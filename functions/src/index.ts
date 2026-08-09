@@ -47,6 +47,7 @@ export { enhanceWizardInput } from "./enhanceWizardInput";
 export { onInviteApproved } from "./inviteService";
 export { joinCompetition } from "./competitionEndpoints";
 export { createUserByAdmin, setUserAdmin } from "./adminUserService";
+export { createStoryByAdmin } from "./adminStoryEndpoint";
 export {
   saveAiSettings,
   deleteAiSettings,
