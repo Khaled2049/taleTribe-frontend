@@ -34,3 +34,11 @@ cypress/videos/
 cypress/downloads/
 # Firebase emulator persisted state (--import/--export-on-exit)
 .emulator-data/
+
+# One-off emulator data exports (Emulator UI / `firebase emulators:export`)
+emulator-exports/
+# Catch stray exports written outside emulator-exports/
+firebase-export-*/
+
+# Local story idea drafts and generated imports
+functions/story-ideas/

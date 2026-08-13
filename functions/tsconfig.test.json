@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": ".test-dist",
+    "rootDir": ".",
+    "sourceMap": false
+  },
+  "include": [
+    "src/adminStorySchemas.ts",
+    "src/adminStoryService.ts",
+    "tests/**/*.test.ts"
+  ]
+}
