@@ -273,7 +273,6 @@ export function materializeAggregate(
     createdAt: now,
     updatedAt: now,
     chapterCount: chapters.length,
-    nextChapterOrder: chapters.length,
     chapterIndex: chapters.map((chapter, index) => ({
       title: chapter.data.title,
       order: index,

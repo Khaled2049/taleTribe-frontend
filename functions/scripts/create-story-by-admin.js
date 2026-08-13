@@ -24,6 +24,11 @@
  *   --unpublish            Force story.isPublished = false
  *   --url=<url>            Override the function URL
  *   --project=<id>         Firebase project id (default story-6f89f)
+ *   --service-account=<email>  Sign custom tokens as this service account. Needed
+ *                          with --prod when your credentials are a gcloud user
+ *                          login (those cannot sign JWTs locally); requires
+ *                          roles/iam.serviceAccountTokenCreator on it. Not needed
+ *                          when GOOGLE_APPLICATION_CREDENTIALS points at a key.
  *   --dry-run              Validate payloads locally (needs `npm run build`) and stop
  *   --prod                 Target production instead of the emulators
  *   --help                 Show this message
@@ -63,6 +68,7 @@ function parseArgs(argv) {
     keySuffix: flags.get('key-suffix') || '',
     publish: flags.has('publish') ? true : flags.has('unpublish') ? false : null,
     url: flags.get('url') || '',
+    serviceAccount: flags.get('service-account') || process.env.FIREBASE_SERVICE_ACCOUNT_ID || '',
     projectId: flags.get('project') || process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || DEFAULT_PROJECT,
     dryRun: flags.has('dry-run'),
     prod: flags.has('prod'),
@@ -125,6 +131,15 @@ function loadSchema() {
   }
 }
 
+/** Build the seeded profile from the same defaults signup and createUserByAdmin use. */
+function loadUserProfileDefaults() {
+  try {
+    return require('../lib/userProfileDefaults').buildUserProfileDefaults
+  } catch {
+    throw new Error('Run `npm run build` first — the seeded owner profile reuses lib/userProfileDefaults.js')
+  }
+}
+
 async function ensureAdminIdentity({ email, prod }) {
   let user
   try {
@@ -176,32 +191,20 @@ async function ensureOwner({ email, prod }) {
   }
 
   const generated = `seed_owner_${user.uid.slice(0, 6).toLowerCase()}`
-  const nowIso = new Date().toISOString()
-  await db.collection('usernames').doc(generated).set({ uid: user.uid })
-  await userRef.set(
+  const userDoc = loadUserProfileDefaults()({ username: generated, email })
+
+  // Same three writes createUserByAdmin makes: username index, user doc, public profile.
+  await db.collection('usernames').doc(generated.trim().toLowerCase()).set({ uid: user.uid })
+  await userRef.set(userDoc, { merge: true })
+  await db.collection('publicProfiles').doc(user.uid).set(
     {
       username: generated,
-      email,
-      createdAt: nowIso,
-      lastLogin: nowIso,
-      followers: [],
-      following: [],
-      stories: [],
-      posts: [],
-      likedPosts: [],
-      savedPosts: [],
-      isAnonymous: false,
-      aiUsage: 0,
-      lastAiUsageDate: nowIso.split('T')[0],
-      bio: 'Seeded story owner',
-      occupation: '',
-      location: '',
-      updatedAt: nowIso,
+      bio: userDoc.bio,
+      occupation: userDoc.occupation,
+      location: userDoc.location,
+      createdAt: userDoc.createdAt,
+      updatedAt: userDoc.createdAt,
     },
-    { merge: true },
-  )
-  await db.collection('publicProfiles').doc(user.uid).set(
-    { username: generated, bio: 'Seeded story owner', createdAt: nowIso, updatedAt: nowIso },
     { merge: true },
   )
   console.log(`  seeded owner profile users/${user.uid} (${generated})`)
@@ -210,7 +213,22 @@ async function ensureOwner({ email, prod }) {
 
 /** Exchange a custom token for an ID token so the function sees a real bearer token. */
 async function mintIdToken({ uid, prod, projectId }) {
-  const customToken = await admin.auth().createCustomToken(uid)
+  let customToken
+  try {
+    customToken = await admin.auth().createCustomToken(uid)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (/signBlob|service account/i.test(message)) {
+      throw new Error(
+        'Cannot sign a custom token — gcloud user credentials have no signing key. Either:\n' +
+        '  a) grant yourself roles/iam.serviceAccountTokenCreator on a service account and pass\n' +
+        '     --service-account=<sa-email>, or\n' +
+        '  b) export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json\n' +
+        `Original error: ${message}`,
+      )
+    }
+    throw error
+  }
   const apiKey = prod
     ? process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY
     : 'emulator-key'
@@ -301,7 +319,13 @@ async function main() {
     process.env.FIREBASE_AUTH_EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || AUTH_EMULATOR_HOST
     process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || FIRESTORE_EMULATOR_HOST
   }
-  admin.initializeApp({ projectId: options.projectId })
+  admin.initializeApp({
+    projectId: options.projectId,
+    // Lets a gcloud user login sign custom tokens via the IAM signBlob API instead
+    // of looking for a local private key (or the GCE metadata server, which is
+    // absent off-GCP). Ignored when the credential already carries a private key.
+    ...(options.serviceAccount ? { serviceAccountId: options.serviceAccount } : {}),
+  })
 
   const adminUser = await ensureAdminIdentity({ email: options.adminEmail, prod: options.prod })
   const ownerUid = options.ownerUid || (await ensureOwner({ email: options.ownerEmail, prod: options.prod }))
