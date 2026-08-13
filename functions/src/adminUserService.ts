@@ -55,12 +55,10 @@ function buildRandomUsername(): string {
 
 async function isUsernameTaken(username: string): Promise<boolean> {
   const snapshot = await db
-    .collection("users")
-    .where("username", "==", username)
-    .limit(1)
+    .collection("usernames")
+    .doc(username.trim().toLowerCase())
     .get();
-
-  return !snapshot.empty;
+  return snapshot.exists;
 }
 
 async function generateUniqueUsername(maxAttempts = 20): Promise<string> {
@@ -130,37 +128,80 @@ export const createUserByAdmin = onRequest(
         emailVerified: true,
       });
 
+      let firestoreCommitted = false;
       try {
         const userDoc = buildUserProfileDefaults({
           username,
           email: normalizedEmail,
         });
-
-        await db.collection("users").doc(createdUser.uid).set(userDoc);
-
+        const usernameRef = db
+          .collection("usernames")
+          .doc(username.trim().toLowerCase());
+        const userRef = db.collection("users").doc(createdUser.uid);
+        const publicProfileRef = db
+          .collection("publicProfiles")
+          .doc(createdUser.uid);
         const inviteRef = db.collection("invites").doc(normalizedEmail);
-        const inviteSnapshot = await inviteRef.get();
-        const inviteData = inviteSnapshot.data() as InviteDoc | undefined;
 
-        await inviteRef.set(
-          {
-            email: normalizedEmail,
-            status: "completed",
-            completedAt: FieldValue.serverTimestamp(),
-            approvedAt: FieldValue.serverTimestamp(),
-            sentAt: FieldValue.serverTimestamp(),
-            approvedBy: adminToken.uid,
-            linkSentCount:
-              typeof inviteData?.linkSentCount === "number"
-                ? inviteData.linkSentCount
-                : 0,
-          },
-          { merge: true },
-        );
+        await db.runTransaction(async (transaction) => {
+          const usernameSnapshot = await transaction.get(usernameRef);
+          if (usernameSnapshot.exists) {
+            throw Object.assign(
+              new Error("Generated username is already taken"),
+              {
+                statusCode: 409,
+              },
+            );
+          }
+          const inviteSnapshot = await transaction.get(inviteRef);
+          const inviteData = inviteSnapshot.data() as InviteDoc | undefined;
 
-        const passwordResetLink = await admin
-          .auth()
-          .generatePasswordResetLink(normalizedEmail);
+          transaction.create(usernameRef, { uid: createdUser.uid });
+          transaction.create(userRef, userDoc);
+          transaction.set(publicProfileRef, {
+            username,
+            bio: userDoc.bio,
+            occupation: userDoc.occupation,
+            location: userDoc.location,
+            createdAt: userDoc.createdAt,
+            updatedAt: userDoc.createdAt,
+          });
+          transaction.set(
+            inviteRef,
+            {
+              email: normalizedEmail,
+              status: "completed",
+              completedAt: FieldValue.serverTimestamp(),
+              approvedAt: FieldValue.serverTimestamp(),
+              sentAt: FieldValue.serverTimestamp(),
+              approvedBy: adminToken.uid,
+              linkSentCount:
+                typeof inviteData?.linkSentCount === "number"
+                  ? inviteData.linkSentCount
+                  : 0,
+            },
+            { merge: true },
+          );
+        });
+        firestoreCommitted = true;
+
+        let passwordResetLink: string | null = null;
+        let warning: string | undefined;
+        try {
+          passwordResetLink = await admin
+            .auth()
+            .generatePasswordResetLink(normalizedEmail);
+        } catch (error) {
+          warning =
+            "User was created, but the password reset link could not be generated";
+          logger.warn(
+            "Password reset link generation failed after user creation",
+            {
+              uid: createdUser.uid,
+              error,
+            },
+          );
+        }
 
         response.status(200).json({
           success: true,
@@ -168,9 +209,22 @@ export const createUserByAdmin = onRequest(
           email: normalizedEmail,
           username,
           passwordResetLink,
+          ...(warning ? { warning } : {}),
         });
       } catch (error) {
-        await admin.auth().deleteUser(createdUser.uid);
+        if (!firestoreCommitted) {
+          try {
+            await admin.auth().deleteUser(createdUser.uid);
+          } catch (cleanupError) {
+            logger.error(
+              "Failed to clean up Auth user after Firestore failure",
+              {
+                uid: createdUser.uid,
+                cleanupError,
+              },
+            );
+          }
+        }
         throw error;
       }
     } catch (error) {

@@ -60,6 +60,7 @@ export {
 export { competitionAdvanceTask } from "./competitionAdvanceTask";
 export { settleCompetitionEndpoint as settleCompetition } from "./competitionSettlementEndpoints";
 export { createUserByAdmin, setUserAdmin } from "./adminUserService";
+export { createStoryByAdmin } from "./adminStoryEndpoint";
 export {
   saveAiSettings,
   deleteAiSettings,
