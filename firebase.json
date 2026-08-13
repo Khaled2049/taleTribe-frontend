@@ -98,7 +98,10 @@
         "*.md",
         "readme.md",
         "LOCAL_DEVELOPMENT.md",
-        "API_DOCUMENTATION.md"
+        "API_DOCUMENTATION.md",
+        "story-ideas/**",
+        "tests/**",
+        ".test-dist/**"
       ]
     }
   ]
