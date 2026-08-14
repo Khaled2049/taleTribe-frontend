@@ -3,7 +3,7 @@ import { queryKeys } from "./queryKeys";
 import { competitionService } from "@/services/CompetitionService";
 import type {
   ICompetition,
-  ICompetitionCreateInput,
+  ICompetitionDraftInput,
   ICompetitionUpdate,
 } from "@/types/ICompetition";
 
@@ -41,17 +41,47 @@ export function useCompetitionsQuery(userId: string | undefined) {
 const invalidateAll = (queryClient: ReturnType<typeof useQueryClient>) =>
   queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all() });
 
-export function useCreateCompetition() {
+/** A host's own unpublished drafts. Empty for anyone who cannot host. */
+export function useMyDraftsQuery(userId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.competitions.drafts(userId ?? "anonymous"),
+    queryFn: () => competitionService.getMyDrafts(userId as string),
+    enabled: !!userId,
+  });
+}
+
+/** Save a draft. No money moves, so no balance invalidation. */
+export function useSaveDraft() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: ICompetitionCreateInput) =>
-      competitionService.createCompetition(input),
+    mutationFn: (input: ICompetitionDraftInput) =>
+      competitionService.saveDraft(input),
+    onSuccess: () => invalidateAll(queryClient),
+  });
+}
+
+export function usePublishCompetition() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (competitionId: string) =>
+      competitionService.publishCompetition(competitionId),
     onSuccess: () => {
       invalidateAll(queryClient);
-      // Creating funds escrow, so the creator's balance just changed.
+      // Publishing funds escrow, so the host's balance just changed.
       queryClient.invalidateQueries({ queryKey: ["token", "balance"] });
     },
+  });
+}
+
+export function useDiscardDraft() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (competitionId: string) =>
+      competitionService.discardDraft(competitionId),
+    onSuccess: () => invalidateAll(queryClient),
   });
 }
 

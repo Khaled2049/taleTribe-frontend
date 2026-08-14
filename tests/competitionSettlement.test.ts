@@ -4,6 +4,7 @@ import {
   buildRankableEntries,
   computePayouts,
   rankEntries,
+  splitEntryFees,
   totalPayout,
   type RankableEntry,
 } from "../functions/src/competitionSettlementCore";
@@ -134,11 +135,61 @@ describe("buildRankableEntries", () => {
   });
 });
 
+describe("splitEntryFees", () => {
+  /** Asserts the two shares re-sum to the input, so escrow drains to zero. */
+  const sums = (feesHeld: string, feeBps: number) => {
+    const { platform, host } = splitEntryFees(feesHeld, feeBps);
+    expect((BigInt(platform) + BigInt(host)).toString()).toBe(feesHeld);
+    return { platform, host };
+  };
+
+  it("takes the configured basis points for the platform", () => {
+    // 100 TALE at 10%
+    expect(sums(POOL, 1000)).toEqual({
+      platform: "10000000000000000000",
+      host: "90000000000000000000",
+    });
+  });
+
+  it("gives everything to the host at 0 bps", () => {
+    expect(sums(POOL, 0)).toEqual({ platform: "0", host: POOL });
+  });
+
+  it("honours the 30% ceiling TippingPlatform uses", () => {
+    expect(sums(POOL, 3000)).toEqual({
+      platform: "30000000000000000000",
+      host: "70000000000000000000",
+    });
+  });
+
+  it("floors the platform share, so the remainder falls to the host", () => {
+    // 7 wei at 10% is 0.7 -> 0, and the host must receive all 7.
+    expect(sums("7", 1000)).toEqual({ platform: "0", host: "7" });
+  });
+
+  it("strands nothing on an awkward rate", () => {
+    // 333 bps of 1000 wei is 33.3 -> 33.
+    expect(sums("1000", 333)).toEqual({ platform: "33", host: "967" });
+  });
+
+  it("is zero on both sides when no fees were collected", () => {
+    expect(splitEntryFees("0", 1000)).toEqual({ platform: "0", host: "0" });
+  });
+
+  it("rejects a rate outside the basis-point range", () => {
+    expect(() => splitEntryFees(POOL, -1)).toThrow();
+    expect(() => splitEntryFees(POOL, 10001)).toThrow();
+    expect(() => splitEntryFees(POOL, 12.5)).toThrow();
+  });
+});
+
 describe("buildDigestPayload", () => {
   const base = {
     competitionId: "comp_1",
     assetId: "TALE",
     pool: POOL,
+    entryFees: "0",
+    feeBps: 1000,
     votingClosedAtMs: 1_700_000_000_000,
   };
 
@@ -149,7 +200,7 @@ describe("buildDigestPayload", () => {
 
   it("serializes with a fixed key order", () => {
     const { json } = buildDigestPayload({ ...base, results });
-    expect(json.startsWith('{"v":1,"competitionId":"comp_1","assetId":"TALE"')).toBe(true);
+    expect(json.startsWith('{"v":2,"competitionId":"comp_1","assetId":"TALE"')).toBe(true);
   });
 
   it("emits no whitespace", () => {
@@ -192,5 +243,30 @@ describe("buildDigestPayload", () => {
     const { payload, json } = buildDigestPayload({ ...base, results: [] });
     expect(payload.results).toEqual([]);
     expect(JSON.parse(json).results).toEqual([]);
+  });
+
+  it("changes when the entry fees collected change", () => {
+    const free = buildDigestPayload({ ...base, results }).json;
+    const paid = buildDigestPayload({
+      ...base,
+      entryFees: "25000000000000000000",
+      results,
+    }).json;
+    expect(paid).not.toBe(free);
+  });
+
+  it("changes when the split rate changes", () => {
+    const original = buildDigestPayload({
+      ...base,
+      entryFees: "25000000000000000000",
+      results,
+    }).json;
+    const rerated = buildDigestPayload({
+      ...base,
+      entryFees: "25000000000000000000",
+      feeBps: 2000,
+      results,
+    }).json;
+    expect(rerated).not.toBe(original);
   });
 });

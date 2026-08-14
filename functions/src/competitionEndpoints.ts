@@ -5,7 +5,15 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { corsOptions } from "./corsConfig";
 import { requireAdmin, requireAuth } from "./authService";
 import { getEscrowProvider } from "./escrow";
-import { makeTokenAmount } from "./money";
+import {
+  assertMinorUnits,
+  getCompetitionFeeBps,
+  makeTokenAmount,
+} from "./money";
+import {
+  buildUnwindRefunds,
+  readHeldContributions,
+} from "./competitionContributions";
 import {
   CompetitionPhase,
   EscrowState,
@@ -15,22 +23,36 @@ import {
 } from "./competitionPhase";
 import {
   assertDateOrdering,
+  validateCompetitionDraft,
   validateCompetitionInput,
   validateCompetitionUpdate,
 } from "./competitionValidation";
 
 const db = admin.firestore();
 
+interface TokenAmountDoc {
+  amount: string;
+  assetId: string;
+  symbol: string;
+  decimals: number;
+}
+
 interface CompetitionDoc {
+  title?: string;
+  description?: string;
+  category?: string;
+  tags?: string[];
   startDate?: admin.firestore.Timestamp;
   deadline?: admin.firestore.Timestamp;
   votingDeadline?: admin.firestore.Timestamp;
   maxParticipants?: number | null;
   participantsCount?: number;
   phase?: CompetitionPhase;
+  published?: boolean;
   escrowState?: EscrowState;
   creatorId?: string;
-  prizePool?: { amount: string; assetId: string; symbol: string; decimals: number };
+  prizePool?: TokenAmountDoc;
+  entryFee?: TokenAmountDoc;
 }
 
 const toStatus = (error: unknown, fallback: number): number =>
@@ -170,21 +192,18 @@ async function assertCanManage(
   }
 }
 
+/** Optional dates, so a half-finished draft can be stored as-is. */
+const optionalTimestamp = (date: Date | undefined) =>
+  date ? Timestamp.fromDate(date) : null;
+
 /**
- * Create a competition and fund its prize pool.
+ * Create or update an unpublished draft. No money moves here.
  *
- * Creation and funding are deliberately NOT one atomic unit. The document is
- * written first in `draft`/`funding`, then escrow is funded, then the phase is
- * advanced. That ordering is what lets this survive escrow moving on-chain,
- * where funding is an asynchronous transaction that can be pending or revert
- * long after the document exists.
- *
- * If funding fails outright, the draft is removed — no money moved and nothing
- * else references it yet. A crash between the two steps leaves a document in
- * `escrowState: "funding"`, which is exactly the state a reconciliation sweep
- * would look for.
+ * An upsert rather than separate create/update endpoints, so the editor can
+ * autosave later without an API change: omit `competitionId` for a new draft,
+ * supply it to overwrite an existing one.
  */
-export const createCompetition = onRequest(
+export const saveCompetitionDraft = onRequest(
   corsOptions,
   requireAdmin(async (request, response, userId) => {
     try {
@@ -193,8 +212,8 @@ export const createCompetition = onRequest(
         return;
       }
 
-      const input = validateCompetitionInput(request.body ?? {});
-      const escrow = getEscrowProvider();
+      const draft = validateCompetitionDraft(request.body ?? {});
+      const existingId = request.body?.competitionId;
 
       const creatorName =
         typeof request.body?.creatorName === "string" &&
@@ -202,58 +221,191 @@ export const createCompetition = onRequest(
           ? request.body.creatorName.trim().slice(0, 120)
           : "Admin";
 
-      const competitionRef = db.collection("competitions").doc();
-      const competitionId = competitionRef.id;
       const timestamp = FieldValue.serverTimestamp();
+      const fields = {
+        title: draft.title,
+        description: draft.description ?? "",
+        category: draft.category ?? "",
+        tags: draft.tags ?? [],
+        maxParticipants: draft.maxParticipants ?? null,
+        startDate: optionalTimestamp(draft.startDate),
+        deadline: optionalTimestamp(draft.deadline),
+        votingDeadline: optionalTimestamp(draft.votingDeadline),
+        prizePool: draft.prizeAmount ? makeTokenAmount(draft.prizeAmount) : null,
+        entryFee: draft.entryFee ? makeTokenAmount(draft.entryFee) : null,
+        updatedAt: timestamp,
+      };
 
-      await competitionRef.set({
-        title: input.title,
-        description: input.description,
-        category: input.category,
-        tags: input.tags,
-        maxParticipants: input.maxParticipants,
-        startDate: Timestamp.fromDate(input.startDate),
-        deadline: Timestamp.fromDate(input.deadline),
-        votingDeadline: Timestamp.fromDate(input.votingDeadline),
+      if (existingId) {
+        if (typeof existingId !== "string") {
+          response.status(400).json({ error: "competitionId must be a string" });
+          return;
+        }
+
+        const ref = db.collection("competitions").doc(existingId);
+        const snapshot = await ref.get();
+        if (!snapshot.exists) {
+          response.status(404).json({ error: "Competition not found" });
+          return;
+        }
+
+        const existing = snapshot.data() as CompetitionDoc;
+        await assertCanManage(existing, userId, request.headers.authorization);
+
+        // Publishing is one-way. Once escrow holds money the terms are governed
+        // by updateCompetition, which refuses to touch the prize.
+        if ((existing.phase ?? "open") !== "draft") {
+          response.status(409).json({
+            error: "This competition is already published — edit it instead",
+          });
+          return;
+        }
+
+        await ref.update(fields);
+        response.status(200).json({ competitionId: existingId, phase: "draft" });
+        return;
+      }
+
+      const ref = db.collection("competitions").doc();
+      await ref.set({
+        ...fields,
         phase: "draft" as CompetitionPhase,
-        escrowState: "funding" as EscrowState,
-        prizePool: makeTokenAmount(input.prizeAmount),
-        escrowAccountId: `escrow:competition:${competitionId}`,
+        // The field the explore query and the rules both match on. A draft is
+        // invisible to everyone but its creator until publish flips this.
+        published: false,
+        escrowState: "unfunded" as EscrowState,
+        feeBps: getCompetitionFeeBps(),
+        entryFeesHeld: "0",
+        escrowAccountId: `escrow:competition:${ref.id}`,
         participantsCount: 0,
         submissionCount: 0,
         ballotCount: 0,
         creatorId: userId,
         creatorName,
         organizer: creatorName,
-        phaseUpdatedAt: timestamp,
-        nextTransitionAt: Timestamp.fromDate(input.startDate),
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        phaseUpdatedAt: FieldValue.serverTimestamp(),
+        nextTransitionAt: null,
+        createdAt: FieldValue.serverTimestamp(),
       });
 
-      const funded = await escrow.fund({
-        competitionId,
-        funderUserId: userId,
-        amount: input.prizeAmount,
-        idempotencyKey: `escrow:fund:competition:${competitionId}`,
-      });
+      response.status(200).json({ competitionId: ref.id, phase: "draft" });
+    } catch (error) {
+      logger.error("Error saving competition draft", { userId, error });
+      response
+        .status(toStatus(error, 500))
+        .json({ error: errorMessage(error, "Failed to save draft") });
+    }
+  })
+);
 
-      if (funded.state === "failed") {
-        await competitionRef.delete();
-        response.status(402).json({ error: funded.reason });
+/**
+ * Publish a draft: validate it fully, fund escrow, then open or schedule it.
+ *
+ * The three steps are deliberately not atomic, the same ordering the old
+ * `createCompetition` used and for the same reason — escrow runs its own
+ * transaction and, once on-chain, will be asynchronous.
+ *
+ * The failure mode is better than it used to be. If funding fails the
+ * competition simply stays a draft: nothing is deleted, the host keeps their
+ * work, and they can fix their balance and try again. Publishing is idempotent
+ * on the escrow side because the funding key is derived from the competition id.
+ */
+export const publishCompetition = onRequest(
+  corsOptions,
+  requireAdmin(async (request, response, userId) => {
+    try {
+      if (request.method !== "POST") {
+        response.status(405).json({ error: "Method not allowed" });
         return;
       }
 
-      // A future start stays in `draft` until its start date; the phase sweep
-      // and lazy advance both move it to `open`.
-      const now = Date.now();
-      const phase: CompetitionPhase =
-        now >= input.startDate.getTime() ? "open" : "draft";
+      const competitionId = request.body?.competitionId;
+      if (!competitionId || typeof competitionId !== "string") {
+        response.status(400).json({ error: "competitionId is required" });
+        return;
+      }
 
-      await competitionRef.update({
+      const ref = db.collection("competitions").doc(competitionId);
+      const snapshot = await ref.get();
+      if (!snapshot.exists) {
+        response.status(404).json({ error: "Competition not found" });
+        return;
+      }
+
+      const existing = snapshot.data() as CompetitionDoc;
+      await assertCanManage(existing, userId, request.headers.authorization);
+
+      if ((existing.phase ?? "open") !== "draft") {
+        response
+          .status(409)
+          .json({ error: "This competition has already been published" });
+        return;
+      }
+
+      // Validate the STORED document, not the request. Publishing takes only an
+      // id, so a client cannot smuggle different terms past the draft it showed
+      // the host on screen.
+      const input = validateCompetitionInput({
+        title: existing.title,
+        description: existing.description,
+        category: existing.category,
+        tags: existing.tags,
+        maxParticipants: existing.maxParticipants,
+        startDate: existing.startDate?.toDate?.()?.toISOString(),
+        deadline: existing.deadline?.toDate?.()?.toISOString(),
+        votingDeadline: existing.votingDeadline?.toDate?.()?.toISOString(),
+        prizeAmount: existing.prizePool?.amount,
+        entryFee: existing.entryFee?.amount,
+      });
+
+      const timestamp = FieldValue.serverTimestamp();
+      await ref.update({
+        escrowState: "funding" as EscrowState,
+        updatedAt: timestamp,
+      });
+
+      const funded = await getEscrowProvider().fund({
+        competitionId,
+        funderUserId: userId,
+        amount: input.prizeAmount,
+        purpose: "seed",
+        idempotencyKey: `escrow:fund:competition:${competitionId}`,
+      });
+
+      if (funded.state !== "confirmed") {
+        // Still a draft, still private, still editable. Put the escrow state
+        // back so a retry is not mistaken for a reconciliation target.
+        await ref.update({
+          escrowState: "unfunded" as EscrowState,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        response.status(funded.state === "failed" ? 402 : 409).json({
+          error:
+            funded.state === "failed"
+              ? funded.reason
+              : "Funding is still being confirmed",
+        });
+        return;
+      }
+
+      // A start date already in the past opens immediately rather than parking
+      // in `scheduled`, which nothing would ever move it out of.
+      const phase: CompetitionPhase =
+        Date.now() >= input.startDate.getTime() ? "open" : "scheduled";
+
+      await ref.update({
         phase,
+        published: true,
         escrowState: "funded" as EscrowState,
-        phaseUpdatedAt: timestamp,
+        // Re-stamped from the validated input, so a draft saved with partial
+        // dates cannot leave stale nulls behind.
+        startDate: Timestamp.fromDate(input.startDate),
+        deadline: Timestamp.fromDate(input.deadline),
+        votingDeadline: Timestamp.fromDate(input.votingDeadline),
+        prizePool: makeTokenAmount(input.prizeAmount),
+        entryFee: makeTokenAmount(input.entryFee),
+        feeBps: input.feeBps,
+        phaseUpdatedAt: FieldValue.serverTimestamp(),
         nextTransitionAt: Timestamp.fromDate(
           nextTransitionAt(
             phase,
@@ -262,8 +414,10 @@ export const createCompetition = onRequest(
             input.votingDeadline,
           ) ?? input.deadline,
         ),
-        updatedAt: timestamp,
+        updatedAt: FieldValue.serverTimestamp(),
       });
+
+      logger.info("Competition published", { competitionId, phase, userId });
 
       response.status(200).json({
         competitionId,
@@ -272,10 +426,62 @@ export const createCompetition = onRequest(
         prizePool: makeTokenAmount(input.prizeAmount),
       });
     } catch (error) {
-      logger.error("Error creating competition", { userId, error });
+      logger.error("Error publishing competition", { userId, error });
       response
         .status(toStatus(error, 500))
-        .json({ error: errorMessage(error, "Failed to create competition") });
+        .json({ error: errorMessage(error, "Failed to publish competition") });
+    }
+  })
+);
+
+/**
+ * Delete an unpublished draft outright.
+ *
+ * A real delete is safe here only because a draft holds no escrow and has never
+ * been visible to anyone. Everything published is cancel-only — see
+ * `cancelCompetition`, which refunds rather than removes.
+ */
+export const discardCompetitionDraft = onRequest(
+  corsOptions,
+  requireAdmin(async (request, response, userId) => {
+    try {
+      if (request.method !== "POST") {
+        response.status(405).json({ error: "Method not allowed" });
+        return;
+      }
+
+      const competitionId = request.body?.competitionId;
+      if (!competitionId || typeof competitionId !== "string") {
+        response.status(400).json({ error: "competitionId is required" });
+        return;
+      }
+
+      const ref = db.collection("competitions").doc(competitionId);
+      const snapshot = await ref.get();
+      if (!snapshot.exists) {
+        response.status(404).json({ error: "Competition not found" });
+        return;
+      }
+
+      const existing = snapshot.data() as CompetitionDoc;
+      await assertCanManage(existing, userId, request.headers.authorization);
+
+      if ((existing.phase ?? "open") !== "draft") {
+        response.status(409).json({
+          error: "A published competition can only be cancelled, not discarded",
+        });
+        return;
+      }
+
+      await ref.delete();
+      logger.info("Competition draft discarded", { competitionId, userId });
+
+      response.status(200).json({ competitionId, discarded: true });
+    } catch (error) {
+      logger.error("Error discarding competition draft", { userId, error });
+      response
+        .status(toStatus(error, 500))
+        .json({ error: errorMessage(error, "Failed to discard draft") });
     }
   })
 );
@@ -421,9 +627,20 @@ export const cancelCompetition = onRequest(
       const funderId = competition.creatorId ?? userId;
       const held = await escrow.escrowedAmount(competitionId);
 
+      // Every funder gets their own money back — sweeping the balance to the
+      // host would hand them the entrants' fees.
+      const contributions = await readHeldContributions(db, competitionId);
       const refunded = await escrow.refund({
         competitionId,
-        funderUserId: funderId,
+        refunds: buildUnwindRefunds({
+          seedUserId: funderId,
+          seedAmount: assertMinorUnits(
+            competition.prizePool?.amount ?? "0",
+            "prizePool.amount",
+          ),
+          held: contributions,
+        }),
+        mode: "final",
         idempotencyKey: `escrow:refund:competition:${competitionId}`,
       });
 
@@ -435,9 +652,12 @@ export const cancelCompetition = onRequest(
       }
 
       const timestamp = FieldValue.serverTimestamp();
-      await competitionRef.update({
+      const batch = db.batch();
+
+      batch.update(competitionRef, {
         phase: "cancelled" as CompetitionPhase,
         escrowState: "refunded" as EscrowState,
+        entryFeesHeld: "0",
         cancelledReason:
           typeof request.body?.reason === "string"
             ? request.body.reason.slice(0, 500)
@@ -447,10 +667,20 @@ export const cancelCompetition = onRequest(
         updatedAt: timestamp,
       });
 
+      for (const contribution of contributions) {
+        batch.update(
+          competitionRef.collection("contributions").doc(contribution.userId),
+          { state: "refunded", updatedAt: timestamp },
+        );
+      }
+
+      await batch.commit();
+
       response.status(200).json({
         competitionId,
         phase: "cancelled",
         refundedAmount: held,
+        refundedEntrants: contributions.length,
       });
     } catch (error) {
       logger.error("Error cancelling competition", { userId, error });

@@ -5,14 +5,12 @@ export interface CompetitionsEmptyStateProps {
   /** "none" — there are no competitions at all. "search" — the query matched none. */
   variant: "none" | "search";
   canHost: boolean;
-  onHost: () => void;
   onClearSearch?: () => void;
 }
 
 export function CompetitionsEmptyState({
   variant,
   canHost,
-  onHost,
   onClearSearch,
 }: CompetitionsEmptyStateProps) {
   const isSearch = variant === "search";
@@ -42,9 +40,11 @@ export function CompetitionsEmptyState({
         ) : (
           <>
             {canHost && (
-              <Button className="bg-ns-ink text-ns-bg hover:opacity-90" onClick={onHost}>
-                Host a competition
-              </Button>
+              <Link to="/explore/competitions/new">
+                <Button className="bg-ns-ink text-ns-bg hover:opacity-90">
+                  Host a competition
+                </Button>
+              </Link>
             )}
             {/* Nothing to browse, so the explainer is the one useful thing here. */}
             <Link

@@ -54,6 +54,14 @@ export const escrowAccount = (competitionId: string): AccountId =>
   `escrow:competition:${competitionId}`;
 export const MINT_ACCOUNT: AccountId = "system:mint";
 
+/**
+ * Where the platform's cut of entry fees lands. Deliberately not a `system:`
+ * id — those are excluded from materialization below and so carry no balance
+ * document, which is right for the mint and wrong for a treasury we want to
+ * read. On-chain, `owner()`.
+ */
+export const PLATFORM_ACCOUNT: AccountId = "platform:treasury";
+
 const isSystemAccount = (accountId: AccountId): boolean =>
   accountId.startsWith("system:");
 
@@ -63,7 +71,13 @@ export type LedgerReason =
   | "grant:admin"
   | "escrow:fund"
   | "escrow:release"
-  | "escrow:refund";
+  | "escrow:refund"
+  /** An entrant's fee moving into escrow. */
+  | "escrow:entry"
+  /** An entrant's fee coming back out on withdrawal or cancellation. */
+  | "escrow:entry-refund"
+  /** Entry fees splitting to the platform and host at settlement. */
+  | "escrow:fee";
 
 export interface Posting {
   accountId: AccountId;
@@ -112,8 +126,11 @@ const readBalance = (
   return isMinorUnits(raw) ? raw : ZERO;
 };
 
-const accountKind = (accountId: AccountId): "user" | "escrow" =>
-  accountId.startsWith("escrow:") ? "escrow" : "user";
+const accountKind = (accountId: AccountId): "user" | "escrow" | "platform" => {
+  if (accountId.startsWith("escrow:")) return "escrow";
+  if (accountId.startsWith("platform:")) return "platform";
+  return "user";
+};
 
 const ownerIdOf = (accountId: AccountId): string | null =>
   accountId.startsWith("user:") ? accountId.slice("user:".length) : null;

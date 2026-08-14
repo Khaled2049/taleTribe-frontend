@@ -17,7 +17,12 @@ export interface PhaseCopy {
  * label and the one-line blurb are common.
  */
 export const PHASE_COPY: Record<CompetitionPhase, PhaseCopy> = {
+  // Host-facing only. A draft is private, so no reader ever sees this.
   draft: {
+    label: "Draft",
+    blurb: "Not published yet — only you can see this.",
+  },
+  scheduled: {
     label: "Not open yet",
     blurb: "Entries open when the competition starts.",
   },

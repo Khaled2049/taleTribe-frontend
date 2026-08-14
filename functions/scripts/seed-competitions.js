@@ -42,8 +42,15 @@
  *   funding-stuck a create that died between the document write and escrow
  *                 confirming. This is what a reconciliation sweep looks for.
  *   legacy        a pre-TALE competition: legacyPrizeLabel, no prizePool,
- *                 escrowState "unfunded". Mirrors what
- *                 backfill-competition-phase.js produces.
+ *                 escrowState "unfunded". The only place the dual-read in
+ *                 CompetitionService.toCompetition still gets exercised.
+ *
+ * PAID ENTRY
+ *
+ * `open-paid`, `settled-paid` and `cancelled-paid` charge an entry fee, so the
+ * seed exercises the multi-funder escrow paths a free competition never touches:
+ * fees held alongside the pool, the platform/host split at settlement, and a
+ * cancellation that refunds every entrant rather than sweeping to the host.
  *
  * ONE EMULATOR QUIRK WORTH KNOWING
  *
@@ -117,12 +124,20 @@ const BEYOND_TASK_HORIZON = 30 * DAY
  */
 const SCENARIOS = [
   {
-    key: 'draft',
+    key: 'scheduled',
     title: 'The Lantern Keeper — Opening Soon',
-    summary: 'Funded, not yet open. Start date in the future.',
-    expectPhase: 'draft',
+    summary: 'Published and funded, not yet open. Start date in the future.',
+    expectPhase: 'scheduled',
     dates: { start: 2 * DAY, deadline: 9 * DAY, voting: 12 * DAY },
     entrants: 0,
+  },
+  {
+    key: 'draft',
+    title: 'Untitled Competition (Work in Progress)',
+    summary: 'Unpublished draft. No escrow, invisible to everyone but its host.',
+    expectPhase: 'draft',
+    dates: { start: 3 * DAY, deadline: 10 * DAY, voting: 13 * DAY },
+    draft: true,
   },
   {
     key: 'open',
@@ -140,6 +155,40 @@ const SCENARIOS = [
     dates: { start: -1 * DAY, deadline: 5 * DAY, voting: 8 * DAY },
     maxParticipants: 2,
     entrants: 2,
+  },
+  {
+    key: 'open-paid',
+    title: 'The Vellum Prize',
+    summary:
+      'Paid entry. 25 TALE per entrant, held in escrow beside the pool and refunded on withdrawal.',
+    expectPhase: 'open',
+    dates: { start: -1 * DAY, deadline: 6 * DAY, voting: 9 * DAY },
+    entryFeeTale: 25,
+    entrants: 3,
+  },
+  {
+    key: 'settled-paid',
+    title: 'The Ninth Letter',
+    summary:
+      'Paid entry, settled with a winner — pool to first place, fees split platform/host.',
+    expectPhase: 'settled',
+    dates: { start: -12 * DAY, deadline: 1 * DAY, voting: 8 * DAY },
+    retime: { deadline: -3 * HOUR, voting: -1 * HOUR },
+    entryFeeTale: 25,
+    entrants: 3,
+    voters: 'all',
+    settle: true,
+  },
+  {
+    key: 'cancelled-paid',
+    title: 'Called Off: The Tin Bell',
+    summary:
+      'Paid entry, then cancelled — every entrant refunded, not just the host.',
+    expectPhase: 'cancelled',
+    dates: { start: -1 * DAY, deadline: 6 * DAY, voting: 9 * DAY },
+    entryFeeTale: 25,
+    entrants: 2,
+    cancel: true,
   },
   {
     key: 'voting',
@@ -199,7 +248,7 @@ const SCENARIOS = [
     key: 'funding-stuck',
     title: 'Hollow Pledge (Escrow Never Confirmed)',
     summary: 'Direct write. escrowState "funding" — reconciliation target.',
-    expectPhase: 'draft',
+    expectPhase: 'scheduled',
     direct: 'funding-stuck',
   },
   {
@@ -505,7 +554,9 @@ async function stampSeedTag(competitionId, key) {
  * Build a competition through the real endpoints and walk it to its phase.
  */
 async function runApiScenario({ scenario, adminUser, adminToken, writers, prizeTale, call }) {
-  const created = await call('createCompetition', adminToken, {
+  // Everything starts as a draft now; publishing is the separate step that
+  // funds escrow. A `draft: true` scenario simply stops here.
+  const created = await call('saveCompetitionDraft', adminToken, {
     title: scenario.title,
     description:
       `${scenario.summary} Seeded by scripts/seed-competitions.js for local testing.`,
@@ -516,10 +567,18 @@ async function runApiScenario({ scenario, adminUser, adminToken, writers, prizeT
     deadline: iso(scenario.dates.deadline),
     votingDeadline: iso(scenario.dates.voting),
     prizeAmount: tale(prizeTale),
+    ...(scenario.entryFeeTale ? { entryFee: tale(scenario.entryFeeTale) } : {}),
     creatorName: 'TaleTribe',
   })
 
   const competitionId = created.competitionId
+
+  if (scenario.draft) {
+    await stampSeedTag(competitionId, scenario.key)
+    return competitionId
+  }
+
+  await call('publishCompetition', adminToken, { competitionId })
   await stampSeedTag(competitionId, scenario.key)
 
   // Entrants: join, then submit. The creator is barred from entering their own
@@ -618,8 +677,9 @@ async function runDirectScenario({ scenario, adminUser, prizeTale }) {
       startDate: ts(1 * DAY),
       deadline: ts(8 * DAY),
       votingDeadline: ts(11 * DAY),
-      phase: 'draft',
-      // No ledger movement: this is precisely a create that died before escrow
+      phase: 'scheduled',
+      published: true,
+      // No ledger movement: this is precisely a publish that died before escrow
       // confirmed, so there is nothing held for it.
       escrowState: 'funding',
       prizePool: {
@@ -634,13 +694,14 @@ async function runDirectScenario({ scenario, adminUser, prizeTale }) {
     return ref.id
   }
 
-  // legacy: what backfill-competition-phase.js produces for a pre-TALE document.
+  // legacy: a pre-TALE document — a decorative prize label, no funded pool.
   await ref.set({
     ...shared,
     startDate: ts(-3 * DAY),
     deadline: ts(10 * DAY),
     votingDeadline: ts(13 * DAY),
     phase: 'open',
+    published: true,
     escrowState: 'unfunded',
     legacyPrizeLabel: '1,000 USDC',
     prizeAmount: 1000,

@@ -3,10 +3,12 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { formatCountdown } from "@/hooks/useCountdown";
 import {
+  getEntryFee,
   getHostName,
   getPrizeDisplay,
   hasJoinedWithoutSubmitting,
 } from "@/lib/competitionListing";
+import { formatTokenAmount } from "@/lib/money";
 import {
   LEDGER_GRID,
   ROW_ACTION,
@@ -33,6 +35,24 @@ const entrySubline = (
   countdown.isPast
     ? `Entries closed · ${category}`
     : `Closes in ${countdown.label} · ${category}`;
+
+const LedgerDate = ({ date }: { date?: Date }) => {
+  if (!date) return <span className="text-ns-ink-muted">—</span>;
+
+  return (
+    <time dateTime={date.toISOString()} title={date.toLocaleString()}>
+      <span className="block whitespace-nowrap">
+        {date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+      </span>
+      <span className="block text-[10px] text-ns-ink-muted whitespace-nowrap mt-0.5">
+        {date.toLocaleTimeString(undefined, {
+          hour: "numeric",
+          minute: "2-digit",
+        })}
+      </span>
+    </time>
+  );
+};
 
 function rowState(competition: ICompetition, now: number) {
   const countdown = formatCountdown(competition.deadline, now);
@@ -111,6 +131,7 @@ export function CompetitionLedgerRow({
   now,
 }: CompetitionLedgerRowProps) {
   const prize = getPrizeDisplay(competition);
+  const entryFee = getEntryFee(competition);
   const state = rowState(competition, now);
   const detailUrl = `/explore/competitions/${competition.id}`;
   const entrants = `${competition.participants}${
@@ -154,7 +175,9 @@ export function CompetitionLedgerRow({
           <p
             className={cn(
               "font-ui text-xs mt-1",
-              state.urgent ? "font-semibold text-ns-accent" : "text-ns-ink-muted",
+              state.urgent
+                ? "font-semibold text-ns-accent"
+                : "text-ns-ink-muted",
             )}
           >
             {state.subline}
@@ -165,12 +188,26 @@ export function CompetitionLedgerRow({
           {getHostName(competition)}
         </div>
 
-        <div className="relative z-10 pointer-events-none text-right font-heading text-[26px] text-ns-gold-bright">
-          {prize.amount}
+        <div className="hidden xl:block relative z-10 pointer-events-none font-ui text-xs text-ns-ink-secondary tabular-nums">
+          <LedgerDate date={competition.startDate} />
+        </div>
+
+        <div className="hidden xl:block relative z-10 pointer-events-none font-ui text-xs text-ns-ink-secondary tabular-nums">
+          <LedgerDate date={competition.deadline} />
+        </div>
+
+        <div className="hidden xl:block relative z-10 pointer-events-none font-ui text-xs text-ns-ink-secondary tabular-nums">
+          <LedgerDate date={competition.votingDeadline} />
         </div>
 
         <div className="relative z-10 pointer-events-none text-right font-ui text-sm">
-          <span className="font-semibold text-ns-success">Free</span>
+          {entryFee ? (
+            <span className="font-semibold text-ns-ink tabular-nums">
+              {formatTokenAmount(entryFee)}
+            </span>
+          ) : (
+            <span className="font-semibold text-ns-success">Free</span>
+          )}
         </div>
 
         <div className="relative z-10 flex items-center justify-end gap-3">
@@ -198,6 +235,42 @@ export function CompetitionLedgerRow({
           <span className="font-ui text-xs text-ns-ink-secondary tabular-nums">
             {entrants} entered
           </span>
+        </div>
+        <div className="flex items-center gap-2 mt-1 font-ui text-xs">
+          <span className="text-ns-ink-muted">Entry</span>
+          {entryFee ? (
+            <span className="font-semibold text-ns-ink tabular-nums">
+              {formatTokenAmount(entryFee)}
+            </span>
+          ) : (
+            <span className="font-semibold text-ns-success">Free</span>
+          )}
+        </div>
+        <div className="grid grid-cols-3 gap-2 mt-2 border-t border-ns-border pt-3">
+          <div>
+            <p className="font-ui text-[9px] uppercase tracking-[0.12em] text-ns-ink-muted">
+              Opens
+            </p>
+            <div className="font-ui text-[11px] text-ns-ink-secondary tabular-nums mt-1">
+              <LedgerDate date={competition.startDate} />
+            </div>
+          </div>
+          <div>
+            <p className="font-ui text-[9px] uppercase tracking-[0.12em] text-ns-ink-muted">
+              Entries close
+            </p>
+            <div className="font-ui text-[11px] text-ns-ink-secondary tabular-nums mt-1">
+              <LedgerDate date={competition.deadline} />
+            </div>
+          </div>
+          <div>
+            <p className="font-ui text-[9px] uppercase tracking-[0.12em] text-ns-ink-muted">
+              Voting closes
+            </p>
+            <div className="font-ui text-[11px] text-ns-ink-secondary tabular-nums mt-1">
+              <LedgerDate date={competition.votingDeadline} />
+            </div>
+          </div>
         </div>
         <div className="flex items-center mt-1">{actionPill}</div>
       </div>

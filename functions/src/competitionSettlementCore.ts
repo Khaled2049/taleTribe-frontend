@@ -42,12 +42,42 @@ export interface DigestResultEntry {
 }
 
 export interface DigestPayload {
+  /** Bumped to 2 when entry fees were added; a v1 payload named only the prize. */
   v: number;
   competitionId: string;
   assetId: string;
   pool: string;
+  /** Entry fees held at settlement, in minor units. "0" on a free competition. */
+  entryFees: string;
+  /** Platform's share of `entryFees`, in basis points. */
+  feeBps: number;
   votingClosedAtMs: number;
   results: DigestResultEntry[];
+}
+
+/** Platform and host shares of the entry fees collected by a competition. */
+export interface FeeSplit {
+  platform: string;
+  host: string;
+}
+
+/**
+ * Split entry fees between the platform and the host.
+ *
+ * The host's share is the exact remainder, never a second multiplication, so
+ * the two always sum to `feesHeld` and escrow can still drain to zero. Same
+ * arithmetic as TippingPlatform.calculateSplit().
+ */
+export function splitEntryFees(feesHeld: string, feeBps: number): FeeSplit {
+  const total = BigInt(feesHeld);
+  if (total <= 0n) return { platform: "0", host: "0" };
+
+  if (!Number.isInteger(feeBps) || feeBps < 0 || feeBps > 10000) {
+    throw new Error(`splitEntryFees: feeBps must be an integer in [0, 10000], got ${feeBps}`);
+  }
+
+  const platform = (total * BigInt(feeBps)) / 10000n;
+  return { platform: platform.toString(), host: (total - platform).toString() };
 }
 
 /**
@@ -125,14 +155,18 @@ export function buildDigestPayload(args: {
   competitionId: string;
   assetId: string;
   pool: string;
+  entryFees: string;
+  feeBps: number;
   votingClosedAtMs: number;
   results: SettlementResult[];
 }): { payload: DigestPayload; json: string } {
   const payload: DigestPayload = {
-    v: 1,
+    v: 2,
     competitionId: args.competitionId,
     assetId: args.assetId,
     pool: args.pool,
+    entryFees: args.entryFees,
+    feeBps: args.feeBps,
     votingClosedAtMs: args.votingClosedAtMs,
     results: [...args.results]
       .sort((a, b) => a.rank - b.rank)

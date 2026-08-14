@@ -21,6 +21,22 @@ import {
   type MinorUnits,
 } from "@/types/IToken";
 
+/**
+ * Basis points: 10000 bps = 100%.
+ *
+ * The client knows the fee rate so it can say "the platform takes 10%", and
+ * deliberately has no way to compute the resulting split — `splitEntryFees`
+ * divides the money server-side at settlement.
+ */
+export const BPS_DENOMINATOR = 10000;
+export const DEFAULT_FEE_BPS = 1000;
+
+/** "1000" -> "10%". Display only; trims a trailing ".0" so 10% isn't "10.0%". */
+export function formatFeeBps(bps: number): string {
+  const percent = (bps / BPS_DENOMINATOR) * 100;
+  return `${Number.isInteger(percent) ? percent : percent.toFixed(2)}%`;
+}
+
 /** Caps length at 78 digits — one past uint256's maximum. */
 const MINOR_UNITS_RE = /^(0|[1-9][0-9]{0,77})$/;
 

@@ -18,7 +18,7 @@ interface Guarantee {
 const GUARANTEES: Guarantee[] = [
   {
     title: "The prize exists before you enter",
-    body: "Prizes are not pledges. Creating a competition moves the full pool out of the host's balance and into escrow, and it stays there until the competition ends. A host cannot start one they can't pay for, and cannot change the prize afterwards.",
+    body: "Prizes are not pledges. Publishing a competition moves the full pool out of the host's balance and into escrow, and it stays there until the competition ends. Nothing is visible to anyone until that happens, so a host cannot advertise a prize they can't pay for — or change it afterwards.",
   },
   {
     title: "Nobody can see who is winning",
@@ -30,7 +30,11 @@ const GUARANTEES: Guarantee[] = [
   },
   {
     title: "Nobody wins by default",
-    body: "If nothing is entered, or nothing is voted for, no prize is handed out on a technicality — the pool goes back to the host. The same happens if the competition is called off.",
+    body: "If nothing is entered, or nothing is voted for, no prize is handed out on a technicality — the pool goes back to the host and every entry fee goes back to the entrant who paid it. The same happens if the competition is called off.",
+  },
+  {
+    title: "An entry fee is never at risk",
+    body: "Most competitions are free. Where a host does charge, the fee is held in escrow next to the prize rather than paid out on the spot — so withdrawing your entry before the deadline returns it in full, as does a cancellation or a competition nobody voted in. Fees are revenue split between the host and the platform, and they never change the prize the winner receives.",
   },
 ];
 
@@ -39,7 +43,7 @@ const HowCompetitionsWork = () => {
     <>
       <SEOHead
         title={`How competitions work - ${APP_NAME}`}
-        description={`How ${APP_NAME} competitions run, from an escrowed prize pool through open entry and blind community voting to a verifiable payout.`}
+        description={`How ${APP_NAME} competitions move from a private draft through funded entry and blind community voting to a verifiable payout.`}
         url="/explore/competitions/how-it-works"
         canonical="/explore/competitions/how-it-works"
       />
@@ -71,9 +75,10 @@ const HowCompetitionsWork = () => {
             A prize, a deadline, and a fair count
           </h1>
           <p className="font-body text-xl leading-[1.55] text-ns-ink-secondary max-w-[62ch] mt-5">
-            Every competition follows the same five steps, on a clock that runs
-            whether anyone is watching or not. Here is what happens at each one —
-            and, at every point, exactly where the prize money is sitting.
+            Every competition begins as a private draft, then moves through five
+            published stages on a clock that runs whether anyone is watching or
+            not. Here is what happens at each one — and, at every point, exactly
+            where the prize money is sitting.
           </p>
         </div>
       </div>
@@ -112,8 +117,8 @@ const HowCompetitionsWork = () => {
           Ready to enter one?
         </h2>
         <p className="font-body text-[17px] leading-[1.6] text-ns-ink-secondary max-w-[52ch] mt-3">
-          You'll need a published story to enter, and one to your name before you
-          can vote — voting is open to writers.
+          You'll need a published story to enter, and one to your name before
+          you can vote — voting is open to writers.
         </p>
         <Link
           to="/explore/competitions"

@@ -9,7 +9,13 @@
  * Errors carry `statusCode` so handlers can rethrow them straight to the
  * caller, matching the idiom already used in competitionEndpoints.ts.
  */
-import { MinorUnits, assertMinorUnits, isPositive } from "./money";
+import {
+  MinorUnits,
+  ZERO,
+  assertMinorUnits,
+  getCompetitionFeeBps,
+  isPositive,
+} from "./money";
 
 export const MAX_TITLE_LENGTH = 200;
 export const MAX_DESCRIPTION_LENGTH = 5000;
@@ -34,6 +40,10 @@ export interface CompetitionInputPayload {
   deadline: Date;
   votingDeadline: Date;
   prizeAmount: MinorUnits;
+  /** What each entrant pays to submit. "0" means the competition is free. */
+  entryFee: MinorUnits;
+  /** Platform's share of the entry fees, in basis points. */
+  feeBps: number;
 }
 
 function requireString(
@@ -129,6 +139,12 @@ export function validateCompetitionInput(
     throw bad("Prize amount must be greater than zero");
   }
 
+  // Zero IS valid here, unlike the prize — a free competition is the default.
+  const entryFee =
+    body.entryFee === undefined || body.entryFee === null
+      ? ZERO
+      : assertMinorUnits(body.entryFee, "entryFee");
+
   return {
     title,
     description,
@@ -139,16 +155,108 @@ export function validateCompetitionInput(
     deadline,
     votingDeadline,
     prizeAmount,
+    entryFee,
+    // Not taken from the request: the platform's cut is not the host's to set.
+    feeBps: getCompetitionFeeBps(),
   };
 }
 
 /**
- * Validate a partial update. The prize is deliberately absent: it is immutable
- * once escrow is funded, so changing it is a cancel-and-recreate, not an edit.
+ * A draft in progress. Every field is optional except the title, because the
+ * point of a draft is that it can be saved half-finished — the strict checks
+ * belong at publish, where `validateCompetitionInput` runs over the finished
+ * document.
+ *
+ * Dates are still ordered when present: catching an impossible window while the
+ * host is typing is better than surfacing it only when they try to publish.
+ */
+export interface CompetitionDraftPayload {
+  title: string;
+  description?: string;
+  category?: string;
+  tags?: string[];
+  maxParticipants?: number | null;
+  startDate?: Date;
+  deadline?: Date;
+  votingDeadline?: Date;
+  prizeAmount?: MinorUnits;
+  entryFee?: MinorUnits;
+}
+
+export function validateCompetitionDraft(
+  body: Record<string, unknown>,
+): CompetitionDraftPayload {
+  const draft: CompetitionDraftPayload = {
+    title: requireString(body.title, "Title", MAX_TITLE_LENGTH),
+  };
+
+  if (body.description !== undefined && body.description !== null) {
+    const value = String(body.description).trim();
+    if (value.length > MAX_DESCRIPTION_LENGTH) {
+      throw bad(`Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer`);
+    }
+    draft.description = value;
+  }
+  if (body.category !== undefined && body.category !== null) {
+    const value = String(body.category).trim();
+    if (value.length > MAX_CATEGORY_LENGTH) {
+      throw bad(`Category must be ${MAX_CATEGORY_LENGTH} characters or fewer`);
+    }
+    draft.category = value;
+  }
+  if (body.tags !== undefined) {
+    draft.tags = normalizeTags(body.tags);
+  }
+  if (body.maxParticipants !== undefined) {
+    if (body.maxParticipants === null) {
+      draft.maxParticipants = null;
+    } else if (
+      !Number.isInteger(body.maxParticipants) ||
+      (body.maxParticipants as number) <= 0 ||
+      (body.maxParticipants as number) > MAX_PARTICIPANTS_CEILING
+    ) {
+      throw bad("Max participants must be a whole number greater than 0");
+    } else {
+      draft.maxParticipants = body.maxParticipants as number;
+    }
+  }
+
+  if (body.startDate !== undefined && body.startDate !== null) {
+    draft.startDate = requireDate(body.startDate, "Start date");
+  }
+  if (body.deadline !== undefined && body.deadline !== null) {
+    draft.deadline = requireDate(body.deadline, "Deadline");
+  }
+  if (body.votingDeadline !== undefined && body.votingDeadline !== null) {
+    draft.votingDeadline = requireDate(body.votingDeadline, "Voting deadline");
+  }
+  assertDateOrdering(
+    draft.startDate ?? null,
+    draft.deadline ?? null,
+    draft.votingDeadline ?? null,
+  );
+
+  // Zero is allowed on both here — an unfinished draft may not have priced
+  // itself yet. `validateCompetitionInput` rejects a zero prize at publish.
+  if (body.prizeAmount !== undefined && body.prizeAmount !== null) {
+    draft.prizeAmount = assertMinorUnits(body.prizeAmount, "prizeAmount");
+  }
+  if (body.entryFee !== undefined && body.entryFee !== null) {
+    draft.entryFee = assertMinorUnits(body.entryFee, "entryFee");
+  }
+
+  return draft;
+}
+
+/**
+ * Validate a partial update to a PUBLISHED competition. The prize and the entry
+ * fee are deliberately absent: both are immutable once escrow holds money
+ * against them, so changing either is a cancel-and-recreate, not an edit. While
+ * a competition is still a draft, `validateCompetitionDraft` accepts them.
  */
 export function validateCompetitionUpdate(
   body: Record<string, unknown>,
-): Partial<Omit<CompetitionInputPayload, "prizeAmount">> {
+): Partial<Omit<CompetitionInputPayload, "prizeAmount" | "entryFee" | "feeBps">> {
   const update: Partial<CompetitionInputPayload> = {};
 
   if (body.title !== undefined) {
@@ -199,8 +307,14 @@ export function validateCompetitionUpdate(
     body.prizeCurrency !== undefined ||
     body.payoutSplitBps !== undefined
   ) {
+    throw bad("The prize cannot be changed after a competition is published", 422);
+  }
+
+  // Same reasoning as the prize: entrants have already paid the advertised fee,
+  // and re-pricing would make escrow disagree with what the document claims.
+  if (body.entryFee !== undefined || body.feeBps !== undefined) {
     throw bad(
-      "The prize cannot be changed after a competition is created",
+      "The entry fee cannot be changed after a competition is published",
       422,
     );
   }
@@ -213,14 +327,17 @@ export function validateCompetitionUpdate(
  * partial edit can't produce an invalid combination.
  */
 export function assertDateOrdering(
-  startDate: Date,
-  deadline: Date,
+  startDate: Date | null,
+  deadline: Date | null,
   votingDeadline: Date | null,
 ): void {
-  if (deadline.getTime() <= startDate.getTime()) {
+  // Nulls are skipped rather than rejected so a half-filled draft can be saved;
+  // publish supplies all three, so nothing escapes unchecked.
+  if (startDate && deadline && deadline.getTime() <= startDate.getTime()) {
     throw bad("Deadline must be after the start date");
   }
   if (
+    deadline &&
     votingDeadline &&
     votingDeadline.getTime() - deadline.getTime() < MIN_VOTING_WINDOW_MS
   ) {

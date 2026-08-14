@@ -42,7 +42,8 @@ export interface ITokenBalance {
 export interface ITokenAccountDoc {
   accountId: string;
   ownerId?: string;
-  kind: "user" | "escrow";
+  /** `platform` is the treasury that receives the platform's cut of entry fees. */
+  kind: "user" | "escrow" | "platform";
   assetId: string;
   balance: string;
 }

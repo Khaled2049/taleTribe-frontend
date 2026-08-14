@@ -1,5 +1,6 @@
 import type { ICompetition } from "@/types/ICompetition";
-import { formatMinorUnits } from "@/lib/money";
+import type { ITokenAmount } from "@/types/IToken";
+import { DEFAULT_FEE_BPS, formatMinorUnits, formatTokenAmount } from "@/lib/money";
 
 /** Prize display, honoring the legacy-pool rule: pre-TALE competitions show their label, not a fabricated TALE amount. */
 export function getPrizeDisplay(competition: ICompetition): {
@@ -20,6 +21,50 @@ export function getPrizeDisplay(competition: ICompetition): {
 
 export function getHostName(competition: ICompetition): string {
   return competition.organizer || competition.creatorName || "Unknown host";
+}
+
+/**
+ * Minimum gap between submissions closing and voting closing.
+ *
+ * KEEP IN SYNC with MIN_VOTING_WINDOW_MS in
+ * functions/src/competitionValidation.ts, which is the authority — publish
+ * rejects a shorter window whatever this says.
+ */
+export const MIN_VOTING_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * The entry fee, or `null` when entering is free.
+ *
+ * Absence and a zero amount both mean free, collapsed here so no caller has to
+ * remember both.
+ */
+export function getEntryFee(competition: ICompetition): ITokenAmount | null {
+  const fee = competition.entryFee;
+  if (!fee || BigInt(fee.amount) <= 0n) return null;
+  return fee;
+}
+
+export function isPaidEntry(competition: ICompetition): boolean {
+  return getEntryFee(competition) !== null;
+}
+
+/** "Free" or "25 TALE" — the Entry column, and the entry CTA. */
+export function getEntryFeeLabel(competition: ICompetition): string {
+  const fee = getEntryFee(competition);
+  return fee ? formatTokenAmount(fee) : "Free";
+}
+
+/**
+ * Platform's cut, falling back to the default for pre-fee documents.
+ *
+ * The rate is the only fee thing the client may know. Computing the resulting
+ * amounts belongs to `splitEntryFees` in functions/src/competitionSettlementCore.ts
+ * — a copy here could drift and show a host a number they do not receive.
+ */
+export function getFeeBps(competition: ICompetition): number {
+  return typeof competition.feeBps === "number"
+    ? competition.feeBps
+    : DEFAULT_FEE_BPS;
 }
 
 /**

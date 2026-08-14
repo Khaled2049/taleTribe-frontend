@@ -20,6 +20,26 @@ export const TALE_SYMBOL = "TALE";
 export const TALE_DECIMALS = 18;
 
 /**
+ * Basis points: 10000 bps = 100%. Values mirror TippingPlatform.sol, so the
+ * entry-fee split and the on-chain tip split share one ceiling.
+ */
+export const BPS_DENOMINATOR = 10000n;
+export const MAX_FEE_BPS = 3000;
+export const DEFAULT_FEE_BPS = 1000;
+
+/** Platform's cut of entry fees, resolved once at competition creation. */
+export function getCompetitionFeeBps(): number {
+  const parsed = Number.parseInt(
+    process.env.COMPETITION_FEE_BPS || String(DEFAULT_FEE_BPS),
+    10,
+  );
+  if (Number.isNaN(parsed) || parsed < 0 || parsed > MAX_FEE_BPS) {
+    return DEFAULT_FEE_BPS;
+  }
+  return parsed;
+}
+
+/**
  * A non-negative integer in base 10, with no sign, exponent, decimal point, or
  * leading zeros. "0" is valid. The brand stops an arbitrary string being passed
  * where a validated amount is required — construct via `toMinorUnits` or

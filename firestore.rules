@@ -353,13 +353,39 @@ service cloud.firestore {
     //
     // Deletion is gone entirely: a competition holding escrow cannot be
     // removed, only cancelled and refunded.
+    // Drafts are private to their creator. `published` is denormalized from the
+    // phase specifically so this rule and the explore query can both match on a
+    // field — an inequality on `phase` would force the query's first orderBy
+    // onto `phase` and destroy the createdAt sort.
+    //
+    // Any client listing this collection must constrain on `published` or on
+    // `creatorId`; an unconstrained list is rejected outright, which is the
+    // intended behaviour and is covered by the rules tests.
     match /competitions/{competitionId} {
-      allow read: if true;
+      // `.get(field, default)` rather than `.published`: reading a property that
+      // is absent is an ERROR in rules, not false, so a document written before
+      // this field existed would be unreadable rather than merely unlisted.
+      // Defaulting to false fails closed: an unflagged document stays private
+      // to its creator instead of leaking.
+      allow read: if resource.data.get('published', false) == true
+                  || (request.auth != null
+                      && request.auth.uid == resource.data.get('creatorId', ''));
       allow write: if false;
 
       match /participants/{userId} {
         allow read: if request.auth != null;
         allow create, update, delete: if false;
+      }
+
+      // What each entrant paid, and whether it is still held.
+      //
+      // `list` MUST stay false. Unlike `participants`, these carry amounts, so
+      // an enumerable collection would hand any signed-in client the roster of
+      // who paid what. A reader only ever needs their own.
+      match /contributions/{userId} {
+        allow get: if request.auth != null && request.auth.uid == userId;
+        allow list: if false;
+        allow write: if false;
       }
 
       // Entries are a public gallery — they link to stories that are already

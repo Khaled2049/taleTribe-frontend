@@ -1,5 +1,7 @@
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getEntryFee } from "@/lib/competitionListing";
+import { formatTokenAmount } from "@/lib/money";
 import type { ICompetition } from "@/types/ICompetition";
 import type { ICompetitionSubmission } from "@/types/ICompetitionSubmission";
 
@@ -20,6 +22,7 @@ export function CompetitionEnteredCard({
   busy = false,
 }: CompetitionEnteredCardProps) {
   const editable = competition.phase === "open" || !competition.phase;
+  const entryFee = getEntryFee(competition);
 
   return (
     <div className="rounded-[14px] border border-ns-border bg-ns-elevated overflow-hidden">
@@ -57,6 +60,24 @@ export function CompetitionEnteredCard({
             })}
           </span>
         </div>
+
+        {entryFee && (
+          <div className="flex items-center justify-between">
+            <span className="font-ui text-[13px] text-ns-ink-muted">
+              Entry fee paid
+            </span>
+            <span className="font-ui text-[13px] font-semibold text-ns-ink tabular-nums">
+              {formatTokenAmount(entryFee)}
+            </span>
+          </div>
+        )}
+
+        {entryFee && editable && (
+          <p className="font-ui text-[11px] leading-relaxed text-ns-ink-muted">
+            Editing withdraws your entry first, which refunds the fee — you'll
+            pay it again when you resubmit.
+          </p>
+        )}
 
         <div className="flex items-center gap-3">
           <Button

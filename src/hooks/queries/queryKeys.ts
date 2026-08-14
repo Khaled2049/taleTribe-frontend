@@ -52,6 +52,7 @@ export const queryKeys = {
   competitions: {
     all: () => ["competitions"] as const,
     list: (userId: string) => ["competitions", "list", userId] as const,
+    drafts: (userId: string) => ["competitions", "drafts", userId] as const,
     detail: (competitionId: string) =>
       ["competitions", competitionId] as const,
     submissions: (competitionId: string) =>

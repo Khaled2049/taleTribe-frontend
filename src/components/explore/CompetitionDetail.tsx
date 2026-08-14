@@ -14,15 +14,18 @@ import {
   useWithdrawSubmission,
 } from "@/hooks/queries/useCompetitionQueries";
 import { formatCountdown, useNow } from "@/hooks/useCountdown";
+import { useTokenBalanceQuery } from "@/hooks/queries/useTokenQueries";
 import {
   DEFAULT_MAX_VOTES_PER_USER,
+  getEntryFee,
+  getEntryFeeLabel,
   getMaxVotesPerUser,
   isCompetitionFull,
 } from "@/lib/competitionListing";
 import { PHASE_COPY } from "@/lib/competitionPhaseCopy";
 import { canTransition, isEditablePhase } from "@/lib/competitionPhase";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
-import { HostPrizeDialog } from "./HostPrizeDialog";
+import EntryFeeDialog from "./EntryFeeDialog";
 import CompetitionDetailHero from "./CompetitionDetailHero";
 import CompetitionBrief from "./CompetitionBrief";
 import CompetitionEnteredCard from "./CompetitionEnteredCard";
@@ -33,7 +36,6 @@ import SubmissionCard from "./SubmissionCard";
 import SubmissionPicker from "./SubmissionPicker";
 import type { CompetitionPhase } from "@/types/ICompetition";
 import type { ICompetitionSubmission } from "@/types/ICompetitionSubmission";
-
 
 /**
  * Stable per-viewer ordering.
@@ -64,8 +66,9 @@ const CompetitionDetail: React.FC = () => {
   const { competitionId = "" } = useParams<{ competitionId: string }>();
   const { user } = useAuthContext();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  /** Chosen in the picker, held while the fee is confirmed. */
+  const [pendingStoryId, setPendingStoryId] = useState<string | null>(null);
   const now = useNow();
 
   /** The brief is always on the page now; on narrow screens it may be above. */
@@ -87,6 +90,12 @@ const CompetitionDetail: React.FC = () => {
 
   const phase: CompetitionPhase = competition?.phase ?? "open";
   const entries = useMemo(() => submissions ?? [], [submissions]);
+
+  const entryFee = competition ? getEntryFee(competition) : null;
+  // Only fetched when there is something to pay for.
+  const { data: tokenBalance } = useTokenBalanceQuery(
+    entryFee ? user?.uid : undefined,
+  );
 
   const myEntry = entries.find((entry) => entry.userId === user?.uid);
   const selected = ballot?.submissionIds ?? [];
@@ -141,20 +150,37 @@ const CompetitionDetail: React.FC = () => {
    * Entering implies joining. The server requires participation before an
    * entry, so join first when needed rather than making the reader do it as a
    * separate step and leaving the entry action inert until they do.
+   *
+   * Joining stays free on a paid competition — the fee is charged by
+   * submitToCompetition — so a reader who backs out is just a participant who
+   * never entered.
    */
-  const handlePickStory = async (storyId: string) => {
+  const enterWithStory = async (storyId: string) => {
     try {
       if (!competition?.isJoined) {
         await joinCompetition.mutateAsync(competitionId);
       }
       await submitStory.mutateAsync(storyId);
-      toast.success("Your entry is in");
+      toast.success(
+        entryFee ? "You're in — fee held in escrow" : "Your entry is in",
+      );
       setPickerOpen(false);
+      setPendingStoryId(null);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to submit your entry",
       );
     }
+  };
+
+  const handlePickStory = async (storyId: string) => {
+    if (entryFee) {
+      // Confirm the spend before anything is charged.
+      setPickerOpen(false);
+      setPendingStoryId(storyId);
+      return;
+    }
+    await enterWithStory(storyId);
   };
 
   /**
@@ -188,7 +214,9 @@ const CompetitionDetail: React.FC = () => {
       setPickerOpen(true);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to withdraw your entry",
+        error instanceof Error
+          ? error.message
+          : "Failed to withdraw your entry",
       );
     }
   };
@@ -220,7 +248,7 @@ const CompetitionDetail: React.FC = () => {
    * isn't enough — it would count down to something that will never happen.
    */
   const showEntryCountdown =
-    (phase === "draft" || phase === "open") &&
+    (phase === "scheduled" || phase === "open") &&
     !formatCountdown(competition.deadline, now).isPast;
 
   // Same rule the server applies in assertCanManage (competitionEndpoints.ts):
@@ -232,12 +260,17 @@ const CompetitionDetail: React.FC = () => {
 
   // The hero's call to action. `null` means "no actionable button" — the hero
   // then falls back to phase/sign-in/creator copy instead.
-  let cta: { label: string; onClick?: () => void; disabled?: boolean } | null = null;
+  let cta: { label: string; onClick?: () => void; disabled?: boolean } | null =
+    null;
   if (!myEntry && user && !isCreator && phase === "open") {
     cta = full
       ? { label: "Competition is full", disabled: true }
       : {
-          label: competition.isJoined ? "Continue your entry" : "Enter this competition",
+          label: entryFee
+            ? `Enter · ${getEntryFeeLabel(competition)}`
+            : competition.isJoined
+              ? "Continue your entry"
+              : "Enter this competition",
           onClick: () => setPickerOpen(true),
         };
   }
@@ -258,19 +291,21 @@ const CompetitionDetail: React.FC = () => {
             <span className="hidden sm:inline font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted">
               {isCreator ? "You host this" : "Admin"}
             </span>
-            <button
-              type="button"
-              onClick={() => setEditOpen(true)}
-              disabled={!canEdit}
-              title={
-                canEdit
-                  ? undefined
-                  : `A competition in the ${phase} phase can no longer be edited`
-              }
-              className="font-ui text-[13px] font-semibold text-ns-ink-secondary hover:text-ns-ink transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-ns-ink-secondary"
-            >
-              Edit
-            </button>
+            {canEdit ? (
+              <Link
+                to={`/explore/competitions/${competitionId}/edit`}
+                className="font-ui text-[13px] font-semibold text-ns-ink-secondary hover:text-ns-ink transition-colors"
+              >
+                Edit
+              </Link>
+            ) : (
+              <span
+                title={`A competition in the ${phase} phase can no longer be edited`}
+                className="font-ui text-[13px] font-semibold text-ns-ink-secondary opacity-40 cursor-not-allowed"
+              >
+                Edit
+              </span>
+            )}
             <button
               type="button"
               onClick={() => setCancelOpen(true)}
@@ -289,23 +324,16 @@ const CompetitionDetail: React.FC = () => {
       </div>
 
       {canManage && (
-        <>
-          <HostPrizeDialog
-            open={editOpen}
-            onOpenChange={setEditOpen}
-            editingCompetition={competition}
-          />
-          <ConfirmDialog
-            open={cancelOpen}
-            onOpenChange={setCancelOpen}
-            title="Cancel this competition?"
-            description="The prize pool is refunded to the host and it can't be reopened."
-            confirmLabel="Cancel competition"
-            cancelLabel="Keep competition"
-            variant="danger"
-            onConfirm={handleCancelCompetition}
-          />
-        </>
+        <ConfirmDialog
+          open={cancelOpen}
+          onOpenChange={setCancelOpen}
+          title="Cancel this competition?"
+          description="The prize is refunded to the host and every entry fee goes back to whoever paid it. It can't be reopened."
+          confirmLabel="Cancel competition"
+          cancelLabel="Keep competition"
+          variant="danger"
+          onConfirm={handleCancelCompetition}
+        />
       )}
 
       <CompetitionDetailHero
@@ -421,6 +449,22 @@ const CompetitionDetail: React.FC = () => {
           onOpenChange={setPickerOpen}
           userId={user.uid}
           onPick={handlePickStory}
+          isSubmitting={submitStory.isPending || joinCompetition.isPending}
+          entryFee={entryFee}
+          balance={tokenBalance?.balance}
+        />
+      )}
+
+      {user && entryFee && pendingStoryId && (
+        <EntryFeeDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setPendingStoryId(null);
+          }}
+          competition={competition}
+          fee={entryFee}
+          balance={tokenBalance?.balance}
+          onConfirm={() => enterWithStory(pendingStoryId)}
           isSubmitting={submitStory.isPending || joinCompetition.isPending}
         />
       )}

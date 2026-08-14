@@ -25,7 +25,7 @@ interface WalkthroughStep extends DemoStep {
 }
 
 /**
- * The five phases in the order a competition actually moves through them.
+ * The six phases in the order a competition actually moves through them.
  *
  * `cancelled` is not a step: it is a branch off the first three, rendered
  * separately below the rail. Which phases it branches from is derived from
@@ -37,11 +37,21 @@ const STEPS: WalkthroughStep[] = [
   {
     phase: "draft",
     playMs: 4800,
+    clockLabel: "Before publishing",
+    heading: "The host shapes the brief in private",
+    body: "A competition starts as a draft that only its host can see. They can refine the title, brief, schedule, prize and entry terms, save their progress, or discard it without anyone else knowing it existed.",
+    money:
+      "Nothing has moved yet. The prize remains in the host's balance until they publish, and a draft never appears in the public competition list.",
+  },
+  {
+    phase: "scheduled",
+    playMs: 4800,
     countdownFromMs: 2 * DAY,
     clockLabel: "Opens in",
     heading: "The prize is put up front",
-    body: "A host sets the brief, the dates and the prize, and the prize leaves their balance the moment the competition is created.",
-    money: "The pool is already held in escrow. If that funding never confirms, the competition stays here — it will not open promising a prize nobody can pay.",
+    body: "A host writes the brief privately, then publishes it. Publishing is what moves the prize out of their balance — nothing is announced until the money is committed.",
+    money:
+      "The pool is already held in escrow before anyone can see the competition. A host cannot advertise a prize they have not paid for.",
   },
   {
     phase: "open",
@@ -50,7 +60,8 @@ const STEPS: WalkthroughStep[] = [
     clockLabel: "Entries close in",
     heading: "Writers enter",
     body: "Anyone can join and enter one published story. You can swap your entry out right up until the deadline, and the host cannot enter their own competition.",
-    money: "The pool sits untouched in escrow while entries come in. Entering is free — nothing is deducted from your balance.",
+    money:
+      "The pool sits untouched in escrow while entries come in. Most competitions are free to enter; where a host charges an entry fee, it is held in escrow beside the pool and comes back in full if you withdraw before the deadline.",
   },
   {
     phase: "voting",
@@ -59,7 +70,8 @@ const STEPS: WalkthroughStep[] = [
     clockLabel: "Voting closes in",
     heading: "The tribe reads and votes",
     body: "Entries close and ballots open. Each reader backs up to three entries and cannot back their own. Entries are shown in a different order to every reader, so nobody gets a head start from being first on the page.",
-    money: "Still escrowed, still untouched. Running vote counts are hidden from everyone — including the host — so nobody can pile onto whoever is ahead.",
+    money:
+      "Still escrowed, still untouched. Running vote counts are hidden from everyone — including the host — so nobody can pile onto whoever is ahead.",
   },
   {
     phase: "settling",
@@ -67,7 +79,8 @@ const STEPS: WalkthroughStep[] = [
     clockLabel: "In progress",
     heading: "Votes are counted",
     body: "Voting freezes and the result is worked out: most votes wins, with the earlier submission taking it if two entries tie.",
-    money: "The payout is in flight. Freezing voting first is what stops the count shifting underneath a payment that has already started — and it means an interrupted payout can be safely retried.",
+    money:
+      "The payout is in flight. Freezing voting first is what stops the count shifting underneath a payment that has already started — and it means an interrupted payout can be safely retried.",
   },
   {
     phase: "settled",
@@ -75,7 +88,8 @@ const STEPS: WalkthroughStep[] = [
     clockLabel: "Done",
     heading: "The winner is paid",
     body: "The result is published along with the full standings, and the prize lands in the winner's balance.",
-    money: "The whole pool goes to first place. A SHA-256 digest of the results is published next to them, so anyone can recompute it and check the result was not edited after the fact.",
+    money:
+      "The whole pool goes to first place — entry fees are revenue and never add to it, splitting instead between the host and the platform. If nobody voted, nothing is earned: the pool goes back to the host and every fee back to the entrant who paid it. A SHA-256 digest of the results is published next to them, so anyone can recompute it and check the result was not edited after the fact.",
   },
 ];
 
@@ -83,6 +97,9 @@ const STEPS: WalkthroughStep[] = [
 const CANCELLABLE = STEPS.filter((step) =>
   canTransition(step.phase, "cancelled"),
 ).map((step) => step.phase);
+const CANCELLABLE_AFTER_PUBLISH = CANCELLABLE.filter(
+  (phase) => phase !== "draft",
+);
 
 /** "draft, open or voting" */
 const listPhases = (phases: CompetitionPhase[]): string =>
@@ -277,16 +294,18 @@ export function PhaseWalkthrough() {
         </button>
       </div>
 
-      {/* The one branch off the happy path */}
+      {/* The paths that do not reach settlement */}
       <div className="mt-8 rounded-[14px] border border-dashed border-ns-border-strong bg-ns-surface p-[22px]">
         <p className="font-ui text-[10px] uppercase tracking-[0.2em] text-ns-ink-muted mb-2">
-          If it is called off
+          If plans change
         </p>
         <p className="font-body text-[16px] leading-[1.6] text-ns-ink-secondary max-w-[64ch]">
-          A competition can be called off while it is still{" "}
-          {listPhases(CANCELLABLE)} — never once the payout has started.
-          Cancelling refunds the whole pool to the host, so a competition holding
-          a prize is never simply deleted.
+          Before publishing, a host can discard a draft because no prize has
+          moved and nobody else can see it. Once it is published, a competition
+          can be called off while it is still{" "}
+          {listPhases(CANCELLABLE_AFTER_PUBLISH)} — never once the payout has
+          started. Cancelling refunds the whole pool to the host, so a
+          competition holding a prize is never simply deleted.
         </p>
       </div>
     </section>

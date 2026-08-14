@@ -37,6 +37,9 @@ const Competitions = lazy(() => import("./components/explore/Competitions"));
 const CompetitionDetail = lazy(
   () => import("./components/explore/CompetitionDetail"),
 );
+const CompetitionEditor = lazy(
+  () => import("./components/explore/CompetitionEditor"),
+);
 const HowCompetitionsWork = lazy(
   () => import("./components/explore/HowCompetitionsWork"),
 );
@@ -137,10 +140,26 @@ const router = createBrowserRouter([
             ),
           },
           {
+            path: "competitions/new",
+            element: (
+              <Suspense fallback={<LoadingFallback />}>
+                <CompetitionEditor />
+              </Suspense>
+            ),
+          },
+          {
             path: "competitions/:competitionId",
             element: (
               <Suspense fallback={<LoadingFallback />}>
                 <CompetitionDetail />
+              </Suspense>
+            ),
+          },
+          {
+            path: "competitions/:competitionId/edit",
+            element: (
+              <Suspense fallback={<LoadingFallback />}>
+                <CompetitionEditor />
               </Suspense>
             ),
           },

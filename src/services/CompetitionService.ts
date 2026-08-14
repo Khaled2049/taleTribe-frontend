@@ -5,16 +5,18 @@ import {
   getDocs,
   orderBy,
   query,
+  where,
   Timestamp,
 } from "firebase/firestore";
 import api, { getApiErrorMessage } from "@/api";
 import { firestore } from "@/config/firebase";
 import { deriveCompetitionStatus } from "@/lib/competitionPhase";
+import { isMinorUnits } from "@/lib/money";
 import {
   CompetitionPhase,
   EscrowState,
   ICompetition,
-  ICompetitionCreateInput,
+  ICompetitionDraftInput,
   ICompetitionUpdate,
 } from "@/types/ICompetition";
 import type { ITokenAmount } from "@/types/IToken";
@@ -33,8 +35,13 @@ interface CompetitionDoc {
   votingDeadline?: Timestamp;
   /** Absent on every document written before the phase model existed. */
   phase?: CompetitionPhase;
+  published?: boolean;
   escrowState?: EscrowState;
   prizePool?: ITokenAmount;
+  entryFee?: ITokenAmount;
+  feeBps?: number;
+  entryFeesHeld?: string;
+  entryFeesSettled?: ICompetition["entryFeesSettled"];
   submissionCount?: number;
   ballotCount?: number;
   votingRules?: ICompetition["votingRules"];
@@ -79,7 +86,7 @@ class CompetitionService {
     // Dual-read across the prize migration. Competitions created before TALE
     // existed carry a decorative prizeAmount/prizeCurrency that was never
     // funded, so they are surfaced as a plain label rather than dressed up as a
-    // real pool. Once the backfill has run and the old fields are dropped, the
+    // real pool. Once no stored document carries the old fields, the
     // `legacyPrizeLabel` branch can go with them.
     const legacyAmount =
       typeof data.prizeAmount === "number" ? data.prizeAmount : 0;
@@ -96,6 +103,17 @@ class CompetitionService {
       prizeAmount: legacyAmount,
       prizeCurrency: data.prizeCurrency ?? "USD",
       prizePool: data.prizePool,
+      // Left undefined rather than synthesized as a zero amount; `getEntryFee`
+      // in competitionListing.ts is the single reader and handles absence.
+      entryFee: data.entryFee,
+      feeBps: typeof data.feeBps === "number" ? data.feeBps : undefined,
+      entryFeesHeld: isMinorUnits(data.entryFeesHeld)
+        ? data.entryFeesHeld
+        : undefined,
+      entryFeesSettled: data.entryFeesSettled,
+      // Absent on every document written before drafts existed; those were all
+      // public, so treat a missing flag as published.
+      published: data.published ?? true,
       escrowState: data.escrowState ?? (data.prizePool ? "funded" : "unfunded"),
       legacyPrizeLabel,
       deadline,
@@ -130,13 +148,40 @@ class CompetitionService {
     };
   }
 
+  /**
+   * Every published competition.
+   *
+   * The `published` constraint is required, not an optimization: `firestore.rules`
+   * denies drafts to everyone but their creator, and Firestore rejects an entire
+   * list query if any document it would return fails the rule. An unconstrained
+   * read of this collection now errors for everyone.
+   */
   async getCompetitions(): Promise<ICompetition[]> {
     const competitionsQuery = query(
       this.competitionsCollection,
+      where("published", "==", true),
       orderBy("createdAt", "desc"),
     );
 
     const snapshot = await getDocs(competitionsQuery);
+    return snapshot.docs.map((competitionDoc) =>
+      this.mapCompetition(
+        competitionDoc.id,
+        competitionDoc.data() as CompetitionDoc,
+      ),
+    );
+  }
+
+  /** A host's own unpublished drafts. Nobody else can read these. */
+  async getMyDrafts(userId: string): Promise<ICompetition[]> {
+    const draftsQuery = query(
+      this.competitionsCollection,
+      where("creatorId", "==", userId),
+      where("published", "==", false),
+      orderBy("updatedAt", "desc"),
+    );
+
+    const snapshot = await getDocs(draftsQuery);
     return snapshot.docs.map((competitionDoc) =>
       this.mapCompetition(
         competitionDoc.id,
@@ -158,34 +203,64 @@ class CompetitionService {
   }
 
   /**
-   * Create a competition and fund its prize pool.
+   * Create or overwrite an unpublished draft. No money moves.
    *
-   * Server-side: creating one debits the caller's TALE into escrow and
-   * requires the `admin` claim, neither of which a client write could enforce.
-   * `firestore.rules` denies all client writes to `competitions`.
+   * Every field but the title is optional — the server's draft validator is
+   * deliberately lenient so a half-written competition can be saved.
    */
-  async createCompetition(input: ICompetitionCreateInput): Promise<string> {
+  async saveDraft(input: ICompetitionDraftInput): Promise<string> {
     try {
       const { data } = await api.post<{ competitionId: string }>(
-        "/createCompetition",
+        "/saveCompetitionDraft",
         {
+          ...(input.competitionId
+            ? { competitionId: input.competitionId }
+            : {}),
           title: input.title,
-          description: input.description,
-          category: input.category,
-          tags: input.tags,
+          description: input.description ?? "",
+          category: input.category ?? "",
+          tags: input.tags ?? [],
           maxParticipants: input.maxParticipants ?? null,
-          startDate: input.startDate.toISOString(),
-          deadline: input.deadline.toISOString(),
-          votingDeadline: input.votingDeadline.toISOString(),
-          prizeAmount: input.prizeAmount,
+          startDate: input.startDate?.toISOString() ?? null,
+          deadline: input.deadline?.toISOString() ?? null,
+          votingDeadline: input.votingDeadline?.toISOString() ?? null,
+          prizeAmount: input.prizeAmount ?? null,
+          entryFee: input.entryFee ?? null,
           creatorName: input.creatorName,
         },
       );
       return data.competitionId;
     } catch (error) {
-      throw new Error(
-        getApiErrorMessage(error, "Failed to create competition"),
+      throw new Error(getApiErrorMessage(error, "Failed to save draft"));
+    }
+  }
+
+  /**
+   * Publish a draft. This is the call that debits the host's TALE into escrow.
+   *
+   * Takes only an id: the server validates and publishes the stored document,
+   * so the terms that go live are exactly the ones the host last saved.
+   */
+  async publishCompetition(competitionId: string): Promise<CompetitionPhase> {
+    try {
+      const { data } = await api.post<{ phase: CompetitionPhase }>(
+        "/publishCompetition",
+        { competitionId },
       );
+      return data.phase;
+    } catch (error) {
+      throw new Error(
+        getApiErrorMessage(error, "Failed to publish competition"),
+      );
+    }
+  }
+
+  /** Delete a draft outright. Only legal while unpublished. */
+  async discardDraft(competitionId: string): Promise<void> {
+    try {
+      await api.post("/discardCompetitionDraft", { competitionId });
+    } catch (error) {
+      throw new Error(getApiErrorMessage(error, "Failed to discard draft"));
     }
   }
 

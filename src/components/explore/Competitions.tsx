@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   HelpCircle,
@@ -12,22 +11,23 @@ import {
 import { useAuthContext } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CompetitionLedgerRow } from "./CompetitionLedgerRow";
 import { LEDGER_GRID } from "@/lib/competitionLedger";
 import { pageItems } from "@/lib/pagination";
 import { CompetitionsEmptyState } from "./CompetitionsEmptyState";
 import { LedgerStatusLegend } from "./LedgerStatusLegend";
-import { HostPrizeDialog } from "./HostPrizeDialog";
-import { useCompetitionsQuery } from "@/hooks/queries/useCompetitionQueries";
-import { useNow, formatCountdown } from "@/hooks/useCountdown";
-import { getHostName, getPrizeDisplay } from "@/lib/competitionListing";
+import {
+  useCompetitionsQuery,
+  useMyDraftsQuery,
+} from "@/hooks/queries/useCompetitionQueries";
+import { useNow } from "@/hooks/useCountdown";
+import { getHostName } from "@/lib/competitionListing";
 import { ICompetition } from "@/types/ICompetition";
 
 const PAGE_SIZE = 8;
 
-type SortKey = "closesAt" | "pool";
+type CompetitionTab = "competitions" | "drafts";
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
   if (error instanceof Error && error.message) {
@@ -56,9 +56,10 @@ const Competitions: React.FC = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("q") ?? "";
-  const sortKey = (searchParams.get("sort") as SortKey) || "closesAt";
-  const sortDir = searchParams.get("dir") === "desc" ? "desc" : "asc";
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const activeTab: CompetitionTab =
+    canHost && searchParams.get("tab") === "drafts" ? "drafts" : "competitions";
+  const draftPage = Math.max(1, Number(searchParams.get("draftPage")) || 1);
 
   const updateParams = (patch: Record<string, string | null>) => {
     setSearchParams((prev) => {
@@ -72,7 +73,6 @@ const Competitions: React.FC = () => {
   };
 
   const [error, setError] = useState<string | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
 
   const {
     data: competitionsData,
@@ -84,9 +84,22 @@ const Competitions: React.FC = () => {
     [competitionsData],
   );
 
+  // Only the host's own, and only readable by them — firestore.rules denies a
+  // draft to everyone else.
+  const {
+    data: draftsData,
+    isLoading: draftsLoading,
+    error: draftsError,
+  } = useMyDraftsQuery(canHost ? user?.uid : undefined);
+  const drafts = draftsData ?? [];
+
   const displayedError =
     error ??
-    (loadError ? getErrorMessage(loadError, "Failed to load competitions.") : null);
+    (loadError
+      ? getErrorMessage(loadError, "Failed to load competitions.")
+      : draftsError
+        ? getErrorMessage(draftsError, "Failed to load your drafts.")
+        : null);
 
   // Cmd+K / Ctrl+K focuses search, matching the handoff's stated shortcut.
   useEffect(() => {
@@ -100,50 +113,18 @@ const Competitions: React.FC = () => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // Creating only. Editing and cancelling belong to a single competition, so
-  // they live on that competition's page.
-  const handleStartCreate = () => {
-    setDialogOpen(true);
-  };
-
   const searched = useMemo(
     () => competitions.filter((c) => matchesQuery(c, query)),
     [competitions, query],
   );
 
-  const activeCompetitions = useMemo(
-    () => searched.filter((c) => c.status === "active"),
-    [searched],
-  );
-
-  const featured = useMemo(() => {
-    if (activeCompetitions.length === 0) return null;
-    return activeCompetitions.reduce((best, c) => {
-      const bestAmount = best.prizePool ? BigInt(best.prizePool.amount) : 0n;
-      const amount = c.prizePool ? BigInt(c.prizePool.amount) : 0n;
-      return amount > bestAmount ? c : best;
-    }, activeCompetitions[0]);
-  }, [activeCompetitions]);
-
   // No filtering: the ledger lists every competition, in every phase. Search
-  // narrows it, sorting reorders it — neither hides a phase from the reader.
+  // narrows it; the list stays ordered by submissions-close date.
   const sorted = useMemo(() => {
-    const dir = sortDir === "asc" ? 1 : -1;
     const list = [...searched];
-    list.sort((a, b) => {
-      switch (sortKey) {
-        case "pool": {
-          const av = a.prizePool ? BigInt(a.prizePool.amount) : 0n;
-          const bv = b.prizePool ? BigInt(b.prizePool.amount) : 0n;
-          return av < bv ? -1 * dir : av > bv ? 1 * dir : 0;
-        }
-        case "closesAt":
-        default:
-          return (a.deadline.getTime() - b.deadline.getTime()) * dir;
-      }
-    });
+    list.sort((a, b) => a.deadline.getTime() - b.deadline.getTime());
     return list;
-  }, [searched, sortKey, sortDir]);
+  }, [searched]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   // Clamped rather than trusted: `?page=` is user-editable, and a search that
@@ -151,6 +132,14 @@ const Competitions: React.FC = () => {
   const currentPage = Math.min(Math.max(1, page), totalPages);
   const firstIndex = (currentPage - 1) * PAGE_SIZE;
   const visible = sorted.slice(firstIndex, firstIndex + PAGE_SIZE);
+
+  const draftTotalPages = Math.max(1, Math.ceil(drafts.length / PAGE_SIZE));
+  const currentDraftPage = Math.min(Math.max(1, draftPage), draftTotalPages);
+  const firstDraftIndex = (currentDraftPage - 1) * PAGE_SIZE;
+  const visibleDrafts = drafts.slice(
+    firstDraftIndex,
+    firstDraftIndex + PAGE_SIZE,
+  );
 
   const goToPage = (next: number) => {
     // Page 1 is the default, so it stays out of the URL.
@@ -160,24 +149,14 @@ const Competitions: React.FC = () => {
     document.getElementById("ledger")?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      updateParams({ dir: sortDir === "asc" ? "desc" : "asc", page: null });
-    } else {
-      updateParams({ sort: key, dir: "asc", page: null });
-    }
+  const goToDraftPage = (next: number) => {
+    updateParams({ draftPage: next === 1 ? null : String(next) });
+    document.getElementById("drafts")?.scrollIntoView({ behavior: "smooth" });
   };
 
   const clearSearch = () => {
     setSearchParams(new URLSearchParams());
   };
-
-  const featuredCountdown = featured ? formatCountdown(featured.deadline, now) : null;
-  const featuredPrize = featured ? getPrizeDisplay(featured) : null;
-  const featuredPct =
-    featured?.maxParticipants && featured.maxParticipants > 0
-      ? Math.min((featured.participants / featured.maxParticipants) * 100, 100)
-      : null;
 
   return (
     <div className="min-h-screen">
@@ -193,12 +172,6 @@ const Competitions: React.FC = () => {
           </button>
         </div>
       )}
-
-      <HostPrizeDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        editingCompetition={null}
-      />
 
       {loading ? (
         <div className="py-10 space-y-10">
@@ -217,281 +190,305 @@ const Competitions: React.FC = () => {
             ))}
           </div>
         </div>
-      ) : competitions.length === 0 ? (
-        <CompetitionsEmptyState
-          variant="none"
-          canHost={canHost}
-          onHost={handleStartCreate}
-        />
       ) : (
         <>
-          {/* Featured competition hero */}
-          {featured && featuredPrize && featuredCountdown && (
-            <div className="relative overflow-hidden py-11 border-b border-ns-border">
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  backgroundImage:
-                    "radial-gradient(90% 130% at 78% 0%, var(--ns-accent-subtle) 0%, transparent 62%), repeating-linear-gradient(105deg, rgba(212,169,74,.05) 0 1px, transparent 1px 13px)",
-                }}
-              />
-              <div className="relative flex flex-col xl:flex-row gap-12 items-start xl:items-end">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-ns-accent animate-ns-glow-pulse motion-reduce:animate-none" />
-                    <span className="font-ui text-[10px] font-bold uppercase tracking-[0.22em] text-ns-accent">
-                      {featuredCountdown.isPast
-                        ? "Closed"
-                        : `Live · Closes in ${featuredCountdown.label}`}
-                    </span>
-                    <span className="font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted">
-                      {getHostName(featured)}
-                    </span>
-                  </div>
-                  <h1 className="font-heading font-light text-[44px] sm:text-[3rem] xl:text-[4.75rem] leading-[0.96] tracking-[-0.02em] text-ns-ink max-w-[20ch] text-balance">
-                    {featured.title}
-                  </h1>
-                  <p className="font-body text-xl leading-[1.5] text-ns-ink-secondary max-w-[56ch] mt-5">
-                    {featured.description}
-                  </p>
-                  <div className="flex items-center gap-3 mt-[30px]">
-                    <Link to={`/explore/competitions/${featured.id}`}>
-                      <Button
-                        size="lg"
-                        className="bg-ns-ink text-ns-bg hover:opacity-90 rounded-[10px] px-[30px]"
-                      >
-                        Read the brief & enter
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="w-full xl:w-[330px] shrink-0 rounded-[14px] border border-ns-border bg-ns-elevated p-6 flex flex-col gap-[18px]">
-                  <div>
-                    <p className="font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted mb-1">
-                      Prize pool
-                    </p>
-                    <p className="font-heading text-[52px] leading-[0.9] text-ns-gold-bright">
-                      {featuredPrize.amount}
-                    </p>
-                    <p className="font-ui text-[11px] tracking-[0.14em] text-ns-ink-muted mt-1">
-                      {featuredPrize.symbol
-                        ? `${featuredPrize.symbol} · winner takes all`
-                        : "Legacy prize"}
-                    </p>
-                  </div>
-                  <div className="h-px bg-ns-border" />
-                  <div className="flex items-center justify-between">
-                    <span className="font-ui text-[13px] text-ns-ink-muted">Category</span>
-                    <span className="font-ui text-[13px] font-semibold text-ns-ink">
-                      {featured.category}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-ui text-[13px] text-ns-ink-muted">Entrants</span>
-                      <span className="font-ui text-[13px] font-semibold text-ns-ink tabular-nums">
-                        {featured.participants}
-                        {featured.maxParticipants ? ` / ${featured.maxParticipants}` : ""}
-                      </span>
-                    </div>
-                    {featuredPct !== null && <Progress value={featuredPct} />}
-                  </div>
-                </div>
-              </div>
-            </div>
+          {canHost && (
+            <nav
+              aria-label="Competition views"
+              className="flex items-end gap-6 border-b border-ns-border"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "competitions"}
+                onClick={() => updateParams({ tab: null })}
+                className={`relative py-4 font-ui text-[13px] font-semibold transition-colors ${
+                  activeTab === "competitions"
+                    ? "text-ns-ink"
+                    : "text-ns-ink-muted hover:text-ns-ink-secondary"
+                }`}
+              >
+                Explore competitions
+                {activeTab === "competitions" && (
+                  <span className="absolute inset-x-0 bottom-0 h-0.5 bg-ns-accent" />
+                )}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "drafts"}
+                onClick={() => updateParams({ tab: "drafts", draftPage: null })}
+                className={`relative py-4 font-ui text-[13px] font-semibold transition-colors ${
+                  activeTab === "drafts"
+                    ? "text-ns-ink"
+                    : "text-ns-ink-muted hover:text-ns-ink-secondary"
+                }`}
+              >
+                Your drafts
+                {drafts.length > 0 && (
+                  <span className="ml-1.5 text-[11px] text-ns-ink-muted tabular-nums">
+                    {drafts.length}
+                  </span>
+                )}
+                {activeTab === "drafts" && (
+                  <span className="absolute inset-x-0 bottom-0 h-0.5 bg-ns-accent" />
+                )}
+              </button>
+            </nav>
           )}
 
-          {/* Utility bar. Inside the loaded branch and below the hero, but
-              above the ledger's own empty state — so a search that matches
-              nothing still leaves the reader a search box to edit. */}
-          <div className="flex items-center gap-6 py-[22px] border-b border-ns-border">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ns-ink-muted" />
-              <Input
-                ref={searchInputRef}
-                type="text"
-                placeholder="Search competitions, genres, hosts… (⌘K)"
-                value={query}
-                onChange={(e) =>
-                  updateParams({ q: e.target.value || null, page: null })
-                }
-                className="h-11 rounded-[10px] bg-ns-elevated pl-10 pr-4"
-              />
-            </div>
-            <Link
-              to="/explore/competitions/how-it-works"
-              className="hidden sm:inline-flex items-center gap-1.5 whitespace-nowrap font-ui text-[13px] font-semibold text-ns-ink-secondary hover:text-ns-ink transition-colors"
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-              How it works
-            </Link>
-            {user && (
-              <Button
-                variant="outline"
-                onClick={handleStartCreate}
-                disabled={!canHost}
-                title={!canHost ? "Only admins can host a competition" : undefined}
-                className="whitespace-nowrap"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                Host a competition
-              </Button>
-            )}
-          </div>
-
-          {/* Every competition — the ledger table */}
-          <div id="ledger" className="py-8 scroll-mt-24">
-            <div className="flex items-center gap-4 mb-5 flex-wrap">
-              <h2 className="font-heading text-[32px] text-ns-ink shrink-0">
-                Every competition
-              </h2>
-              <div className="h-px flex-1 min-w-8 bg-ns-border" />
-            </div>
-
-            {sorted.length === 0 ? (
-              <CompetitionsEmptyState
-                variant="search"
-                canHost={canHost}
-                onHost={handleStartCreate}
-                onClearSearch={clearSearch}
-              />
-            ) : (
-              <>
-                <div
-                  className={`hidden md:grid gap-x-5 border-b border-ns-border pb-3 px-1 ${LEDGER_GRID}`}
-                >
-                  <SortHead
-                    label="Competition"
-                    active={sortKey === "closesAt"}
-                    dir={sortDir}
-                    onClick={() => toggleSort("closesAt")}
-                  />
-                  <span className="hidden xl:block font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted">
-                    Host
-                  </span>
-                  <SortHead
-                    label="Pool"
-                    align="right"
-                    active={sortKey === "pool"}
-                    dir={sortDir}
-                    onClick={() => toggleSort("pool")}
-                  />
-                  <span className="font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted text-right">
-                    Entry
-                  </span>
-                  <LedgerStatusLegend />
-                </div>
-
+          {activeTab === "drafts" ? (
+            <section id="drafts" className="py-8 scroll-mt-24">
+              <div className="flex items-center gap-4 mb-5 flex-wrap">
                 <div>
-                  {visible.map((competition) => (
-                    <CompetitionLedgerRow
-                      key={competition.id}
-                      competition={competition}
-                      now={now}
-                    />
+                  <h2 className="font-heading text-[32px] text-ns-ink">
+                    Your drafts
+                  </h2>
+                  <p className="font-body text-[15px] text-ns-ink-secondary mt-1">
+                    Only you can see and edit these unpublished competitions.
+                  </p>
+                </div>
+                <div className="h-px flex-1 min-w-8 bg-ns-border" />
+                <Link to="/explore/competitions/new">
+                  <Button variant="outline" className="whitespace-nowrap">
+                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                    New draft
+                  </Button>
+                </Link>
+              </div>
+
+              {draftsLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
                   ))}
                 </div>
-
-                <div className="flex flex-col items-center gap-4 pt-8">
-                  <p className="font-ui text-xs text-ns-ink-muted tabular-nums">
-                    Showing {firstIndex + 1}–{firstIndex + visible.length} of{" "}
-                    {sorted.length} competition
-                    {sorted.length === 1 ? "" : "s"}
+              ) : drafts.length === 0 ? (
+                <div className="flex flex-col items-center gap-4 px-8 py-16 text-center border border-dashed border-ns-border rounded-ns bg-ns-elevated/40">
+                  <h3 className="font-heading text-[32px] leading-none text-ns-ink">
+                    No drafts to pick up
+                  </h3>
+                  <p className="font-body text-[16px] leading-[1.55] max-w-[38ch] text-ns-ink-secondary">
+                    Start a competition when inspiration strikes. Your
+                    unfinished brief will stay here until you are ready to
+                    publish it.
                   </p>
-
-                  {totalPages > 1 && (
-                    <nav
-                      aria-label="Pagination"
-                      className="flex items-center gap-1.5"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => goToPage(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        aria-label="Previous page"
-                        className="inline-flex items-center justify-center h-8 w-8 rounded-ns font-ui text-ns-ink-secondary transition-colors hover:bg-ns-surface hover:text-ns-ink disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ns-ink-secondary"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-
-                      {pageItems(currentPage, totalPages).map((item, index) =>
-                        item === null ? (
-                          <span
-                            key={`gap-${index}`}
-                            aria-hidden="true"
-                            className="px-1 font-ui text-xs text-ns-ink-muted select-none"
-                          >
-                            …
-                          </span>
-                        ) : (
-                          <button
-                            key={item}
-                            type="button"
-                            onClick={() => goToPage(item)}
-                            aria-label={`Page ${item}`}
-                            aria-current={
-                              item === currentPage ? "page" : undefined
-                            }
-                            className={`inline-flex items-center justify-center h-8 min-w-8 px-2 rounded-ns font-ui text-[13px] font-semibold tabular-nums transition-colors ${
-                              item === currentPage
-                                ? "bg-ns-ink text-ns-bg"
-                                : "text-ns-ink-secondary hover:bg-ns-surface hover:text-ns-ink"
-                            }`}
-                          >
-                            {item}
-                          </button>
-                        ),
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => goToPage(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        aria-label="Next page"
-                        className="inline-flex items-center justify-center h-8 w-8 rounded-ns font-ui text-ns-ink-secondary transition-colors hover:bg-ns-surface hover:text-ns-ink disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ns-ink-secondary"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </nav>
-                  )}
+                  <Link to="/explore/competitions/new">
+                    <Button className="bg-ns-ink text-ns-bg hover:opacity-90">
+                      <Plus className="w-3.5 h-3.5 mr-1.5" />
+                      Start a competition
+                    </Button>
+                  </Link>
                 </div>
-              </>
-            )}
-          </div>
+              ) : (
+                <>
+                  <div className="flex flex-col border-t border-ns-border">
+                    {visibleDrafts.map((draft) => (
+                      <Link
+                        key={draft.id}
+                        to={`/explore/competitions/${draft.id}/edit`}
+                        className="group flex items-center justify-between gap-4 py-4 border-b border-ns-border px-1 transition-colors hover:bg-ns-surface-hover"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-heading text-xl text-ns-ink truncate group-hover:text-ns-accent transition-colors">
+                            {draft.title || "Untitled competition"}
+                          </p>
+                          <p className="font-ui text-[11px] uppercase tracking-[0.14em] text-ns-ink-muted mt-1">
+                            {draft.category || "Uncategorised"} · Draft
+                          </p>
+                        </div>
+                        <span className="font-ui text-[12px] font-semibold text-ns-ink-secondary shrink-0">
+                          Continue editing
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+
+                  <Pagination
+                    currentPage={currentDraftPage}
+                    totalPages={draftTotalPages}
+                    onPageChange={goToDraftPage}
+                    label={`Showing ${firstDraftIndex + 1}–${firstDraftIndex + visibleDrafts.length} of ${drafts.length} draft${drafts.length === 1 ? "" : "s"}`}
+                    ariaLabel="Draft pagination"
+                  />
+                </>
+              )}
+            </section>
+          ) : competitions.length === 0 ? (
+            <CompetitionsEmptyState variant="none" canHost={canHost} />
+          ) : (
+            <>
+              {/* Utility bar. Inside the loaded branch and below the hero, but
+              above the ledger's own empty state — so a search that matches
+              nothing still leaves the reader a search box to edit. */}
+              <div className="flex items-center gap-6 py-[22px] border-b border-ns-border">
+                <div className="relative flex-1">
+                  <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ns-ink-muted" />
+                  <Input
+                    ref={searchInputRef}
+                    type="text"
+                    placeholder="Search competitions, genres, hosts… (⌘K)"
+                    value={query}
+                    onChange={(e) =>
+                      updateParams({ q: e.target.value || null, page: null })
+                    }
+                    className="h-11 rounded-[10px] bg-ns-elevated pl-10 pr-4"
+                  />
+                </div>
+                <Link
+                  to="/explore/competitions/how-it-works"
+                  className="hidden sm:inline-flex items-center gap-1.5 whitespace-nowrap font-ui text-[13px] font-semibold text-ns-ink-secondary hover:text-ns-ink transition-colors"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  How it works
+                </Link>
+                {canHost && (
+                  <Link to="/explore/competitions/new">
+                    <Button variant="outline" className="whitespace-nowrap">
+                      <Plus className="w-3.5 h-3.5 mr-1.5" />
+                      Host a competition
+                    </Button>
+                  </Link>
+                )}
+              </div>
+
+              {/* Every competition — the ledger table */}
+              <div id="ledger" className="py-8 scroll-mt-24">
+                <div className="flex items-center gap-4 mb-5 flex-wrap">
+                  <h2 className="font-heading text-[32px] text-ns-ink shrink-0">
+                    Every competition
+                  </h2>
+                  <div className="h-px flex-1 min-w-8 bg-ns-border" />
+                </div>
+
+                {sorted.length === 0 ? (
+                  <CompetitionsEmptyState
+                    variant="search"
+                    canHost={canHost}
+                    onClearSearch={clearSearch}
+                  />
+                ) : (
+                  <>
+                    <div
+                      className={`hidden md:grid gap-x-5 border-b border-ns-border pb-3 px-1 ${LEDGER_GRID}`}
+                    >
+                      <span className="font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted">
+                        Competition
+                      </span>
+                      <span className="hidden xl:block font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted">
+                        Host
+                      </span>
+                      <span className="hidden xl:block font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted">
+                        Opens
+                      </span>
+                      <span className="hidden xl:block font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted">
+                        Entries close
+                      </span>
+                      <span className="hidden xl:block font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted">
+                        Voting closes
+                      </span>
+                      <span className="font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted text-right">
+                        Entry
+                      </span>
+                      <LedgerStatusLegend />
+                    </div>
+
+                    <div>
+                      {visible.map((competition) => (
+                        <CompetitionLedgerRow
+                          key={competition.id}
+                          competition={competition}
+                          now={now}
+                        />
+                      ))}
+                    </div>
+
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      onPageChange={goToPage}
+                      label={`Showing ${firstIndex + 1}–${firstIndex + visible.length} of ${sorted.length} competition${sorted.length === 1 ? "" : "s"}`}
+                      ariaLabel="Competition pagination"
+                    />
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
   );
 };
 
-function SortHead({
+function Pagination({
+  currentPage,
+  totalPages,
+  onPageChange,
   label,
-  active,
-  dir,
-  onClick,
-  align = "left",
+  ariaLabel,
 }: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
   label: string;
-  active: boolean;
-  dir: "asc" | "desc";
-  onClick: () => void;
-  align?: "left" | "right";
+  ariaLabel: string;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1 font-ui text-[10px] uppercase tracking-[0.18em] transition-colors ${
-        align === "right" ? "justify-end" : "justify-start"
-      } ${active ? "text-ns-ink" : "text-ns-ink-muted hover:text-ns-ink-secondary"}`}
-    >
-      {label}
-      <ChevronDown
-        className={`w-3 h-3 transition-transform ${
-          active ? "opacity-100" : "opacity-0"
-        } ${active && dir === "desc" ? "rotate-180" : ""}`}
-      />
-    </button>
+    <div className="flex flex-col items-center gap-4 pt-8">
+      <p className="font-ui text-xs text-ns-ink-muted tabular-nums">{label}</p>
+
+      {totalPages > 1 && (
+        <nav aria-label={ariaLabel} className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            aria-label="Previous page"
+            className="inline-flex items-center justify-center h-8 w-8 rounded-ns font-ui text-ns-ink-secondary transition-colors hover:bg-ns-surface hover:text-ns-ink disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ns-ink-secondary"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {pageItems(currentPage, totalPages).map((item, index) =>
+            item === null ? (
+              <span
+                key={`gap-${index}`}
+                aria-hidden="true"
+                className="px-1 font-ui text-xs text-ns-ink-muted select-none"
+              >
+                …
+              </span>
+            ) : (
+              <button
+                key={item}
+                type="button"
+                onClick={() => onPageChange(item)}
+                aria-label={`Page ${item}`}
+                aria-current={item === currentPage ? "page" : undefined}
+                className={`inline-flex items-center justify-center h-8 min-w-8 px-2 rounded-ns font-ui text-[13px] font-semibold tabular-nums transition-colors ${
+                  item === currentPage
+                    ? "bg-ns-ink text-ns-bg"
+                    : "text-ns-ink-secondary hover:bg-ns-surface hover:text-ns-ink"
+                }`}
+              >
+                {item}
+              </button>
+            ),
+          )}
+
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            aria-label="Next page"
+            className="inline-flex items-center justify-center h-8 w-8 rounded-ns font-ui text-ns-ink-secondary transition-colors hover:bg-ns-surface hover:text-ns-ink disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ns-ink-secondary"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </nav>
+      )}
+    </div>
   );
 }
 

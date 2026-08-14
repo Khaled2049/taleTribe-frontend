@@ -30,14 +30,20 @@ import { createHash } from "crypto";
 import { FieldValue, Firestore, Timestamp } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { getEscrowProvider } from "./escrow";
-import { assertMinorUnits } from "./money";
+import { DEFAULT_FEE_BPS, assertMinorUnits } from "./money";
 import { CompetitionPhase } from "./competitionPhase";
+import {
+  buildUnwindRefunds,
+  readHeldContributions,
+  totalContributions,
+} from "./competitionContributions";
 import {
   SettlementResult,
   buildDigestPayload,
   buildRankableEntries,
   computePayouts,
   rankEntries,
+  splitEntryFees,
   totalPayout,
 } from "./competitionSettlementCore";
 
@@ -159,23 +165,45 @@ export async function settleCompetition(
 
   // Reads happen outside a transaction: voting is frozen by the `settling`
   // claim, so nothing here can change underneath us.
-  const [competitionSnapshot, tallySnapshot, submissionsSnapshot, escrowed] =
-    await Promise.all([
-      ref.get(),
-      ref.collection("private").doc("tally").get(),
-      ref.collection("submissions").limit(MAX_SUBMISSIONS_READ).get(),
-      escrow.escrowedAmount(competitionId),
-    ]);
+  const [
+    competitionSnapshot,
+    tallySnapshot,
+    submissionsSnapshot,
+    escrowed,
+    contributions,
+  ] = await Promise.all([
+    ref.get(),
+    ref.collection("private").doc("tally").get(),
+    ref.collection("submissions").limit(MAX_SUBMISSIONS_READ).get(),
+    escrow.escrowedAmount(competitionId),
+    readHeldContributions(db, competitionId),
+  ]);
 
   const competition = competitionSnapshot.data() ?? {};
   const creatorId = competition.creatorId as string | undefined;
   if (!creatorId) throw fail("Competition has no creator to refund", 422);
 
   const poolAmount = (competition.prizePool?.amount as string) ?? "0";
-  if (BigInt(escrowed) !== BigInt(poolAmount)) {
-    // Refuse rather than pay out of a balance we cannot account for.
+
+  // Derived from the contribution documents, not the denormalized counter —
+  // using the counter on both sides would make the assertion below vacuous.
+  const entryFees = totalContributions(contributions);
+  const counterHeld = (competition.entryFeesHeld as string) ?? "0";
+  if (BigInt(entryFees) !== BigInt(counterHeld)) {
     throw fail(
-      `Escrowed amount (${escrowed}) does not match the prize pool (${poolAmount})`,
+      `Held entry fees (${entryFees}) do not match entryFeesHeld (${counterHeld})`,
+      422,
+    );
+  }
+
+  const feeBps =
+    typeof competition.feeBps === "number" ? competition.feeBps : DEFAULT_FEE_BPS;
+
+  // Refuse rather than pay out of a balance we cannot account for.
+  const accounted = BigInt(poolAmount) + BigInt(entryFees);
+  if (BigInt(escrowed) !== accounted) {
+    throw fail(
+      `Escrowed amount (${escrowed}) does not match the prize pool plus entry fees (${accounted})`,
       422,
     );
   }
@@ -209,6 +237,8 @@ export async function settleCompetition(
     competitionId,
     assetId: (competition.prizePool?.assetId as string) ?? escrow.assetId,
     pool: poolAmount,
+    entryFees,
+    feeBps,
     votingClosedAtMs,
     results,
   });
@@ -217,11 +247,17 @@ export async function settleCompetition(
   const refunded = results.length === 0;
 
   if (refunded) {
-    // Nobody entered, or nobody voted. No prize was earned, so the pool goes
-    // back to the creator rather than being awarded arbitrarily.
+    // Nobody entered, or nobody voted. Nothing was judged and nothing earned,
+    // so everything goes back to source — keeping the fees would charge people
+    // for a contest that produced no result.
     const refund = await escrow.refund({
       competitionId,
-      funderUserId: creatorId,
+      refunds: buildUnwindRefunds({
+        seedUserId: creatorId,
+        seedAmount: assertMinorUnits(poolAmount, "prize pool"),
+        held: contributions,
+      }),
+      mode: "final",
       idempotencyKey: `escrow:refund:competition:${competitionId}`,
     });
     if (refund.state !== "confirmed") {
@@ -243,17 +279,41 @@ export async function settleCompetition(
       );
     }
 
+    // The prize is the seed alone — fees are revenue, not winnings.
+    const fees = splitEntryFees(entryFees, feeBps);
+
+    const payouts = results
+      .filter((result) => BigInt(result.amount) > 0n)
+      .map((result) => ({
+        userId: result.userId,
+        // The core is import-free and so deals in plain strings; re-validate at
+        // the boundary rather than casting, which also proves its output is
+        // canonical minor units before any of it reaches the ledger.
+        amount: assertMinorUnits(result.amount, "payout amount"),
+      }));
+
+    if (BigInt(fees.host) > 0n) {
+      payouts.push({
+        userId: creatorId,
+        amount: assertMinorUnits(fees.host, "host fee share"),
+      });
+    }
+
+    const released = payouts.reduce(
+      (sum, payout) => sum + BigInt(payout.amount),
+      BigInt(fees.platform),
+    );
+    if (released !== BigInt(escrowed)) {
+      throw fail(
+        `Release total (${released}) does not drain escrow (${escrowed})`,
+        500,
+      );
+    }
+
     const release = await escrow.release({
       competitionId,
-      // The core is import-free and so deals in plain strings; re-validate at
-      // the boundary rather than casting, which also proves its output is
-      // canonical minor units before any of it reaches the ledger.
-      payouts: results
-        .filter((result) => BigInt(result.amount) > 0n)
-        .map((result) => ({
-          userId: result.userId,
-          amount: assertMinorUnits(result.amount, "payout amount"),
-        })),
+      payouts,
+      platformFee: assertMinorUnits(fees.platform, "platform fee share"),
       resultsDigest,
       idempotencyKey: `escrow:release:competition:${competitionId}`,
     });
@@ -280,6 +340,11 @@ export async function settleCompetition(
     tx.update(ref, {
       phase: "settled" as CompetitionPhase,
       escrowState: refunded ? "refunded" : "released",
+      // Escrow is drained either way, so nothing is held any more.
+      entryFeesHeld: "0",
+      entryFeesSettled: refunded
+        ? { platform: "0", host: "0" }
+        : splitEntryFees(entryFees, feeBps),
       results,
       resultsDigest,
       // Stored so anyone can recompute the hash. A digest nobody can verify is
@@ -293,6 +358,7 @@ export async function settleCompetition(
   });
 
   await denormalizeVoteCounts(db, competitionId, results);
+  await closeContributions(db, competitionId, contributions, refunded);
 
   logger.info("Competition settled", {
     competitionId,
@@ -344,5 +410,40 @@ async function denormalizeVoteCounts(
     // The competition is settled and paid; failing to publish display counts
     // must not turn that into an error the caller retries.
     logger.warn("Failed to denormalize vote counts", { competitionId, error });
+  }
+}
+
+/**
+ * Close out the contribution records once escrow has been drained.
+ *
+ * Best-effort and outside the transaction, like the vote counts: escrow is
+ * already empty, so these are a record rather than an authority. A row left on
+ * `held` cannot misdirect money — a settled competition can no longer be
+ * cancelled or withdrawn from.
+ */
+async function closeContributions(
+  db: Firestore,
+  competitionId: string,
+  contributions: Array<{ userId: string }>,
+  refunded: boolean,
+): Promise<void> {
+  if (contributions.length === 0) return;
+
+  try {
+    const batch = db.batch();
+    const collection = db
+      .collection("competitions")
+      .doc(competitionId)
+      .collection("contributions");
+
+    for (const contribution of contributions) {
+      batch.update(collection.doc(contribution.userId), {
+        state: refunded ? "refunded" : "settled",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  } catch (error) {
+    logger.warn("Failed to close contributions", { competitionId, error });
   }
 }

@@ -102,9 +102,9 @@ interface EnsurePhaseResult {
  * Advances one legal step at a time and re-checks, since a competition
  * untouched for a while may be due to move twice (draft -> open -> voting).
  *
- * A `draft` whose escrow never confirmed is deliberately held back: opening a
- * competition for entries when its prize pool does not exist would promise a
- * prize nobody can pay.
+ * A `scheduled` competition whose escrow never confirmed is deliberately held
+ * back: opening it for entries when its prize pool does not exist would promise
+ * a prize nobody can pay. A `draft` is never touched here at all.
  */
 export async function ensurePhase(
   db: Firestore,
@@ -185,7 +185,9 @@ export async function ensurePhase(
  * never *what* the outcome is.
  */
 function followingPhase(phase: CompetitionPhase): CompetitionPhase | null {
-  if (phase === "draft") return "open";
+  // `draft` returns null: an unpublished competition has no scheduled future, so
+  // nothing is ever enqueued for one.
+  if (phase === "scheduled") return "open";
   if (phase === "open") return "voting";
   if (phase === "voting") return "settled";
   return null;

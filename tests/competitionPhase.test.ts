@@ -46,6 +46,7 @@ describe("deriveCompetitionStatus", () => {
   it("maps every phase to one of the three UI buckets", () => {
     const cases: Array<[CompetitionPhase, string]> = [
       ["draft", "upcoming"],
+      ["scheduled", "upcoming"],
       ["open", "active"],
       ["voting", "active"],
       // Not "completed": voting is over but nothing is decided or paid yet.
@@ -75,6 +76,7 @@ describe("deriveCompetitionStatus", () => {
   it("never returns a value outside the three the UI knows", () => {
     const phases: Array<CompetitionPhase | undefined> = [
       "draft",
+      "scheduled",
       "open",
       "voting",
       "settling",
@@ -92,14 +94,21 @@ describe("deriveCompetitionStatus", () => {
 
 describe("canTransition", () => {
   it("allows the forward path", () => {
-    expect(canTransition("draft", "open")).toBe(true);
+    expect(canTransition("draft", "scheduled")).toBe(true);
+    expect(canTransition("scheduled", "open")).toBe(true);
     expect(canTransition("open", "voting")).toBe(true);
     expect(canTransition("voting", "settling")).toBe(true);
     expect(canTransition("settling", "settled")).toBe(true);
   });
 
+  /** Publishing something whose start date has already passed opens it now. */
+  it("lets a draft open directly, skipping scheduled", () => {
+    expect(canTransition("draft", "open")).toBe(true);
+  });
+
   it("allows cancelling from any phase before settlement is claimed", () => {
     expect(canTransition("draft", "cancelled")).toBe(true);
+    expect(canTransition("scheduled", "cancelled")).toBe(true);
     expect(canTransition("open", "cancelled")).toBe(true);
     expect(canTransition("voting", "cancelled")).toBe(true);
   });
@@ -138,8 +147,20 @@ describe("canTransition", () => {
 });
 
 describe("dueTimePhase", () => {
-  it("opens a draft once the start date passes", () => {
-    expect(dueTimePhase("draft", past(1), future(5), NOW)).toBe("open");
+  it("opens a scheduled competition once the start date passes", () => {
+    expect(dueTimePhase("scheduled", past(1), future(5), NOW)).toBe("open");
+    expect(dueTimePhase("scheduled", future(1), future(5), NOW)).toBeNull();
+  });
+
+  /**
+   * The property the whole draft phase exists for. An unpublished competition
+   * holds no escrow and nobody has seen it, so no date may open it — only
+   * publishing can. If this ever regresses, a host's private work goes live on
+   * its own and their balance is debited without them asking.
+   */
+  it("NEVER advances a draft, whatever the clock says", () => {
+    expect(dueTimePhase("draft", past(100), past(50), NOW)).toBeNull();
+    expect(dueTimePhase("draft", past(1), future(5), NOW)).toBeNull();
     expect(dueTimePhase("draft", future(1), future(5), NOW)).toBeNull();
   });
 
@@ -166,9 +187,15 @@ describe("nextTransitionAt", () => {
     const start = future(1);
     const deadline = future(5);
     const voting = future(8);
-    expect(nextTransitionAt("draft", start, deadline, voting)).toBe(start);
+    expect(nextTransitionAt("scheduled", start, deadline, voting)).toBe(start);
     expect(nextTransitionAt("open", start, deadline, voting)).toBe(deadline);
     expect(nextTransitionAt("voting", start, deadline, voting)).toBe(voting);
+  });
+
+  it("has nothing scheduled for a draft", () => {
+    // Nothing about an unpublished competition is time-driven, so no advance
+    // task is ever enqueued for one.
+    expect(nextTransitionAt("draft", future(1), future(5), future(8))).toBeNull();
   });
 
   it("is null when nothing further is time-driven", () => {

@@ -23,6 +23,8 @@ import {
   getDoc,
   getDocs,
   collection,
+  query,
+  where,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -34,6 +36,7 @@ let testEnv: RulesTestEnvironment;
 const OWNER = "user_owner";
 const OTHER = "user_other";
 const COMPETITION_ID = "comp_1";
+const DRAFT_ID = "comp_draft";
 
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
@@ -56,10 +59,20 @@ beforeEach(async () => {
   // Seed as the Admin SDK would, bypassing rules.
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
+    await setDoc(doc(db, "competitions", DRAFT_ID), {
+      title: "Unpublished draft",
+      creatorId: OWNER,
+      phase: "draft",
+      published: false,
+      escrowState: "unfunded",
+      createdAt: new Date(),
+    });
     await setDoc(doc(db, "competitions", COMPETITION_ID), {
       title: "Seeded",
       creatorId: OWNER,
       phase: "open",
+      published: true,
+      createdAt: new Date(),
       escrowState: "funded",
       participantsCount: 0,
       prizePool: {
@@ -72,6 +85,14 @@ beforeEach(async () => {
     await setDoc(
       doc(db, "competitions", COMPETITION_ID, "participants", OWNER),
       { userId: OWNER },
+    );
+    await setDoc(
+      doc(db, "competitions", COMPETITION_ID, "contributions", OWNER),
+      { userId: OWNER, amount: "25000000000000000000", state: "held" },
+    );
+    await setDoc(
+      doc(db, "competitions", COMPETITION_ID, "contributions", OTHER),
+      { userId: OTHER, amount: "25000000000000000000", state: "held" },
     );
     await setDoc(doc(db, "tokenAccounts", `user:${OWNER}`), {
       accountId: `user:${OWNER}`,
@@ -113,7 +134,7 @@ const authed = (uid: string) => testEnv.authenticatedContext(uid).firestore();
 const anon = () => testEnv.unauthenticatedContext().firestore();
 
 describe("competitions", () => {
-  it("is publicly readable", async () => {
+  it("is publicly readable once published", async () => {
     await assertSucceeds(getDoc(doc(anon(), "competitions", COMPETITION_ID)));
     await assertSucceeds(getDoc(doc(authed(OTHER), "competitions", COMPETITION_ID)));
   });
@@ -186,6 +207,73 @@ describe("competitions", () => {
     await assertFails(deleteDoc(doc(authed(OWNER), "competitions", COMPETITION_ID)));
   });
 
+  it("hides an unpublished draft from everyone but its creator", async () => {
+    await assertSucceeds(getDoc(doc(authed(OWNER), "competitions", DRAFT_ID)));
+    await assertFails(getDoc(doc(authed(OTHER), "competitions", DRAFT_ID)));
+    await assertFails(getDoc(doc(anon(), "competitions", DRAFT_ID)));
+  });
+
+  /**
+   * Firestore rejects a whole list query if any document it would return fails
+   * the rule, so the explore page MUST constrain on `published`. If this ever
+   * starts passing, an unconstrained read is leaking drafts.
+   */
+  it("refuses an unconstrained list of the collection", async () => {
+    await assertFails(getDocs(collection(anon(), "competitions")));
+    await assertFails(getDocs(collection(authed(OTHER), "competitions")));
+  });
+
+  it("allows the two queries the app actually issues", async () => {
+    // The public explore list.
+    await assertSucceeds(
+      getDocs(
+        query(collection(anon(), "competitions"), where("published", "==", true)),
+      ),
+    );
+    // A host's own drafts.
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(authed(OWNER), "competitions"),
+          where("creatorId", "==", OWNER),
+          where("published", "==", false),
+        ),
+      ),
+    );
+  });
+
+  it("will not let one host list another's drafts", async () => {
+    await assertFails(
+      getDocs(
+        query(
+          collection(authed(OTHER), "competitions"),
+          where("creatorId", "==", OWNER),
+          where("published", "==", false),
+        ),
+      ),
+    );
+  });
+
+  /**
+   * A document that predates `published` must fail closed, not error. This is
+   * why the rule uses `.get(field, default)` — reading an absent property is an
+   * error in rules, which would have made such a document unreadable to its own
+   * creator too. It also makes the migration a hard prerequisite for deploying.
+   */
+  it("hides a document the migration has not reached, without erroring", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "competitions", "unmigrated"), {
+        title: "Pre-migration",
+        creatorId: OWNER,
+        phase: "open",
+      });
+    });
+
+    await assertFails(getDoc(doc(anon(), "competitions", "unmigrated")));
+    // Its creator can still reach it, so nothing is stranded.
+    await assertSucceeds(getDoc(doc(authed(OWNER), "competitions", "unmigrated")));
+  });
+
   it("keeps participants readable but not writable", async () => {
     await assertSucceeds(
       getDoc(doc(authed(OTHER), "competitions", COMPETITION_ID, "participants", OWNER)),
@@ -195,6 +283,68 @@ describe("competitions", () => {
         doc(authed(OTHER), "competitions", COMPETITION_ID, "participants", OTHER),
         { userId: OTHER },
       ),
+    );
+  });
+});
+
+describe("contributions", () => {
+  it("lets an entrant read what they paid", async () => {
+    await assertSucceeds(
+      getDoc(doc(authed(OWNER), "competitions", COMPETITION_ID, "contributions", OWNER)),
+    );
+  });
+
+  it("hides what somebody else paid", async () => {
+    await assertFails(
+      getDoc(doc(authed(OTHER), "competitions", COMPETITION_ID, "contributions", OWNER)),
+    );
+  });
+
+  /** Denying `get` is not enough — a list would expose the whole roster. */
+  it("cannot be listed, even by the host", async () => {
+    await assertFails(
+      getDocs(collection(authed(OWNER), "competitions", COMPETITION_ID, "contributions")),
+    );
+    await assertFails(
+      getDocs(collection(authed(OTHER), "competitions", COMPETITION_ID, "contributions")),
+    );
+  });
+
+  it("is unreadable when signed out", async () => {
+    await assertFails(
+      getDoc(doc(anon(), "competitions", COMPETITION_ID, "contributions", OWNER)),
+    );
+  });
+
+  it("cannot be forged, so nobody can claim to have paid", async () => {
+    await assertFails(
+      setDoc(doc(authed(OTHER), "competitions", COMPETITION_ID, "contributions", OTHER), {
+        userId: OTHER,
+        amount: "25000000000000000000",
+        state: "held",
+      }),
+    );
+  });
+
+  /** A writable `state` would let an entrant claim a refund they never got. */
+  it("cannot be edited by the entrant it belongs to", async () => {
+    await assertFails(
+      updateDoc(
+        doc(authed(OWNER), "competitions", COMPETITION_ID, "contributions", OWNER),
+        { state: "refunded" },
+      ),
+    );
+    await assertFails(
+      updateDoc(
+        doc(authed(OWNER), "competitions", COMPETITION_ID, "contributions", OWNER),
+        { amount: "999000000000000000000" },
+      ),
+    );
+  });
+
+  it("cannot be deleted to erase the record of a payment", async () => {
+    await assertFails(
+      deleteDoc(doc(authed(OWNER), "competitions", COMPETITION_ID, "contributions", OWNER)),
     );
   });
 });
@@ -317,6 +467,7 @@ describe("settled results", () => {
         title: "Settled",
         creatorId: OWNER,
         phase: "settled",
+        published: true,
         escrowState: "released",
         results: [
           {

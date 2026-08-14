@@ -22,6 +22,9 @@ import { corsOptions } from "./corsConfig";
 import { requireAdmin, requireAuth } from "./authService";
 import { CompetitionPhase, canTransition } from "./competitionPhase";
 import { ensurePhase, loadCompetitionWithPhase } from "./competitionLifecycle";
+import { getEscrowProvider } from "./escrow";
+import { CONTRIBUTIONS } from "./competitionContributions";
+import { MinorUnits, ZERO, assertMinorUnits, isPositive } from "./money";
 
 const db = admin.firestore();
 
@@ -73,8 +76,11 @@ export const submitToCompetition = onRequest(
         await loadCompetitionWithPhase(db, competitionId);
 
       if (phase !== "open") {
+        // `draft` should be unreachable — the rules deny it to everyone but its
+        // creator, and they cannot enter their own — but answer honestly rather
+        // than claiming submissions closed on something never published.
         throw fail(
-          phase === "draft"
+          phase === "scheduled" || phase === "draft"
             ? "This competition has not opened yet"
             : "Submissions for this competition have closed",
           422,
@@ -108,7 +114,22 @@ export const submitToCompetition = onRequest(
       const participantRef = competitionRef
         .collection("participants")
         .doc(userId);
+      const contributionRef = competitionRef
+        .collection(CONTRIBUTIONS)
+        .doc(userId);
 
+      const entryFee: MinorUnits = competition.entryFee?.amount
+        ? assertMinorUnits(competition.entryFee.amount, "entryFee")
+        : ZERO;
+      const paid = isPositive(entryFee);
+
+      /**
+       * Record first in `pending-fee`, move money second, confirm third — the
+       * ordering createCompetition uses, because escrow runs its own
+       * transaction and cannot nest inside this one. A crash between steps
+       * leaves an entry that is uncounted and cannot win, so it is safe to
+       * retry.
+       */
       await db.runTransaction(async (tx) => {
         const [submissionSnapshot, participantSnapshot, competitionSnapshot] =
           await Promise.all([
@@ -121,6 +142,9 @@ export const submitToCompetition = onRequest(
           const existing = submissionSnapshot.data() ?? {};
           if (existing.status === "submitted") {
             throw fail("You have already entered this competition", 409);
+          }
+          if (existing.status === "pending-fee") {
+            throw fail("Your entry is still being processed", 409);
           }
         }
 
@@ -156,7 +180,7 @@ export const submitToCompetition = onRequest(
             storyTitle: story.title ?? "Untitled story",
             storyAuthorName: story.authorName ?? story.username ?? null,
             coverImageUrl: story.coverImageUrl ?? null,
-            status: "submitted",
+            status: paid ? "pending-fee" : "submitted",
             submittedAt: submissionSnapshot.exists
               ? (submissionSnapshot.data()?.submittedAt ?? timestamp)
               : timestamp,
@@ -165,7 +189,20 @@ export const submitToCompetition = onRequest(
           { merge: true },
         );
 
-        if (isNew) {
+        if (paid) {
+          tx.set(
+            contributionRef,
+            {
+              userId,
+              amount: entryFee,
+              state: "pending",
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            },
+            { merge: true },
+          );
+        } else if (isNew) {
+          // Free entries still settle in one transaction, exactly as before.
           tx.update(competitionRef, {
             submissionCount: FieldValue.increment(1),
             updatedAt: timestamp,
@@ -173,11 +210,66 @@ export const submitToCompetition = onRequest(
         }
       });
 
+      if (paid) {
+        const charged = await getEscrowProvider().fund({
+          competitionId,
+          funderUserId: userId,
+          amount: entryFee,
+          purpose: "entry",
+          idempotencyKey: `escrow:entry:${competitionId}:${userId}`,
+        });
+
+        if (charged.state !== "confirmed") {
+          // Nothing was taken, so leave nothing behind.
+          await Promise.all([
+            submissionRef.delete(),
+            contributionRef.delete(),
+          ]);
+          throw fail(
+            charged.state === "failed"
+              ? charged.reason
+              : "Your entry fee is still being confirmed",
+            charged.state === "failed" ? 402 : 409,
+          );
+        }
+
+        // Publish the entry and account for the fee together, so
+        // `entryFeesHeld` cannot disagree with the set of submitted entries.
+        await db.runTransaction(async (tx) => {
+          const competitionSnapshot = await tx.get(competitionRef);
+          const current = competitionSnapshot.data() ?? {};
+          const heldBefore = assertMinorUnits(
+            current.entryFeesHeld ?? "0",
+            "entryFeesHeld",
+          );
+          const timestamp = FieldValue.serverTimestamp();
+
+          tx.update(submissionRef, {
+            status: "submitted",
+            updatedAt: timestamp,
+          });
+          tx.update(contributionRef, {
+            state: "held",
+            updatedAt: timestamp,
+          });
+          tx.update(competitionRef, {
+            submissionCount: FieldValue.increment(1),
+            // A string add, not FieldValue.increment: 18-decimal minor units
+            // are far past the float Firestore would increment with.
+            entryFeesHeld: (
+              BigInt(heldBefore) + BigInt(entryFee)
+            ).toString(),
+            updatedAt: timestamp,
+          });
+        });
+      }
+
       response.status(200).json({
         submissionId: userId,
         competitionId,
         storyId,
         status: "submitted",
+        entryFeePaid: paid ? entryFee : null,
       });
     } catch (error) {
       logger.error("Error submitting to competition", { userId, error });
@@ -210,19 +302,36 @@ export const withdrawSubmission = onRequest(
       );
 
       if (phase !== "open") {
-        // Once voting starts, people have read and voted on this entry.
+        // Once voting starts, people have read and voted on this entry. The
+        // gate also stops a fee refund landing mid-vote.
         throw fail("Entries can no longer be withdrawn", 422);
       }
 
       const submissionRef = competitionRef
         .collection("submissions")
         .doc(userId);
+      const contributionRef = competitionRef
+        .collection(CONTRIBUTIONS)
+        .doc(userId);
 
-      await db.runTransaction(async (tx) => {
-        const snapshot = await tx.get(submissionRef);
+      // Withdraw first, then return the money — the mirror of submit, so an
+      // interruption leaves a withdrawn entry whose fee is still owed rather
+      // than a live entry that has already been refunded.
+      const refundAmount = await db.runTransaction(async (tx) => {
+        const [snapshot, contributionSnapshot] = await Promise.all([
+          tx.get(submissionRef),
+          tx.get(contributionRef),
+        ]);
+
         if (!snapshot.exists || snapshot.data()?.status !== "submitted") {
           throw fail("You have no entry to withdraw", 404);
         }
+
+        const contribution = contributionSnapshot.data();
+        const owed =
+          contributionSnapshot.exists && contribution?.state === "held"
+            ? assertMinorUnits(contribution.amount, "contribution amount")
+            : ZERO;
 
         const timestamp = FieldValue.serverTimestamp();
         tx.update(submissionRef, { status: "withdrawn", updatedAt: timestamp });
@@ -230,11 +339,56 @@ export const withdrawSubmission = onRequest(
           submissionCount: FieldValue.increment(-1),
           updatedAt: timestamp,
         });
+
+        return owed;
       });
 
-      response
-        .status(200)
-        .json({ submissionId: userId, competitionId, status: "withdrawn" });
+      if (isPositive(refundAmount)) {
+        const refunded = await getEscrowProvider().refund({
+          competitionId,
+          refunds: [{ userId, amount: refundAmount }],
+          mode: "partial",
+          idempotencyKey: `escrow:entry-refund:${competitionId}:${userId}`,
+        });
+
+        if (refunded.state !== "confirmed") {
+          // The entry is already withdrawn, so leave the contribution `held`:
+          // it stays owed, and a cancel or settlement unwind will return it.
+          throw fail(
+            refunded.state === "failed"
+              ? refunded.reason
+              : "Your refund is still being confirmed",
+            500,
+          );
+        }
+
+        await db.runTransaction(async (tx) => {
+          const competitionSnapshot = await tx.get(competitionRef);
+          const heldBefore = assertMinorUnits(
+            competitionSnapshot.data()?.entryFeesHeld ?? "0",
+            "entryFeesHeld",
+          );
+          const timestamp = FieldValue.serverTimestamp();
+
+          tx.update(contributionRef, {
+            state: "refunded",
+            updatedAt: timestamp,
+          });
+          tx.update(competitionRef, {
+            entryFeesHeld: (
+              BigInt(heldBefore) - BigInt(refundAmount)
+            ).toString(),
+            updatedAt: timestamp,
+          });
+        });
+      }
+
+      response.status(200).json({
+        submissionId: userId,
+        competitionId,
+        status: "withdrawn",
+        entryFeeRefunded: isPositive(refundAmount) ? refundAmount : null,
+      });
     } catch (error) {
       logger.error("Error withdrawing submission", { userId, error });
       response

@@ -41,5 +41,7 @@ export function __setEscrowProviderForTests(provider: EscrowProvider | null): vo
 export type {
   EscrowProvider,
   EscrowOpResult,
+  FundPurpose,
   PayoutInstruction,
+  RefundInstruction,
 } from "./EscrowProvider";

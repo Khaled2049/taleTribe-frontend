@@ -43,7 +43,11 @@ export function deriveCompetitionStatus(
   now: number = Date.now(),
 ): CompetitionStatus {
   switch (phase) {
+    // A draft is never listed — the explore query excludes it, and the rules
+    // deny it to everyone but its creator. This value only matters on the
+    // host's own editor page.
     case "draft":
+    case "scheduled":
       return "upcoming";
     case "open":
     case "voting":
@@ -75,7 +79,9 @@ export const isTerminalPhase = (phase: CompetitionPhase | undefined): boolean =>
  * server checks it on both the scheduled and the manual path.
  */
 const ALLOWED_TRANSITIONS: Record<CompetitionPhase, CompetitionPhase[]> = {
-  draft: ["open", "cancelled"],
+  // `draft -> open` covers publishing a competition whose start date has passed.
+  draft: ["scheduled", "open", "cancelled"],
+  scheduled: ["open", "cancelled"],
   open: ["voting", "cancelled"],
   voting: ["settling", "cancelled"],
   // Settlement has claimed it and money may already have moved.
@@ -97,7 +103,11 @@ export function canTransition(
  * these, so a UI offering the action anywhere else is offering a dead end.
  */
 export const isEditablePhase = (phase: CompetitionPhase): boolean =>
-  phase === "draft" || phase === "open";
+  phase === "draft" || phase === "scheduled" || phase === "open";
+
+/** Unpublished: no escrow, private to its creator, discardable. */
+export const isDraftPhase = (phase: CompetitionPhase | undefined): boolean =>
+  phase === "draft";
 
 /**
  * Phase a competition *should* be in given the clock, ignoring settlement,
@@ -112,7 +122,9 @@ export function dueTimePhase(
   deadline: Date,
   now: number = Date.now(),
 ): CompetitionPhase | null {
-  if (phase === "draft" && now >= startDate.getTime()) return "open";
+  // `draft` is absent on purpose: an unpublished competition holds no escrow, so
+  // no date may open it. Only publishing can.
+  if (phase === "scheduled" && now >= startDate.getTime()) return "open";
   if (phase === "open" && now > deadline.getTime()) return "voting";
   return null;
 }
@@ -129,12 +141,13 @@ export function nextTransitionAt(
   votingDeadline?: Date,
 ): Date | null {
   switch (phase) {
-    case "draft":
+    case "scheduled":
       return startDate;
     case "open":
       return deadline;
     case "voting":
       return votingDeadline ?? null;
+    // `draft` included: nothing about it is time-driven.
     default:
       return null;
   }

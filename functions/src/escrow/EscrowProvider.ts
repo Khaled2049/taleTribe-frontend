@@ -43,16 +43,29 @@ export interface PayoutInstruction {
   amount: MinorUnits;
 }
 
+/**
+ * Why money is entering escrow. One movement either way, so this is a
+ * discriminator rather than two methods; on-chain it selects the event emitted.
+ */
+export type FundPurpose = "seed" | "entry";
+
 export interface FundParams {
   competitionId: string;
   funderUserId: string;
   amount: MinorUnits;
+  purpose: FundPurpose;
   idempotencyKey: string;
 }
 
 export interface ReleaseParams {
   competitionId: string;
   payouts: PayoutInstruction[];
+  /**
+   * The platform's cut of the entry fees. Separate from `payouts` because the
+   * platform has no `userId`; where it lands is the provider's business, as
+   * with a winner's address. On-chain, `owner()`.
+   */
+  platformFee?: MinorUnits;
   /**
    * SHA-256 of the canonical results payload. Recorded alongside the movement
    * so a payout is always traceable to the tally that justified it; the chain
@@ -62,9 +75,28 @@ export interface ReleaseParams {
   idempotencyKey: string;
 }
 
+export interface RefundInstruction {
+  userId: string;
+  amount: MinorUnits;
+}
+
+/**
+ * A refund enumerates every funder and their exact amount.
+ *
+ * Sweeping the balance to one funder was correct only while the host was the
+ * sole one; with paid entry it pays the entrants' fees to the host. Enumerating
+ * is also what a contract needs, since it cannot iterate an unbounded mapping.
+ */
 export interface RefundParams {
   competitionId: string;
-  funderUserId: string;
+  refunds: RefundInstruction[];
+  /**
+   * `"final"` must drain escrow to exactly zero; `"partial"` (one entrant
+   * withdrawing) only has to fit inside the balance. Explicit rather than
+   * inferred, so a lone withdrawal cannot accidentally satisfy the full-drain
+   * check on a competition holding nothing else yet.
+   */
+  mode: "partial" | "final";
   idempotencyKey: string;
 }
 
@@ -76,10 +108,14 @@ export interface EscrowProvider {
   /** Move `amount` from the funder into the competition's escrow. */
   fund(params: FundParams): Promise<EscrowOpResult>;
 
-  /** Distribute escrow to winners. Payouts must not exceed the escrowed total. */
+  /**
+   * Distribute escrow to winners, the host, and the platform. Payouts plus
+   * `platformFee` must drain the balance exactly — a leftover is stranded
+   * forever, since nothing else reads that account.
+   */
   release(params: ReleaseParams): Promise<EscrowOpResult>;
 
-  /** Return the entire remaining escrow to the funder. */
+  /** Return escrow to the funders named in `refunds`. */
   refund(params: RefundParams): Promise<EscrowOpResult>;
 
   escrowedAmount(competitionId: string): Promise<MinorUnits>;

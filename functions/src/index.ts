@@ -47,7 +47,9 @@ export { enhanceWizardInput } from "./enhanceWizardInput";
 export { onInviteApproved } from "./inviteService";
 export {
   joinCompetition,
-  createCompetition,
+  saveCompetitionDraft,
+  publishCompetition,
+  discardCompetitionDraft,
   updateCompetition,
   cancelCompetition,
 } from "./competitionEndpoints";

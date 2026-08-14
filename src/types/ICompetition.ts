@@ -10,16 +10,21 @@ export type CompetitionStatus = "active" | "upcoming" | "completed";
  * The real lifecycle. Stored on the document and written only by Cloud
  * Functions, because each transition moves money or decides who receives it.
  *
- *   draft ──> open ──> voting ──> settling ──> settled
- *     └──────────┴─────────┴────> cancelled
+ *   draft ──publish──> scheduled ──> open ──> voting ──> settling ──> settled
+ *     │                    └───────────┴────────┴────> cancelled
+ *     └── discarded (hard delete; a draft holds no escrow)
  *
- * `draft` covers a competition whose escrow funding has not confirmed yet, and
- * `settling` covers one whose payout is in flight — so neither funding nor
- * payout has to succeed or fail atomically with a phase write. Those are the
- * two assumptions that could not survive moving escrow on-chain.
+ * `draft` is authoring: unfunded, private to its creator, and never moved by the
+ * clock. Publishing funds escrow and lands in `scheduled`, or in `open` when the
+ * start date has already passed.
+ *
+ * `settling` covers a payout in flight, so paying does not have to succeed or
+ * fail atomically with a phase write — the assumption that lets escrow move
+ * on-chain later.
  */
 export type CompetitionPhase =
   | "draft"
+  | "scheduled"
   | "open"
   | "voting"
   | "settling"
@@ -75,6 +80,18 @@ export interface ICompetition {
   prizeCurrency: string;
   /** Escrowed prize, in integer minor units. Absent on pre-TALE competitions. */
   prizePool?: ITokenAmount;
+  /**
+   * What each entrant pays to submit; absent or zero means free. NOT added to
+   * the prize — it is revenue split between the host and the platform at
+   * settlement, and `prizePool` alone is what the winner receives.
+   */
+  entryFee?: ITokenAmount;
+  /** Platform's share of the entry fees, in basis points. Fixed at creation. */
+  feeBps?: number;
+  /** Fees in escrow now. Escrow's balance is `prizePool + entryFeesHeld`. */
+  entryFeesHeld?: MinorUnits;
+  /** How the fees were actually split. Written once, at settlement. */
+  entryFeesSettled?: { platform: MinorUnits; host: MinorUnits };
   escrowState?: EscrowState;
   /**
    * Rendered instead of `prizePool` on competitions created before TALE
@@ -98,6 +115,12 @@ export interface ICompetition {
   /** Voting closes. Absent on legacy documents. */
   votingDeadline?: Date;
   phase?: CompetitionPhase;
+  /**
+   * False only while `phase === "draft"`. Denormalized from the phase because
+   * Firestore rules and list queries match on fields, not on derived state —
+   * the explore query constrains on it and the rules gate reads with it.
+   */
+  published?: boolean;
   /** Entries with status "submitted". Server-maintained. */
   submissionCount?: number;
   /**
@@ -151,12 +174,37 @@ export interface ICompetitionCreateInput {
   /** Voting closes. Must be at least an hour after `deadline`. */
   votingDeadline: Date;
   prizeAmount: MinorUnits;
+  /** What each entrant pays. Omit or pass "0" for a free competition. */
+  entryFee?: MinorUnits;
   creatorName?: string;
 }
 
 /**
- * Editable fields. The prize is deliberately absent: it is immutable once
- * escrow is funded, and the server returns 422 if one is supplied.
+ * An unpublished draft. Only the title is required — the point of a draft is
+ * that it can be saved half-finished, and the strict checks run at publish.
+ *
+ * Omit `competitionId` to create; supply it to overwrite an existing draft.
+ */
+export interface ICompetitionDraftInput {
+  competitionId?: string;
+  title: string;
+  description?: string;
+  category?: string;
+  tags?: string[];
+  maxParticipants?: number | null;
+  startDate?: Date;
+  deadline?: Date;
+  votingDeadline?: Date;
+  prizeAmount?: MinorUnits;
+  entryFee?: MinorUnits;
+  creatorName?: string;
+}
+
+/**
+ * Editable fields on a PUBLISHED competition. The prize and entry fee are
+ * deliberately absent: both are immutable once escrow holds money against them,
+ * and the server returns 422 if either is supplied. While still a draft, they
+ * are ordinary fields on `ICompetitionDraftInput`.
  */
 export interface ICompetitionUpdate {
   title?: string;

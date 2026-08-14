@@ -22,7 +22,7 @@ import type { BadgeProps } from "@/components/ui/badge";
  * the content box the `fr` tracks divide up.
  */
 export const LEDGER_GRID =
-  "grid-cols-[1.9fr_.8fr_.8fr_176px] xl:grid-cols-[1.9fr_.9fr_.8fr_.8fr_176px]";
+  "grid-cols-[1fr_.8fr_176px] xl:grid-cols-[minmax(180px,1.6fr)_minmax(78px,.65fr)_minmax(84px,.8fr)_minmax(92px,.9fr)_minmax(92px,.9fr)_minmax(80px,.8fr)_120px]";
 
 export type RowActionKey =
   | "register"
