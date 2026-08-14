@@ -21,9 +21,6 @@ export const MAX_PARTICIPANTS_CEILING = 10000;
 /** Minimum gap between submissions closing and voting closing. */
 export const MIN_VOTING_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
-const DIFFICULTIES = ["beginner", "intermediate", "advanced"] as const;
-export type CompetitionDifficulty = (typeof DIFFICULTIES)[number];
-
 const bad = (message: string, statusCode = 400): Error =>
   Object.assign(new Error(message), { statusCode });
 
@@ -31,7 +28,6 @@ export interface CompetitionInputPayload {
   title: string;
   description: string;
   category: string;
-  difficulty: CompetitionDifficulty;
   tags: string[];
   maxParticipants: number | null;
   startDate: Date;
@@ -101,11 +97,6 @@ export function validateCompetitionInput(
   );
   const category = requireString(body.category, "Category", MAX_CATEGORY_LENGTH);
 
-  const difficulty = (body.difficulty ?? "beginner") as CompetitionDifficulty;
-  if (!DIFFICULTIES.includes(difficulty)) {
-    throw bad(`Difficulty must be one of: ${DIFFICULTIES.join(", ")}`);
-  }
-
   const startDate = requireDate(body.startDate, "Start date");
   const deadline = requireDate(body.deadline, "Deadline");
   const votingDeadline = requireDate(body.votingDeadline, "Voting deadline");
@@ -142,7 +133,6 @@ export function validateCompetitionInput(
     title,
     description,
     category,
-    difficulty,
     tags: normalizeTags(body.tags),
     maxParticipants,
     startDate,
@@ -177,13 +167,6 @@ export function validateCompetitionUpdate(
       "Category",
       MAX_CATEGORY_LENGTH,
     );
-  }
-  if (body.difficulty !== undefined) {
-    const difficulty = body.difficulty as CompetitionDifficulty;
-    if (!DIFFICULTIES.includes(difficulty)) {
-      throw bad(`Difficulty must be one of: ${DIFFICULTIES.join(", ")}`);
-    }
-    update.difficulty = difficulty;
   }
   if (body.tags !== undefined) {
     update.tags = normalizeTags(body.tags);

@@ -68,28 +68,20 @@ export function CompetitionDetailHero({
             )}
           </div>
 
+          {/* The description is deliberately not repeated here — it is the
+              body of the brief immediately below (CompetitionBrief), and the
+              two used to sit on separate tabs. */}
           <h1 className="font-heading font-light text-[2.75rem] lg:text-[4.25rem] leading-[0.98] tracking-[-0.02em] text-ns-ink max-w-[22ch] text-balance">
             {competition.title}
           </h1>
-          <p className="font-body text-xl leading-[1.5] text-ns-ink-secondary max-w-[58ch] mt-5">
-            {competition.description}
-          </p>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-5 mt-8 py-5 border-y border-ns-border">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-5 mt-8 py-5 border-y border-ns-border">
             <div className="min-w-0">
               <p className="font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted mb-1">
                 Prize pool
               </p>
               <p className="font-heading text-[30px] leading-none text-ns-gold-bright truncate">
                 {prize.amount}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted mb-1">
-                Difficulty
-              </p>
-              <p className="font-heading text-[30px] leading-none text-ns-ink capitalize truncate">
-                {competition.difficulty}
               </p>
             </div>
             <div className="min-w-0">

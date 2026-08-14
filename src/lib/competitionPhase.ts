@@ -92,6 +92,14 @@ export function canTransition(
 }
 
 /**
+ * Phases whose details may still be edited. Mirrors `isEditablePhase` in
+ * functions/src/competitionPhase.ts — `updateCompetition` answers 409 outside
+ * these, so a UI offering the action anywhere else is offering a dead end.
+ */
+export const isEditablePhase = (phase: CompetitionPhase): boolean =>
+  phase === "draft" || phase === "open";
+
+/**
  * Phase a competition *should* be in given the clock, ignoring settlement,
  * which needs a tally and therefore cannot be decided here.
  *

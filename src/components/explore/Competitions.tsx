@@ -1,29 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ChevronDown, Plus, Search, X } from "lucide-react";
-import { toast } from "sonner";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  HelpCircle,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ConfirmDialog } from "@/components/common/ConfirmDialog";
-import { CompetitionRailCard } from "./CompetitionRailCard";
 import { CompetitionLedgerRow } from "./CompetitionLedgerRow";
+import { LEDGER_GRID } from "@/lib/competitionLedger";
+import { pageItems } from "@/lib/pagination";
 import { CompetitionsEmptyState } from "./CompetitionsEmptyState";
+import { LedgerStatusLegend } from "./LedgerStatusLegend";
 import { HostPrizeDialog } from "./HostPrizeDialog";
-import {
-  useCancelCompetition,
-  useCompetitionsQuery,
-} from "@/hooks/queries/useCompetitionQueries";
+import { useCompetitionsQuery } from "@/hooks/queries/useCompetitionQueries";
 import { useNow, formatCountdown } from "@/hooks/useCountdown";
 import { getHostName, getPrizeDisplay } from "@/lib/competitionListing";
 import { ICompetition } from "@/types/ICompetition";
 
-const PAGE_SIZE = 20;
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const PAGE_SIZE = 8;
 
-type SortKey = "closesAt" | "pool" | "entrants";
+type SortKey = "closesAt" | "pool";
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
   if (error instanceof Error && error.message) {
@@ -52,7 +56,6 @@ const Competitions: React.FC = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("q") ?? "";
-  const openOnly = searchParams.get("open") !== "0";
   const sortKey = (searchParams.get("sort") as SortKey) || "closesAt";
   const sortDir = searchParams.get("dir") === "desc" ? "desc" : "asc";
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
@@ -70,10 +73,6 @@ const Competitions: React.FC = () => {
 
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingCompetitionId, setEditingCompetitionId] = useState<
-    string | null
-  >(null);
-  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
 
   const {
     data: competitionsData,
@@ -84,15 +83,6 @@ const Competitions: React.FC = () => {
     () => competitionsData ?? [],
     [competitionsData],
   );
-  const editingCompetition = useMemo(
-    () =>
-      editingCompetitionId
-        ? (competitions.find((c) => c.id === editingCompetitionId) ?? null)
-        : null,
-    [competitions, editingCompetitionId],
-  );
-
-  const cancelCompetition = useCancelCompetition();
 
   const displayedError =
     error ??
@@ -110,56 +100,10 @@ const Competitions: React.FC = () => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // Creating only. Editing and cancelling belong to a single competition, so
+  // they live on that competition's page.
   const handleStartCreate = () => {
-    setEditingCompetitionId(null);
     setDialogOpen(true);
-    setError(null);
-  };
-
-  const handleStartEdit = (competitionId: string) => {
-    const competition = competitions.find((item) => item.id === competitionId);
-    if (!competition) return;
-
-    setEditingCompetitionId(competition.id);
-    setDialogOpen(true);
-    setError(null);
-  };
-
-  /**
-   * Cancel, not delete. A competition holding a prize pool cannot be removed —
-   * the escrowed tokens are returned to the creator instead.
-   */
-  const handleCancelCompetition = (competitionId: string) => {
-    if (!user) {
-      setError("You must be logged in to manage competitions.");
-      return;
-    }
-
-    setCancelTargetId(competitionId);
-  };
-
-  const confirmCancelCompetition = () => {
-    if (!cancelTargetId) return;
-    const competitionId = cancelTargetId;
-
-    setError(null);
-    cancelCompetition.mutate(
-      { competitionId },
-      {
-        onSuccess: () => {
-          toast.success("Competition cancelled and prize refunded");
-          if (editingCompetitionId === competitionId) {
-            setDialogOpen(false);
-            setEditingCompetitionId(null);
-          }
-          setCancelTargetId(null);
-        },
-        onError: (err) => {
-          setError(getErrorMessage(err, "Failed to cancel competition."));
-          setCancelTargetId(null);
-        },
-      },
-    );
   };
 
   const searched = useMemo(
@@ -181,27 +125,11 @@ const Competitions: React.FC = () => {
     }, activeCompetitions[0]);
   }, [activeCompetitions]);
 
-  const closingSoon = useMemo(() => {
-    return activeCompetitions
-      .filter((c) => c.id !== featured?.id)
-      .filter((c) => {
-        const diff = c.deadline.getTime() - now;
-        return diff > 0 && diff <= WEEK_MS;
-      })
-      .sort((a, b) => a.deadline.getTime() - b.deadline.getTime())
-      .slice(0, 12);
-  }, [activeCompetitions, featured, now]);
-
-  const ledgerFiltered = useMemo(() => {
-    return searched.filter((c) => {
-      if (openOnly && c.status !== "active") return false;
-      return true;
-    });
-  }, [searched, openOnly]);
-
+  // No filtering: the ledger lists every competition, in every phase. Search
+  // narrows it, sorting reorders it — neither hides a phase from the reader.
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
-    const list = [...ledgerFiltered];
+    const list = [...searched];
     list.sort((a, b) => {
       switch (sortKey) {
         case "pool": {
@@ -209,18 +137,28 @@ const Competitions: React.FC = () => {
           const bv = b.prizePool ? BigInt(b.prizePool.amount) : 0n;
           return av < bv ? -1 * dir : av > bv ? 1 * dir : 0;
         }
-        case "entrants":
-          return (a.participants - b.participants) * dir;
         case "closesAt":
         default:
           return (a.deadline.getTime() - b.deadline.getTime()) * dir;
       }
     });
     return list;
-  }, [ledgerFiltered, sortKey, sortDir]);
+  }, [searched, sortKey, sortDir]);
 
-  const visible = sorted.slice(0, page * PAGE_SIZE);
-  const canLoadMore = visible.length < sorted.length;
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  // Clamped rather than trusted: `?page=` is user-editable, and a search that
+  // narrows the results can strand the reader past the end.
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const firstIndex = (currentPage - 1) * PAGE_SIZE;
+  const visible = sorted.slice(firstIndex, firstIndex + PAGE_SIZE);
+
+  const goToPage = (next: number) => {
+    // Page 1 is the default, so it stays out of the URL.
+    updateParams({ page: next === 1 ? null : String(next) });
+    // Otherwise a page change lands the reader mid-list, wherever they had
+    // scrolled to reach the control.
+    document.getElementById("ledger")?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -230,7 +168,7 @@ const Competitions: React.FC = () => {
     }
   };
 
-  const clearFilters = () => {
+  const clearSearch = () => {
     setSearchParams(new URLSearchParams());
   };
 
@@ -259,46 +197,8 @@ const Competitions: React.FC = () => {
       <HostPrizeDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        editingCompetition={editingCompetition}
+        editingCompetition={null}
       />
-
-      <ConfirmDialog
-        open={!!cancelTargetId}
-        onOpenChange={(open) => !open && setCancelTargetId(null)}
-        title="Cancel this competition?"
-        description="The prize pool is refunded to the creator and it can't be reopened."
-        confirmLabel="Cancel competition"
-        cancelLabel="Keep competition"
-        variant="danger"
-        onConfirm={confirmCancelCompetition}
-      />
-
-      {/* Top utility bar */}
-      <div className="flex items-center gap-6 pb-[22px] border-b border-ns-border">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ns-ink-muted" />
-          <Input
-            ref={searchInputRef}
-            type="text"
-            placeholder="Search competitions, genres, hosts… (⌘K)"
-            value={query}
-            onChange={(e) => updateParams({ q: e.target.value || null, page: null })}
-            className="h-11 rounded-[10px] bg-ns-elevated pl-10 pr-4"
-          />
-        </div>
-        {user && (
-          <Button
-            variant="outline"
-            onClick={handleStartCreate}
-            disabled={!canHost}
-            title={!canHost ? "Only admins can host a competition" : undefined}
-            className="whitespace-nowrap"
-          >
-            <Plus className="w-3.5 h-3.5 mr-1.5" />
-            Host a competition
-          </Button>
-        )}
-      </div>
 
       {loading ? (
         <div className="py-10 space-y-10">
@@ -382,12 +282,6 @@ const Competitions: React.FC = () => {
                   </div>
                   <div className="h-px bg-ns-border" />
                   <div className="flex items-center justify-between">
-                    <span className="font-ui text-[13px] text-ns-ink-muted">Difficulty</span>
-                    <span className="font-ui text-[13px] font-semibold text-ns-ink capitalize">
-                      {featured.difficulty}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
                     <span className="font-ui text-[13px] text-ns-ink-muted">Category</span>
                     <span className="font-ui text-[13px] font-semibold text-ns-ink">
                       {featured.category}
@@ -408,70 +302,65 @@ const Competitions: React.FC = () => {
             </div>
           )}
 
-          {/* Closing this week rail */}
-          {closingSoon.length > 0 && (
-            <div className="py-8 border-b border-ns-border">
-              <div className="flex items-center gap-4 mb-5">
-                <h2 className="font-heading text-[32px] text-ns-ink shrink-0">
-                  Closing this week
-                </h2>
-                <div className="h-px flex-1 bg-ns-border" />
-                <a
-                  href="#ledger"
-                  className="font-ui text-xs font-semibold text-ns-ink-secondary hover:text-ns-ink"
-                >
-                  See all {ledgerFiltered.length}
-                </a>
-              </div>
-              <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-1 snap-x">
-                {closingSoon.map((competition) => (
-                  <div key={competition.id} className="snap-start">
-                    <CompetitionRailCard competition={competition} now={now} />
-                  </div>
-                ))}
-                <a
-                  href="#ledger"
-                  className="flex w-[130px] shrink-0 items-center justify-center rounded-ns-lg border border-dashed border-ns-border-strong font-ui text-xs text-ns-ink-muted hover:text-ns-ink hover:border-ns-ink transition-colors"
-                >
-                  more →
-                </a>
-              </div>
+          {/* Utility bar. Inside the loaded branch and below the hero, but
+              above the ledger's own empty state — so a search that matches
+              nothing still leaves the reader a search box to edit. */}
+          <div className="flex items-center gap-6 py-[22px] border-b border-ns-border">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ns-ink-muted" />
+              <Input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search competitions, genres, hosts… (⌘K)"
+                value={query}
+                onChange={(e) =>
+                  updateParams({ q: e.target.value || null, page: null })
+                }
+                className="h-11 rounded-[10px] bg-ns-elevated pl-10 pr-4"
+              />
             </div>
-          )}
+            <Link
+              to="/explore/competitions/how-it-works"
+              className="hidden sm:inline-flex items-center gap-1.5 whitespace-nowrap font-ui text-[13px] font-semibold text-ns-ink-secondary hover:text-ns-ink transition-colors"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              How it works
+            </Link>
+            {user && (
+              <Button
+                variant="outline"
+                onClick={handleStartCreate}
+                disabled={!canHost}
+                title={!canHost ? "Only admins can host a competition" : undefined}
+                className="whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                Host a competition
+              </Button>
+            )}
+          </div>
 
-          {/* Every open competition — the ledger table */}
+          {/* Every competition — the ledger table */}
           <div id="ledger" className="py-8 scroll-mt-24">
             <div className="flex items-center gap-4 mb-5 flex-wrap">
               <h2 className="font-heading text-[32px] text-ns-ink shrink-0">
-                Every open competition
+                Every competition
               </h2>
               <div className="h-px flex-1 min-w-8 bg-ns-border" />
-              <div className="flex items-center gap-[7px]">
-                <button
-                  onClick={() =>
-                    updateParams({ open: openOnly ? "0" : null, page: null })
-                  }
-                  className={`rounded-full px-[14px] py-[7px] font-ui text-xs font-semibold transition-colors ${
-                    openOnly
-                      ? "bg-ns-ink text-ns-bg"
-                      : "border border-ns-border-strong text-ns-ink-secondary hover:text-ns-ink"
-                  }`}
-                >
-                  Open
-                </button>
-              </div>
             </div>
 
             {sorted.length === 0 ? (
               <CompetitionsEmptyState
-                variant="filtered"
+                variant="search"
                 canHost={canHost}
                 onHost={handleStartCreate}
-                onClearFilters={clearFilters}
+                onClearSearch={clearSearch}
               />
             ) : (
               <>
-                <div className="hidden md:grid grid-cols-[1.9fr_.8fr_.8fr_.9fr_auto] xl:grid-cols-[1.9fr_.9fr_.8fr_.8fr_.9fr_auto] gap-x-5 border-b border-ns-border pb-3 px-1">
+                <div
+                  className={`hidden md:grid gap-x-5 border-b border-ns-border pb-3 px-1 ${LEDGER_GRID}`}
+                >
                   <SortHead
                     label="Competition"
                     active={sortKey === "closesAt"}
@@ -491,14 +380,7 @@ const Competitions: React.FC = () => {
                   <span className="font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted text-right">
                     Entry
                   </span>
-                  <SortHead
-                    label="Entrants"
-                    align="right"
-                    active={sortKey === "entrants"}
-                    dir={sortDir}
-                    onClick={() => toggleSort("entrants")}
-                  />
-                  <span />
+                  <LedgerStatusLegend />
                 </div>
 
                 <div>
@@ -507,26 +389,71 @@ const Competitions: React.FC = () => {
                       key={competition.id}
                       competition={competition}
                       now={now}
-                      canManage={
-                        competition.creatorId === user?.uid || !!user?.isAdmin
-                      }
-                      onEdit={handleStartEdit}
-                      onCancel={handleCancelCompetition}
                     />
                   ))}
                 </div>
 
                 <div className="flex flex-col items-center gap-4 pt-8">
-                  <p className="font-ui text-xs text-ns-ink-muted">
-                    Showing {visible.length} of {sorted.length} open competitions
+                  <p className="font-ui text-xs text-ns-ink-muted tabular-nums">
+                    Showing {firstIndex + 1}–{firstIndex + visible.length} of{" "}
+                    {sorted.length} competition
+                    {sorted.length === 1 ? "" : "s"}
                   </p>
-                  {canLoadMore && (
-                    <Button
-                      variant="outline"
-                      onClick={() => updateParams({ page: String(page + 1) })}
+
+                  {totalPages > 1 && (
+                    <nav
+                      aria-label="Pagination"
+                      className="flex items-center gap-1.5"
                     >
-                      Load more
-                    </Button>
+                      <button
+                        type="button"
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        aria-label="Previous page"
+                        className="inline-flex items-center justify-center h-8 w-8 rounded-ns font-ui text-ns-ink-secondary transition-colors hover:bg-ns-surface hover:text-ns-ink disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ns-ink-secondary"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+
+                      {pageItems(currentPage, totalPages).map((item, index) =>
+                        item === null ? (
+                          <span
+                            key={`gap-${index}`}
+                            aria-hidden="true"
+                            className="px-1 font-ui text-xs text-ns-ink-muted select-none"
+                          >
+                            …
+                          </span>
+                        ) : (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => goToPage(item)}
+                            aria-label={`Page ${item}`}
+                            aria-current={
+                              item === currentPage ? "page" : undefined
+                            }
+                            className={`inline-flex items-center justify-center h-8 min-w-8 px-2 rounded-ns font-ui text-[13px] font-semibold tabular-nums transition-colors ${
+                              item === currentPage
+                                ? "bg-ns-ink text-ns-bg"
+                                : "text-ns-ink-secondary hover:bg-ns-surface hover:text-ns-ink"
+                            }`}
+                          >
+                            {item}
+                          </button>
+                        ),
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        aria-label="Next page"
+                        className="inline-flex items-center justify-center h-8 w-8 rounded-ns font-ui text-ns-ink-secondary transition-colors hover:bg-ns-surface hover:text-ns-ink disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ns-ink-secondary"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </nav>
                   )}
                 </div>
               </>

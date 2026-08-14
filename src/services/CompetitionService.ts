@@ -37,10 +37,10 @@ interface CompetitionDoc {
   prizePool?: ITokenAmount;
   submissionCount?: number;
   ballotCount?: number;
+  votingRules?: ICompetition["votingRules"];
   results?: ICompetition["results"];
   resultsDigest?: string;
   settledAt?: Timestamp;
-  difficulty?: "beginner" | "intermediate" | "advanced";
   maxParticipants?: number | null;
   participantsCount?: number;
   participants?: number;
@@ -108,12 +108,12 @@ class CompetitionService {
           : undefined,
       ballotCount:
         typeof data.ballotCount === "number" ? data.ballotCount : undefined,
+      votingRules: data.votingRules,
       results: Array.isArray(data.results) ? data.results : undefined,
       resultsDigest:
         typeof data.resultsDigest === "string" ? data.resultsDigest : undefined,
       settledAt: data.settledAt?.toDate?.(),
       status: deriveCompetitionStatus(data.phase, startDate, deadline),
-      difficulty: data.difficulty ?? "beginner",
       participants: participantsCount,
       maxParticipants:
         typeof data.maxParticipants === "number"
@@ -172,7 +172,6 @@ class CompetitionService {
           title: input.title,
           description: input.description,
           category: input.category,
-          difficulty: input.difficulty,
           tags: input.tags,
           maxParticipants: input.maxParticipants ?? null,
           startDate: input.startDate.toISOString(),

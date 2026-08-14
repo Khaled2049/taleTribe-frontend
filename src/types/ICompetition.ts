@@ -34,8 +34,6 @@ export type EscrowState =
   | "released"
   | "refunded";
 
-export type CompetitionDifficulty = "beginner" | "intermediate" | "advanced";
-
 /** One line of the final standings, exactly as settlement recorded it. */
 export interface ICompetitionResult {
   rank: number;
@@ -44,6 +42,18 @@ export interface ICompetitionResult {
   votes: number;
   /** TALE in integer minor units — display only on the client. */
   amount: MinorUnits;
+}
+
+/**
+ * Per-competition voting rules.
+ *
+ * Absent on every competition written so far — nothing sets it yet — in which
+ * case the platform default applies. Surfaced on the client so the UI polices
+ * the same number the server does; see `getMaxVotesPerUser`.
+ */
+export interface IVotingRules {
+  /** How many entries one voter may back. */
+  maxVotesPerUser?: number;
 }
 
 export interface ISponsor {
@@ -95,8 +105,8 @@ export interface ICompetition {
    * nothing about who is ahead, unlike a per-entry count.
    */
   ballotCount?: number;
+  votingRules?: IVotingRules;
   status: CompetitionStatus;
-  difficulty: CompetitionDifficulty;
   participants: number;
   maxParticipants?: number;
   tags: string[];
@@ -118,7 +128,6 @@ export interface ICompetitionInput {
   prizeCurrency: string;
   startDate: Date;
   deadline: Date;
-  difficulty: CompetitionDifficulty;
   maxParticipants?: number | null;
   tags: string[];
   category: string;
@@ -134,7 +143,6 @@ export interface ICompetitionCreateInput {
   title: string;
   description: string;
   category: string;
-  difficulty: CompetitionDifficulty;
   tags: string[];
   maxParticipants?: number | null;
   startDate: Date;
@@ -154,7 +162,6 @@ export interface ICompetitionUpdate {
   title?: string;
   description?: string;
   category?: string;
-  difficulty?: CompetitionDifficulty;
   tags?: string[];
   maxParticipants?: number | null;
   startDate?: Date;

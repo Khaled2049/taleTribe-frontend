@@ -1,20 +1,21 @@
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
 export interface CompetitionsEmptyStateProps {
-  /** "none" — nothing open at all. "filtered" — the active filters matched zero rows. */
-  variant: "none" | "filtered";
+  /** "none" — there are no competitions at all. "search" — the query matched none. */
+  variant: "none" | "search";
   canHost: boolean;
   onHost: () => void;
-  onClearFilters?: () => void;
+  onClearSearch?: () => void;
 }
 
 export function CompetitionsEmptyState({
   variant,
   canHost,
   onHost,
-  onClearFilters,
+  onClearSearch,
 }: CompetitionsEmptyStateProps) {
-  const isFiltered = variant === "filtered";
+  const isSearch = variant === "search";
 
   return (
     <div className="flex flex-col items-center gap-[18px] px-12 py-14 text-center">
@@ -26,24 +27,33 @@ export function CompetitionsEmptyState({
         }}
       />
       <h2 className="font-heading text-[40px] leading-[1.05] text-ns-ink">
-        {isFiltered ? "No competitions match those filters" : "No competitions open just yet"}
+        {isSearch ? "No competitions match your search" : "No competitions just yet"}
       </h2>
       <p className="font-body text-[17px] leading-[1.55] max-w-[36ch] text-ns-ink-secondary">
-        {isFiltered
-          ? "Try widening your filters or clearing your search to see everything that's open right now."
-          : "There's nothing open to enter right now. Check back soon, or start a competition of your own and let the tribe write to it."}
+        {isSearch
+          ? "Try a different search, or clear it to see everything."
+          : "There's nothing to enter right now. Check back soon, or start a competition of your own and let the tribe write to it."}
       </p>
       <div className="mt-2 flex items-center gap-3">
-        {isFiltered ? (
-          <Button variant="outline" onClick={onClearFilters}>
-            Clear filters
+        {isSearch ? (
+          <Button variant="outline" onClick={onClearSearch}>
+            Clear search
           </Button>
         ) : (
-          canHost && (
-            <Button className="bg-ns-ink text-ns-bg hover:opacity-90" onClick={onHost}>
-              Host a competition
-            </Button>
-          )
+          <>
+            {canHost && (
+              <Button className="bg-ns-ink text-ns-bg hover:opacity-90" onClick={onHost}>
+                Host a competition
+              </Button>
+            )}
+            {/* Nothing to browse, so the explainer is the one useful thing here. */}
+            <Link
+              to="/explore/competitions/how-it-works"
+              className="font-ui text-[13px] font-semibold text-ns-accent hover:text-ns-accent-hover transition-colors"
+            >
+              See how competitions work
+            </Link>
+          </>
         )}
       </div>
     </div>

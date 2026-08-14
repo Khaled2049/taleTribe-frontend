@@ -210,7 +210,6 @@ export const createCompetition = onRequest(
         title: input.title,
         description: input.description,
         category: input.category,
-        difficulty: input.difficulty,
         tags: input.tags,
         maxParticipants: input.maxParticipants,
         startDate: Timestamp.fromDate(input.startDate),
@@ -340,9 +339,6 @@ export const updateCompetition = onRequest(
           ? { description: update.description }
           : {}),
         ...(update.category !== undefined ? { category: update.category } : {}),
-        ...(update.difficulty !== undefined
-          ? { difficulty: update.difficulty }
-          : {}),
         ...(update.tags !== undefined ? { tags: update.tags } : {}),
         ...(update.maxParticipants !== undefined
           ? { maxParticipants: update.maxParticipants }

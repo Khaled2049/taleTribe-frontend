@@ -16,23 +16,15 @@ import {
 import { formatMinorUnits, parseTokenInput } from "@/lib/money";
 import { TALE_SYMBOL } from "@/types/IToken";
 import {
-  CompetitionDifficulty,
   ICompetition,
   ICompetitionCreateInput,
   ICompetitionUpdate,
 } from "@/types/ICompetition";
 
-const DIFFICULTY_OPTIONS: CompetitionDifficulty[] = [
-  "beginner",
-  "intermediate",
-  "advanced",
-];
-
 interface CompetitionFormState {
   title: string;
   description: string;
   category: string;
-  difficulty: CompetitionDifficulty;
   /** Whole TALE as typed, e.g. "1000". Converted to minor units on submit. */
   prizeAmount: string;
   startDate: string;
@@ -57,7 +49,6 @@ const getInitialFormState = (): CompetitionFormState => {
     title: "",
     description: "",
     category: "",
-    difficulty: "beginner",
     prizeAmount: "",
     startDate: toDateTimeLocal(start),
     deadline: toDateTimeLocal(deadline),
@@ -81,7 +72,6 @@ const mapCompetitionToForm = (
     title: competition.title,
     description: competition.description,
     category: competition.category,
-    difficulty: competition.difficulty,
     // Display only — the prize is immutable once escrow is funded, so the
     // field is rendered read-only while editing.
     prizeAmount: competition.prizePool
@@ -164,7 +154,6 @@ export function HostPrizeDialog({
         title: formState.title,
         description: formState.description,
         category: formState.category,
-        difficulty: formState.difficulty,
         tags: parseTags(formState.tags),
         maxParticipants: formState.maxParticipants
           ? Number(formState.maxParticipants)
@@ -205,7 +194,6 @@ export function HostPrizeDialog({
         title: formState.title,
         description: formState.description,
         category: formState.category,
-        difficulty: formState.difficulty,
         tags: parseTags(formState.tags),
         maxParticipants: formState.maxParticipants
           ? Number(formState.maxParticipants)
@@ -279,25 +267,6 @@ export function HostPrizeDialog({
               className="w-full bg-transparent border border-ns-border rounded-ns px-3 py-2 text-sm min-h-[96px] text-ns-ink"
               placeholder="Describe the competition and entry expectations"
             />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="font-ui text-[10px] tracking-[0.14em] uppercase text-ns-ink-muted">
-              Difficulty
-            </label>
-            <select
-              value={formState.difficulty}
-              onChange={(e) =>
-                handleFormChange("difficulty", e.target.value as CompetitionDifficulty)
-              }
-              className="w-full bg-transparent border border-ns-border rounded-ns px-3 py-2 text-sm text-ns-ink"
-            >
-              {DIFFICULTY_OPTIONS.map((difficulty) => (
-                <option key={difficulty} value={difficulty}>
-                  {difficulty}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div className="space-y-1.5">

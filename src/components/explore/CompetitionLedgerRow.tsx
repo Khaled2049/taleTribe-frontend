@@ -7,80 +7,108 @@ import {
   getPrizeDisplay,
   hasJoinedWithoutSubmitting,
 } from "@/lib/competitionListing";
+import {
+  LEDGER_GRID,
+  ROW_ACTION,
+  actionBadgeProps,
+  type RowActionKey,
+} from "@/lib/competitionLedger";
 import type { ICompetition } from "@/types/ICompetition";
 
+/**
+ * A row is a link and nothing else. Editing and cancelling live on the
+ * competition's own page, where the phase rules that govern them are visible —
+ * a bare "Cancel" in a list gives no hint that it refunds a prize pool.
+ */
 export interface CompetitionLedgerRowProps {
   competition: ICompetition;
   now: number;
-  canManage: boolean;
-  onEdit: (competitionId: string) => void;
-  onCancel: (competitionId: string) => void;
 }
+
+/** Guards against "Closes in Closed" once the entry deadline has passed. */
+const entrySubline = (
+  countdown: ReturnType<typeof formatCountdown>,
+  category: string,
+): string =>
+  countdown.isPast
+    ? `Entries closed · ${category}`
+    : `Closes in ${countdown.label} · ${category}`;
 
 function rowState(competition: ICompetition, now: number) {
   const countdown = formatCountdown(competition.deadline, now);
+  const category = competition.category;
 
   if (competition.phase === "settled") {
     return {
-      subline: `Results announced · ${competition.category}`,
+      subline: `Results announced · ${category}`,
       urgent: false,
       dim: true,
-      joined: false,
-      action: "Results",
+      actionKey: "results" as RowActionKey,
     };
   }
   if (competition.phase === "settling") {
     return {
-      subline: `Judging · ${competition.category}`,
+      subline: `Judging · ${category}`,
       urgent: false,
       dim: true,
-      joined: false,
-      action: "Judging",
+      actionKey: "judging" as RowActionKey,
     };
   }
   if (competition.phase === "cancelled") {
     return {
-      subline: `Cancelled · ${competition.category}`,
+      subline: `Cancelled · ${category}`,
       urgent: false,
       dim: true,
-      joined: false,
-      action: "Cancelled",
+      actionKey: "cancelled" as RowActionKey,
+    };
+  }
+  // Voting is still "active", so without this it would fall through to the
+  // entry branch below and invite the reader to enter a competition whose
+  // entries have already closed.
+  if (competition.phase === "voting") {
+    const voting = competition.votingDeadline
+      ? formatCountdown(competition.votingDeadline, now)
+      : null;
+    return {
+      subline:
+        voting && !voting.isPast
+          ? `Voting closes in ${voting.label} · ${category}`
+          : `Voting open · ${category}`,
+      urgent: voting?.isUrgent ?? false,
+      dim: false,
+      actionKey: "vote" as RowActionKey,
     };
   }
   if (competition.status === "completed") {
     // Legacy doc with no `phase` — fall back to the derived status only.
     return {
-      subline: `Closed · ${competition.category}`,
+      subline: `Closed · ${category}`,
       urgent: false,
       dim: true,
-      joined: false,
-      action: "Results",
+      actionKey: "results" as RowActionKey,
     };
   }
   if (hasJoinedWithoutSubmitting(competition)) {
     return {
-      subline: `Closes in ${countdown.label} · ${competition.category}`,
+      subline: entrySubline(countdown, category),
       urgent: countdown.isUrgent,
       dim: false,
-      joined: true,
-      action: "Continue",
+      actionKey: "continue" as RowActionKey,
     };
   }
   return {
-    subline: `Closes in ${countdown.label} · ${competition.category}`,
+    subline: entrySubline(countdown, category),
     urgent: countdown.isUrgent,
     dim: false,
-    joined: false,
-    action: competition.status === "upcoming" ? "Register" : "Enter",
+    actionKey: (competition.status === "upcoming"
+      ? "register"
+      : "enter") as RowActionKey,
   };
 }
 
 export function CompetitionLedgerRow({
   competition,
   now,
-  canManage,
-  onEdit,
-  onCancel,
 }: CompetitionLedgerRowProps) {
   const prize = getPrizeDisplay(competition);
   const state = rowState(competition, now);
@@ -89,41 +117,17 @@ export function CompetitionLedgerRow({
     competition.maxParticipants ? ` / ${competition.maxParticipants}` : ""
   }`;
 
+  const action = ROW_ACTION[state.actionKey];
+  const badge = actionBadgeProps(action.tone);
+  const joined = state.actionKey === "continue";
+
   const actionPill = (
     <Badge
-      variant={state.joined ? "outline" : state.dim ? "default" : "success"}
-      className={cn(
-        "pointer-events-none whitespace-nowrap",
-        state.joined && "border-ns-accent/30 text-ns-accent",
-      )}
+      variant={badge.variant}
+      className={cn("pointer-events-none", badge.className)}
     >
-      {state.action}
+      {action.label}
     </Badge>
-  );
-
-  const manageButtons = canManage && (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={(e) => {
-          e.preventDefault();
-          onEdit(competition.id);
-        }}
-        className="relative z-20 pointer-events-auto font-ui text-[11px] font-semibold text-ns-ink-muted hover:text-ns-ink transition-colors"
-      >
-        Edit
-      </button>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.preventDefault();
-          onCancel(competition.id);
-        }}
-        className="relative z-20 pointer-events-auto font-ui text-[11px] font-semibold text-ns-destructive hover:text-ns-destructive-hover transition-colors"
-      >
-        Cancel
-      </button>
-    </div>
   );
 
   return (
@@ -132,7 +136,7 @@ export function CompetitionLedgerRow({
         "relative border-b border-ns-border py-[18px] px-1",
         "transition-colors duration-150 hover:bg-ns-surface-hover",
         state.dim && "opacity-[0.62]",
-        state.joined && "bg-gradient-to-r from-ns-accent-subtle to-transparent",
+        joined && "bg-gradient-to-r from-ns-accent-subtle to-transparent",
       )}
     >
       <Link
@@ -142,7 +146,7 @@ export function CompetitionLedgerRow({
       />
 
       {/* Desktop / tablet ledger row */}
-      <div className="hidden md:grid grid-cols-[1.9fr_.8fr_.8fr_.9fr_auto] xl:grid-cols-[1.9fr_.9fr_.8fr_.8fr_.9fr_auto] items-center gap-x-5">
+      <div className={cn("hidden md:grid items-center gap-x-5", LEDGER_GRID)}>
         <div className="relative z-10 pointer-events-none min-w-0">
           <p className="font-heading text-2xl leading-[1.05] text-ns-ink truncate">
             {competition.title}
@@ -169,13 +173,8 @@ export function CompetitionLedgerRow({
           <span className="font-semibold text-ns-success">Free</span>
         </div>
 
-        <div className="relative z-10 pointer-events-none text-right font-ui text-sm text-ns-ink-secondary tabular-nums">
-          {entrants}
-        </div>
-
         <div className="relative z-10 flex items-center justify-end gap-3">
           {actionPill}
-          {manageButtons}
         </div>
       </div>
 
@@ -200,10 +199,7 @@ export function CompetitionLedgerRow({
             {entrants} entered
           </span>
         </div>
-        <div className="flex items-center justify-between mt-1 pointer-events-auto">
-          {actionPill}
-          {manageButtons}
-        </div>
+        <div className="flex items-center mt-1">{actionPill}</div>
       </div>
     </div>
   );

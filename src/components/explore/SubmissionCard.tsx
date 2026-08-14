@@ -9,6 +9,13 @@ interface SubmissionCardProps {
   onToggleVote: (submissionId: string) => void;
   disabled?: boolean;
   isOwnEntry?: boolean;
+  /**
+   * The voter has used every vote they have. Only blocks entries they haven't
+   * backed — a backed one stays clickable so they can unpick it and swap.
+   */
+  atVoteLimit?: boolean;
+  /** Only used to explain `atVoteLimit`. */
+  maxVotes?: number;
   /** Rank is only ever known after settlement. */
   rank?: number;
 }
@@ -20,8 +27,11 @@ const SubmissionCard: React.FC<SubmissionCardProps> = ({
   onToggleVote,
   disabled = false,
   isOwnEntry = false,
+  atVoteLimit = false,
+  maxVotes,
   rank,
 }) => {
+  const blockedByLimit = atVoteLimit && !selected;
   return (
     <article className="group border-b border-ns-border py-6 flex items-start gap-5">
       {submission.coverImageUrl ? (
@@ -76,9 +86,13 @@ const SubmissionCard: React.FC<SubmissionCardProps> = ({
           <button
             type="button"
             onClick={() => onToggleVote(submission.id)}
-            disabled={disabled || isOwnEntry}
+            disabled={disabled || isOwnEntry || blockedByLimit}
             title={
-              isOwnEntry ? "You can't vote for your own entry" : undefined
+              isOwnEntry
+                ? "You can't vote for your own entry"
+                : blockedByLimit
+                  ? `You've backed ${maxVotes ?? 0} of ${maxVotes ?? 0} — unpick one to swap`
+                  : undefined
             }
             className={`font-ui text-[10px] font-bold tracking-[0.12em] uppercase px-3 py-1.5 rounded-ns border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               selected

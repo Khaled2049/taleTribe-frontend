@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import {
+  useCancelCompetition,
   useCastVote,
   useCompetitionQuery,
   useJoinCompetition,
@@ -12,50 +13,27 @@ import {
   useSubmitStory,
   useWithdrawSubmission,
 } from "@/hooks/queries/useCompetitionQueries";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { useNow } from "@/hooks/useCountdown";
-import { useHashTab } from "@/hooks/useHashTab";
-import { isCompetitionFull } from "@/lib/competitionListing";
+import { formatCountdown, useNow } from "@/hooks/useCountdown";
+import {
+  DEFAULT_MAX_VOTES_PER_USER,
+  getMaxVotesPerUser,
+  isCompetitionFull,
+} from "@/lib/competitionListing";
+import { PHASE_COPY } from "@/lib/competitionPhaseCopy";
+import { canTransition, isEditablePhase } from "@/lib/competitionPhase";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { HostPrizeDialog } from "./HostPrizeDialog";
 import CompetitionDetailHero from "./CompetitionDetailHero";
 import CompetitionBrief from "./CompetitionBrief";
-import CompetitionEntryCard from "./CompetitionEntryCard";
 import CompetitionEnteredCard from "./CompetitionEnteredCard";
 import CompetitionKeyDatesCard from "./CompetitionKeyDatesCard";
-import CompetitionHostCard from "./CompetitionHostCard";
+import CompetitionCountdown from "./CompetitionCountdown";
 import CompetitionResultsCard from "./CompetitionResultsCard";
 import SubmissionCard from "./SubmissionCard";
 import SubmissionPicker from "./SubmissionPicker";
 import type { CompetitionPhase } from "@/types/ICompetition";
 import type { ICompetitionSubmission } from "@/types/ICompetitionSubmission";
 
-const MAX_VOTES_PER_USER = 3;
-const TABS = ["brief", "entrants"] as const;
-
-const PHASE_COPY: Record<CompetitionPhase, { label: string; blurb: string }> = {
-  draft: {
-    label: "Not open yet",
-    blurb: "Entries open when the competition starts.",
-  },
-  open: {
-    label: "Open for entries",
-    blurb: "Join, then enter one of your published stories.",
-  },
-  voting: {
-    label: "Voting open",
-    blurb:
-      "Back up to three entries. Results stay hidden until voting closes — nobody can see who's ahead.",
-  },
-  settling: {
-    label: "Counting votes",
-    blurb: "Voting has closed and the prize is being paid out.",
-  },
-  settled: { label: "Settled", blurb: "The prize has been paid out." },
-  cancelled: {
-    label: "Cancelled",
-    blurb: "This competition was cancelled and its prize refunded.",
-  },
-};
 
 /**
  * Stable per-viewer ordering.
@@ -86,8 +64,13 @@ const CompetitionDetail: React.FC = () => {
   const { competitionId = "" } = useParams<{ competitionId: string }>();
   const { user } = useAuthContext();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const now = useNow();
-  const [tab, setTab] = useHashTab(TABS, "brief");
+
+  /** The brief is always on the page now; on narrow screens it may be above. */
+  const scrollToBrief = () =>
+    document.getElementById("brief")?.scrollIntoView({ behavior: "smooth" });
 
   const { data: competition, isLoading } = useCompetitionQuery(
     competitionId,
@@ -100,12 +83,20 @@ const CompetitionDetail: React.FC = () => {
   const submitStory = useSubmitStory(competitionId);
   const withdrawSubmission = useWithdrawSubmission(competitionId);
   const castVote = useCastVote(competitionId, user?.uid);
+  const cancelCompetition = useCancelCompetition();
 
   const phase: CompetitionPhase = competition?.phase ?? "open";
   const entries = useMemo(() => submissions ?? [], [submissions]);
 
   const myEntry = entries.find((entry) => entry.userId === user?.uid);
   const selected = ballot?.submissionIds ?? [];
+
+  // Read the competition's own rule rather than a local constant, so the UI
+  // polices exactly the number castCompetitionVote enforces.
+  const maxVotes = competition
+    ? getMaxVotesPerUser(competition)
+    : DEFAULT_MAX_VOTES_PER_USER;
+  const atVoteLimit = selected.length >= maxVotes;
 
   const ordered = useMemo(() => {
     if (phase === "settled" && competition?.results?.length) {
@@ -133,8 +124,8 @@ const CompetitionDetail: React.FC = () => {
       ? selected.filter((id) => id !== submissionId)
       : [...selected, submissionId];
 
-    if (next.length > MAX_VOTES_PER_USER) {
-      toast.error(`You can back at most ${MAX_VOTES_PER_USER} entries`);
+    if (next.length > maxVotes) {
+      toast.error(`You can back at most ${maxVotes} entries`);
       return;
     }
 
@@ -164,6 +155,30 @@ const CompetitionDetail: React.FC = () => {
         error instanceof Error ? error.message : "Failed to submit your entry",
       );
     }
+  };
+
+  /**
+   * Cancel, not delete. A competition holding a prize pool can't be removed —
+   * the escrowed tokens go back to the host instead.
+   */
+  const handleCancelCompetition = () => {
+    cancelCompetition.mutate(
+      { competitionId },
+      {
+        onSuccess: () => {
+          toast.success("Competition cancelled and prize refunded");
+          setCancelOpen(false);
+        },
+        onError: (error) => {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Failed to cancel competition",
+          );
+          setCancelOpen(false);
+        },
+      },
+    );
   };
 
   /** No server-side edit-in-place — withdraw, then let the picker reopen. */
@@ -199,9 +214,24 @@ const CompetitionDetail: React.FC = () => {
   const copy = PHASE_COPY[phase];
   const isCreator = competition.creatorId === user?.uid;
   const full = isCompetitionFull(competition);
+  /**
+   * The entry countdown only means something while an entry is still possible.
+   * A cancelled competition can sit on a future deadline, so the clock alone
+   * isn't enough — it would count down to something that will never happen.
+   */
+  const showEntryCountdown =
+    (phase === "draft" || phase === "open") &&
+    !formatCountdown(competition.deadline, now).isPast;
 
-  // Shared between the hero and the sticky rail's entry card. `null` means
-  // "no actionable button" — each card falls back to phase/sign-in/creator copy.
+  // Same rule the server applies in assertCanManage (competitionEndpoints.ts):
+  // the host, or any admin. This only decides what is offered — the endpoints
+  // re-check it, so hiding the buttons is not what makes it safe.
+  const canManage = isCreator || !!user?.isAdmin;
+  const canEdit = isEditablePhase(phase);
+  const canCancel = canTransition(phase, "cancelled");
+
+  // The hero's call to action. `null` means "no actionable button" — the hero
+  // then falls back to phase/sign-in/creator copy instead.
   let cta: { label: string; onClick?: () => void; disabled?: boolean } | null = null;
   if (!myEntry && user && !isCreator && phase === "open") {
     cta = full
@@ -214,7 +244,7 @@ const CompetitionDetail: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="flex items-center py-[22px] border-b border-ns-border">
+      <div className="flex items-center justify-between gap-4 py-[22px] border-b border-ns-border">
         <Link
           to="/explore/competitions"
           className="inline-flex items-center gap-2 font-ui text-[13px] font-semibold text-ns-ink-secondary hover:text-ns-ink transition-colors"
@@ -222,7 +252,61 @@ const CompetitionDetail: React.FC = () => {
           <ArrowLeft className="w-3.5 h-3.5" />
           All competitions
         </Link>
+
+        {canManage && (
+          <div className="flex items-center gap-4">
+            <span className="hidden sm:inline font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted">
+              {isCreator ? "You host this" : "Admin"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              disabled={!canEdit}
+              title={
+                canEdit
+                  ? undefined
+                  : `A competition in the ${phase} phase can no longer be edited`
+              }
+              className="font-ui text-[13px] font-semibold text-ns-ink-secondary hover:text-ns-ink transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-ns-ink-secondary"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => setCancelOpen(true)}
+              disabled={!canCancel || cancelCompetition.isPending}
+              title={
+                canCancel
+                  ? undefined
+                  : `A competition in the ${phase} phase can no longer be cancelled`
+              }
+              className="font-ui text-[13px] font-semibold text-ns-destructive hover:text-ns-destructive-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-ns-destructive"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
+
+      {canManage && (
+        <>
+          <HostPrizeDialog
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            editingCompetition={competition}
+          />
+          <ConfirmDialog
+            open={cancelOpen}
+            onOpenChange={setCancelOpen}
+            title="Cancel this competition?"
+            description="The prize pool is refunded to the host and it can't be reopened."
+            confirmLabel="Cancel competition"
+            cancelLabel="Keep competition"
+            variant="danger"
+            onConfirm={handleCancelCompetition}
+          />
+        </>
+      )}
 
       <CompetitionDetailHero
         competition={competition}
@@ -237,100 +321,99 @@ const CompetitionDetail: React.FC = () => {
         ctaDisabled={cta?.disabled}
       />
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <div className="border-b border-ns-border">
-          <TabsList className="h-auto bg-transparent p-0 gap-9 rounded-none">
-            <TabsTrigger
-              value="brief"
-              className="rounded-none bg-transparent px-1 py-4 font-ui text-sm text-ns-ink-muted transition-colors hover:text-ns-ink-secondary data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-ns-ink data-[state=active]:shadow-[inset_0_-2px_0_0_var(--ns-accent)]"
+      {/* The rail only carries the "you're entered" card, so the second column
+          is dropped entirely when there's nothing to put in it — otherwise the
+          brief would sit against 348px of empty space. */}
+      <div
+        className={`grid grid-cols-1 gap-12 items-start mt-8 ${
+          myEntry ? "lg:grid-cols-[1fr_348px]" : ""
+        }`}
+      >
+        <div>
+          {phase === "settled" && competition.results && (
+            <CompetitionResultsCard
+              competition={competition}
+              entries={entries}
+              currentUserId={user?.uid}
+            />
+          )}
+
+          <section id="brief" className="scroll-mt-24">
+            <CompetitionBrief competition={competition} />
+
+            {/* The countdown disappears once entries close, so the two-column
+                split goes with it — otherwise the key dates would sit at half
+                width against an empty cell. */}
+            <div
+              className={`grid grid-cols-1 gap-4 mt-9 ${
+                showEntryCountdown ? "md:grid-cols-2" : ""
+              }`}
             >
-              The brief
-            </TabsTrigger>
-            <TabsTrigger
-              value="entrants"
-              className="gap-2 rounded-none bg-transparent px-1 py-4 font-ui text-sm text-ns-ink-muted transition-colors hover:text-ns-ink-secondary data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-ns-ink data-[state=active]:shadow-[inset_0_-2px_0_0_var(--ns-accent)]"
-            >
-              Entrants
-              <Badge variant="default" className="px-[7px] py-0.5 text-[11px] leading-none">
+              {showEntryCountdown && (
+                <CompetitionCountdown competition={competition} now={now} />
+              )}
+              <CompetitionKeyDatesCard competition={competition} />
+            </div>
+          </section>
+
+          <section id="entrants" className="mt-14 scroll-mt-24">
+            <div className="flex items-center gap-4 mb-5">
+              <h2 className="font-heading text-[32px] text-ns-ink shrink-0">
+                Entrants
+              </h2>
+              <div className="h-px flex-1 bg-ns-border" />
+              <span className="font-ui text-[13px] text-ns-ink-muted tabular-nums shrink-0">
                 {entries.length}
-              </Badge>
-            </TabsTrigger>
-          </TabsList>
-        </div>
+              </span>
+            </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_348px] gap-12 items-start mt-8">
-          <div>
-            {phase === "settled" && competition.results && (
-              <CompetitionResultsCard
-                competition={competition}
-                entries={entries}
-                currentUserId={user?.uid}
-              />
+            {phase === "voting" && user && (
+              <p className="font-ui text-[11px] tracking-[0.1em] uppercase text-ns-ink-secondary mb-6">
+                You've backed {selected.length} of {maxVotes} ·{" "}
+                {competition.ballotCount ?? 0} ballots cast so far
+                {atVoteLimit && " · unpick one to swap"}
+              </p>
             )}
 
-            <TabsContent value="brief" className="mt-0">
-              <CompetitionBrief competition={competition} />
-            </TabsContent>
-
-            <TabsContent value="entrants" className="mt-0">
-              {phase === "voting" && user && (
-                <p className="font-ui text-[11px] tracking-[0.1em] uppercase text-ns-ink-secondary mb-6">
-                  You've backed {selected.length} of {MAX_VOTES_PER_USER} ·{" "}
-                  {competition.ballotCount ?? 0} ballots cast so far
+            {ordered.length === 0 ? (
+              <div className="py-16 text-center">
+                <p className="font-heading text-2xl text-ns-ink-muted">
+                  No entries yet.
                 </p>
-              )}
-              {ordered.length === 0 ? (
-                <div className="py-16 text-center">
-                  <p className="font-heading text-2xl text-ns-ink-muted">
-                    No entries yet.
-                  </p>
-                </div>
-              ) : (
-                <div className="border-t border-ns-border">
-                  {ordered.map((submission, index) => (
-                    <SubmissionCard
-                      key={submission.id}
-                      submission={submission}
-                      canVote={phase === "voting" && !!user}
-                      selected={selected.includes(submission.id)}
-                      onToggleVote={handleToggleVote}
-                      disabled={castVote.isPending}
-                      isOwnEntry={submission.userId === user?.uid}
-                      rank={phase === "settled" ? index + 1 : undefined}
-                    />
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-          </div>
-
-          <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
-            {myEntry ? (
-              <CompetitionEnteredCard
-                competition={competition}
-                entry={myEntry}
-                onEdit={handleEditEntry}
-                onReadBrief={() => setTab("brief")}
-                busy={withdrawSubmission.isPending}
-              />
+              </div>
             ) : (
-              <CompetitionEntryCard
-                competition={competition}
-                now={now}
-                phaseLabel={copy.label}
-                phaseBlurb={copy.blurb}
-                signedOut={!user}
-                isCreator={isCreator}
-                ctaLabel={cta?.label}
-                onCta={cta?.onClick}
-                ctaDisabled={cta?.disabled}
-              />
+              <div className="border-t border-ns-border">
+                {ordered.map((submission, index) => (
+                  <SubmissionCard
+                    key={submission.id}
+                    submission={submission}
+                    canVote={phase === "voting" && !!user}
+                    selected={selected.includes(submission.id)}
+                    onToggleVote={handleToggleVote}
+                    disabled={castVote.isPending}
+                    isOwnEntry={submission.userId === user?.uid}
+                    atVoteLimit={atVoteLimit}
+                    maxVotes={maxVotes}
+                    rank={phase === "settled" ? index + 1 : undefined}
+                  />
+                ))}
+              </div>
             )}
-            <CompetitionKeyDatesCard competition={competition} />
-            <CompetitionHostCard competition={competition} />
-          </aside>
+          </section>
         </div>
-      </Tabs>
+
+        {myEntry && (
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
+            <CompetitionEnteredCard
+              competition={competition}
+              entry={myEntry}
+              onEdit={handleEditEntry}
+              onReadBrief={scrollToBrief}
+              busy={withdrawSubmission.isPending}
+            />
+          </aside>
+        )}
+      </div>
 
       {user && (
         <SubmissionPicker
