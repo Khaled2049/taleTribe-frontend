@@ -43,6 +43,9 @@
     --ns-destructive: #dc2626;
     --ns-destructive-hover: #b91c1c;
 
+    /* Success */
+    --ns-success: #16a34a;
+
     /* Shadows — warm tinted */
     --ns-shadow: rgba(28, 28, 25, 0.05);
     --ns-shadow-strong: rgba(28, 28, 25, 0.1);
@@ -86,6 +89,8 @@
 
     --ns-destructive: #ef4444;
     --ns-destructive-hover: #dc2626;
+
+    --ns-success: #4ade80;
 
     --ns-shadow: rgba(0, 0, 0, 0.25);
     --ns-shadow-strong: rgba(0, 0, 0, 0.45);

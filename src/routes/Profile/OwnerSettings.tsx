@@ -12,6 +12,7 @@ import {
   useAiCreditsQuery,
   usePurchaseCredits,
 } from "@/hooks/queries/useCreditQueries";
+import SidebarBalanceCard from "@/components/explore/SidebarBalanceCard";
 import { useAccount, useChainId } from "wagmi";
 import { userService } from "@/services/UserService";
 import { getApiErrorMessage } from "@/api";
@@ -364,6 +365,11 @@ const OwnerSettings: React.FC = () => {
 
       {/* ── AI Credits (platform users only; BYOK users don't spend credits) ── */}
       {!user?.hasCustomAiProvider && <AiCreditsCard userId={user?.uid} />}
+
+      {/* ── $TALE token balance + daily faucet claim ── */}
+      <div className="mb-5">
+        <SidebarBalanceCard />
+      </div>
 
       {/* ── MCP access (limited rollout; owner approves each account) ── */}
       <McpAccessCard userId={user?.uid} />

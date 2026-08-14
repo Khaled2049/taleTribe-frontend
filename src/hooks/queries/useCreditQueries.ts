@@ -13,6 +13,10 @@ export function useAiCreditsQuery(userId: string | null | undefined) {
     // remount/focus/reconnect, so opening the editor doesn't hit the endpoint.
     staleTime: Infinity,
     refetchOnMount: false,
+    // Override the global retry: 1 — a transient hiccup in the
+    // Function -> agents -> creditProxy chain would otherwise silently fire a
+    // second invocation. The manual refresh button already covers retrying.
+    retry: 0,
   });
 }
 

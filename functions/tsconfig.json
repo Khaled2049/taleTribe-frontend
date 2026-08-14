@@ -8,7 +8,13 @@
     "outDir": "lib",
     "sourceMap": true,
     "strict": true,
-    "target": "es2017"
+    // es2020 (not es2017) so BigInt literals compile — money.ts/ledger.ts do all
+    // token arithmetic in BigInt because 18-decimal minor units exceed float64.
+    // The deployed runtime is Node 22 (see package.json engines), so this is well
+    // within what the target supports. Deliberately no explicit "lib": the
+    // default for a target includes DOM, which @types/react-dom (hoisted from the
+    // parent node_modules) needs to typecheck.
+    "target": "es2020"
   },
   "compileOnSave": true,
   "include": ["src"]

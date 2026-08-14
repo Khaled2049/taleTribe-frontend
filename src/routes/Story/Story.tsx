@@ -2,7 +2,6 @@ import { Outlet, NavLink, Link } from "react-router-dom";
 import { BookOpen, Layers, Users, MapPin, ArrowLeft } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { StoryWorkspaceTabs } from "./components/StoryWorkspaceTabs";
-import { AiCreditsFooter } from "@/components/layout/AiCreditsFooter";
 
 const NAV_ITEMS = [
   { label: "Editor", path: "", icon: BookOpen, end: true },
@@ -42,9 +41,6 @@ const Story = () => {
             <span>{label}</span>
           </NavLink>
         ))}
-
-        {/* AI credits, pinned to the bottom of the leftmost nav */}
-        <AiCreditsFooter className="mt-auto -mx-2 -mb-4" />
       </nav>
 
       <div className="flex-1 overflow-hidden min-w-0 flex flex-col">

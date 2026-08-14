@@ -2,19 +2,33 @@
 
 set -u
 
-ports="4000 5001 5033 8080 8085 9000 9099 9199 5173 5174 5175 5176"
+# Firebase emulators (see firebase.json) plus the internal ports the suite
+# opens that are not configured there: 4400 hub, 4500 logging, 9150 Firestore
+# gRPC, 9299 eventarc, 9499 tasks. A stale hub on 4400 alone is enough to make
+# `firebase emulators:start` refuse to boot.
+#
+# 8000 is taleTribe-agents (started by ../story/dev.sh) — it is orphaned
+# whenever dev.sh dies mid-startup, and blocks the next run.
+#
+# Deliberately NOT listed: 8090 (creditProxy). It is published by Docker, so
+# lsof reports com.docker.backend — the shared daemon PID that also serves
+# every other container. Killing it takes down all of Docker. Use
+# `docker compose down` from ../creditProxy instead.
+ports="4000 4400 4500 5001 5033 8000 8080 8085 9000 9099 9150 9199 9299 9499 5173 5174 5175 5176"
+
+if command -v lsof >/dev/null 2>&1; then
+  port_pids() { lsof -ti tcp:"$1" 2>/dev/null || true; }
+elif command -v fuser >/dev/null 2>&1; then
+  port_pids() { fuser "$1"/tcp 2>/dev/null || true; }
+else
+  echo "Neither lsof nor fuser is available; cannot free ports."
+  exit 1
+fi
 
 kill_port() {
   port="$1"
-
-  if command -v lsof >/dev/null 2>&1; then
-    pids=$(lsof -ti tcp:"$port" || true)
-  elif command -v fuser >/dev/null 2>&1; then
-    pids=$(fuser "$port"/tcp 2>/dev/null || true)
-  else
-    echo "Skipping port $port: neither lsof nor fuser is available."
-    return
-  fi
+  # lsof returns one PID per line; flatten so log lines stay readable.
+  pids=$(port_pids "$port" | tr '\n' ' ')
 
   if [ -z "$pids" ]; then
     echo "Port $port is already free."
@@ -22,11 +36,31 @@ kill_port() {
   fi
 
   echo "Killing port $port: $pids"
-  if kill $pids 2>/dev/null || kill -9 $pids 2>/dev/null; then
-    return
-  fi
 
-  echo "Could not kill process on port $port. Try again with sufficient permissions."
+  # `kill` reports success once the signal is *delivered*, not once the process
+  # exits, so escalating with `|| kill -9` never fires for a process that simply
+  # ignores or is slow to handle SIGTERM. Send TERM, then re-check the port and
+  # escalate only if something is still holding it.
+  kill $pids 2>/dev/null || true
+
+  n=0
+  while [ "$n" -lt 10 ]; do
+    still=$(port_pids "$port")
+    [ -z "$still" ] && echo "Port $port freed." && return
+    sleep 0.5
+    n=$((n + 1))
+  done
+
+  echo "Port $port still held by $still after SIGTERM; sending SIGKILL."
+  kill -9 $still 2>/dev/null || true
+  sleep 0.5
+
+  still=$(port_pids "$port")
+  if [ -z "$still" ]; then
+    echo "Port $port freed."
+  else
+    echo "Could not kill process on port $port (pids: $still). Try again with sufficient permissions."
+  fi
 }
 
 for port in $ports; do

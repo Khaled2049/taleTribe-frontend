@@ -95,6 +95,71 @@ export function requireAuth(
   };
 }
 
+export interface AdminAuthContext extends AuthContext {
+  decoded: admin.auth.DecodedIdToken & { admin?: boolean };
+}
+
+/**
+ * Verify the caller holds the `admin` custom claim.
+ *
+ * Throws `{statusCode: 401 | 403}`-shaped errors so it can be used directly
+ * inside a handler that already has a try/catch, as adminUserService does.
+ * Prefer `requireAdmin` for new endpoints.
+ */
+export async function ensureAdmin(
+  authHeader: string | undefined,
+): Promise<AdminAuthContext> {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    throw Object.assign(new Error("Unauthorized"), { statusCode: 401 });
+  }
+
+  const idToken = authHeader.split("Bearer ")[1];
+  const decoded = (await admin
+    .auth()
+    .verifyIdToken(idToken)) as admin.auth.DecodedIdToken & { admin?: boolean };
+
+  if (!decoded.admin) {
+    throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
+  }
+
+  return { userId: decoded.uid, idToken, decoded };
+}
+
+/**
+ * Middleware to require authentication AND the `admin` custom claim.
+ *
+ * The claim is the only real gate — a `disabled` attribute in the UI is not one.
+ * Anything that moves tokens or decides who receives them belongs behind this.
+ */
+export function requireAdmin(
+  handler: (
+    request: Request,
+    response: Response,
+    userId: string,
+    idToken: string
+  ) => Promise<void>
+) {
+  return async (request: Request, response: Response): Promise<void> => {
+    if (request.method === "OPTIONS") {
+      response.status(204).send("");
+      return;
+    }
+
+    let context: AdminAuthContext;
+    try {
+      context = await ensureAdmin(request.headers.authorization);
+    } catch (error) {
+      const statusCode = Number((error as { statusCode?: number })?.statusCode) || 401;
+      response
+        .status(statusCode)
+        .json({ error: statusCode === 403 ? "Forbidden" : "Unauthorized" });
+      return;
+    }
+
+    await handler(request, response, context.userId, context.idToken);
+  };
+}
+
 /**
  * Middleware to require authentication and story ownership.
  */

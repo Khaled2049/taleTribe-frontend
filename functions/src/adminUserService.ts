@@ -10,8 +10,8 @@ import {
   animals,
 } from "unique-names-generator";
 import { corsOptions } from "./corsConfig";
+import { ensureAdmin as ensureAdminAuth } from "./authService";
 import { buildUserProfileDefaults } from "./userProfileDefaults";
-import { ensureAdmin } from "./adminAuth";
 
 const db = admin.firestore();
 
@@ -27,6 +27,10 @@ interface SetUserAdminRequest {
 
 interface InviteDoc {
   linkSentCount?: number;
+}
+
+interface DecodedAdminToken extends admin.auth.DecodedIdToken {
+  admin?: boolean;
 }
 
 function isValidEmail(email: string): boolean {
@@ -70,6 +74,17 @@ async function generateUniqueUsername(maxAttempts = 20): Promise<string> {
   throw Object.assign(new Error("Unable to generate unique username"), {
     statusCode: 409,
   });
+}
+
+/**
+ * Thin wrapper over the shared `ensureAdmin` in authService, kept so the call
+ * sites here can go on using the decoded token directly (e.g. `adminToken.uid`).
+ */
+async function ensureAdmin(
+  authHeader: string | undefined,
+): Promise<DecodedAdminToken> {
+  const { decoded } = await ensureAdminAuth(authHeader);
+  return decoded as DecodedAdminToken;
 }
 
 export const createUserByAdmin = onRequest(
@@ -131,9 +146,12 @@ export const createUserByAdmin = onRequest(
         await db.runTransaction(async (transaction) => {
           const usernameSnapshot = await transaction.get(usernameRef);
           if (usernameSnapshot.exists) {
-            throw Object.assign(new Error("Generated username is already taken"), {
-              statusCode: 409,
-            });
+            throw Object.assign(
+              new Error("Generated username is already taken"),
+              {
+                statusCode: 409,
+              },
+            );
           }
           const inviteSnapshot = await transaction.get(inviteRef);
           const inviteData = inviteSnapshot.data() as InviteDoc | undefined;
@@ -174,11 +192,15 @@ export const createUserByAdmin = onRequest(
             .auth()
             .generatePasswordResetLink(normalizedEmail);
         } catch (error) {
-          warning = "User was created, but the password reset link could not be generated";
-          logger.warn("Password reset link generation failed after user creation", {
-            uid: createdUser.uid,
-            error,
-          });
+          warning =
+            "User was created, but the password reset link could not be generated";
+          logger.warn(
+            "Password reset link generation failed after user creation",
+            {
+              uid: createdUser.uid,
+              error,
+            },
+          );
         }
 
         response.status(200).json({
@@ -194,10 +216,13 @@ export const createUserByAdmin = onRequest(
           try {
             await admin.auth().deleteUser(createdUser.uid);
           } catch (cleanupError) {
-            logger.error("Failed to clean up Auth user after Firestore failure", {
-              uid: createdUser.uid,
-              cleanupError,
-            });
+            logger.error(
+              "Failed to clean up Auth user after Firestore failure",
+              {
+                uid: createdUser.uid,
+                cleanupError,
+              },
+            );
           }
         }
         throw error;

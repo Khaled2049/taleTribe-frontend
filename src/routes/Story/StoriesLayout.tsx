@@ -53,8 +53,8 @@ const StoriesLayout = () => {
       <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-4">
         <div className="flex gap-8 pt-6 pb-10">
           {/* Desktop left sidebar nav */}
-          <aside className="hidden lg:flex w-[260px] shrink-0">
-            <div className="sticky top-20">
+          <aside className="hidden lg:flex w-[236px] shrink-0">
+            <div className="sticky top-20 flex h-[calc(100vh-6rem)] flex-col">
               <div className="flex items-center h-9 mb-3 px-3 border-b border-ns-border">
                 <span className="font-ui text-[11px] tracking-[1.5px] uppercase text-ns-ink-muted">
                   Explore

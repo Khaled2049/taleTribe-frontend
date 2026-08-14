@@ -32,6 +32,7 @@ export default {
           "border-strong": "var(--ns-border-strong)",
           destructive: "var(--ns-destructive)",
           "destructive-hover": "var(--ns-destructive-hover)",
+          success: "var(--ns-success)",
         },
       },
       fontFamily: {

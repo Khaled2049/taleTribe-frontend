@@ -34,6 +34,15 @@ const CompleteSignup = lazy(() => import("./routes/Auth/complete-signup"));
 const McpConnect = lazy(() => import("./routes/Auth/McpConnect"));
 const StoriesLayout = lazy(() => import("./routes/Story/StoriesLayout"));
 const Competitions = lazy(() => import("./components/explore/Competitions"));
+const CompetitionDetail = lazy(
+  () => import("./components/explore/CompetitionDetail"),
+);
+const CompetitionEditor = lazy(
+  () => import("./components/explore/CompetitionEditor"),
+);
+const HowCompetitionsWork = lazy(
+  () => import("./components/explore/HowCompetitionsWork"),
+);
 
 const Announcements = lazy(() => import("./components/explore/Announcements"));
 const HelpSupport = lazy(() => import("./routes/Help/HelpSupport"));
@@ -116,6 +125,41 @@ const router = createBrowserRouter([
             element: (
               <Suspense fallback={<LoadingFallback />}>
                 <Competitions />
+              </Suspense>
+            ),
+          },
+          // Declared before the dynamic sibling below. React Router ranks
+          // static segments higher regardless of order, but the intent should
+          // not depend on knowing that.
+          {
+            path: "competitions/how-it-works",
+            element: (
+              <Suspense fallback={<LoadingFallback />}>
+                <HowCompetitionsWork />
+              </Suspense>
+            ),
+          },
+          {
+            path: "competitions/new",
+            element: (
+              <Suspense fallback={<LoadingFallback />}>
+                <CompetitionEditor />
+              </Suspense>
+            ),
+          },
+          {
+            path: "competitions/:competitionId",
+            element: (
+              <Suspense fallback={<LoadingFallback />}>
+                <CompetitionDetail />
+              </Suspense>
+            ),
+          },
+          {
+            path: "competitions/:competitionId/edit",
+            element: (
+              <Suspense fallback={<LoadingFallback />}>
+                <CompetitionEditor />
               </Suspense>
             ),
           },

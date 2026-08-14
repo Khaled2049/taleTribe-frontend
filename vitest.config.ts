@@ -23,5 +23,9 @@ export default defineConfig({
     // They sit outside src/ so the app build doesn't pull in functions/ sources.
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    // tests/rules/ needs a running Firestore emulator, so it is excluded here
+    // and run by `yarn test:rules` (vitest.rules.config.ts). A suite that
+    // silently passes when its dependency is absent is worse than no suite.
+    exclude: ["tests/rules/**", "node_modules/**", "dist/**"],
   },
 });
