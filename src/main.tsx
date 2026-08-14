@@ -44,7 +44,6 @@ const HowCompetitionsWork = lazy(
   () => import("./components/explore/HowCompetitionsWork"),
 );
 
-const Announcements = lazy(() => import("./components/explore/Announcements"));
 const HelpSupport = lazy(() => import("./routes/Help/HelpSupport"));
 const DemoEditorPage = lazy(() => import("./routes/Demo/DemoEditorPage"));
 const DemoEditorIndex = lazy(() => import("./routes/Demo/DemoEditorIndex"));
@@ -113,14 +112,6 @@ const router = createBrowserRouter([
             ),
           },
           {
-            path: "announcements",
-            element: (
-              <Suspense fallback={<LoadingFallback />}>
-                <Announcements />
-              </Suspense>
-            ),
-          },
-          {
             path: "competitions",
             element: (
               <Suspense fallback={<LoadingFallback />}>
@@ -160,14 +151,6 @@ const router = createBrowserRouter([
             element: (
               <Suspense fallback={<LoadingFallback />}>
                 <CompetitionEditor />
-              </Suspense>
-            ),
-          },
-          {
-            path: "events",
-            element: (
-              <Suspense fallback={<LoadingFallback />}>
-                <Announcements />
               </Suspense>
             ),
           },

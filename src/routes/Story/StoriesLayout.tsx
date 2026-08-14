@@ -1,5 +1,5 @@
 import { Outlet, useLocation, Link } from "react-router-dom";
-import { Trophy, BookOpen, Megaphone, Users, Book } from "lucide-react";
+import { Trophy, BookOpen, Users, Book } from "lucide-react";
 
 interface Tab {
   id: string;
@@ -32,12 +32,6 @@ const tabs: Tab[] = [
     label: "Book Clubs",
     icon: <Book className="w-4 h-4" />,
     path: "/explore/book-clubs",
-  },
-  {
-    id: "announcements",
-    label: "Announcements",
-    icon: <Megaphone className="w-4 h-4" />,
-    path: "/explore/announcements",
   },
 ];
 

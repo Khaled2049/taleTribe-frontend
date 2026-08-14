@@ -160,6 +160,16 @@ const Competitions: React.FC = () => {
 
   return (
     <div className="min-h-screen">
+      <header className="pt-8 pb-6">
+        <h1 className="font-heading font-light text-[2.5rem] lg:text-[3rem] leading-[1] tracking-[-0.02em] text-ns-ink">
+          Competitions
+        </h1>
+        <p className="font-body text-[17px] leading-[1.55] text-ns-ink-secondary max-w-[58ch] mt-3">
+          Write to a prompt, enter before the deadline, and let the readers pick
+          the winner.
+        </p>
+      </header>
+
       {displayedError && (
         <div className="mb-6 flex items-center justify-between gap-3 rounded-ns border border-ns-destructive/30 bg-ns-destructive/10 p-3 text-sm text-ns-destructive">
           <span>{displayedError}</span>
@@ -175,10 +185,6 @@ const Competitions: React.FC = () => {
 
       {loading ? (
         <div className="py-10 space-y-10">
-          <div className="space-y-4">
-            <Skeleton className="h-16 w-2/3" />
-            <Skeleton className="h-6 w-1/2" />
-          </div>
           <div className="flex gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-[220px] w-[262px] shrink-0" />
