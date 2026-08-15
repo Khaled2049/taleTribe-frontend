@@ -38,7 +38,7 @@ load them directly, and both are money arithmetic that must not be duplicated
 into the frontend: divergent formatting is survivable, a divergent payout is not.
 
 There is no component-level coverage. E2E lives in `cypress/e2e/`
-(`story_lifecycle`, `chapter_generation`, `ai_chat`, `worldbuilding_indexing`)
+(`story_lifecycle`, `ai_chat`, `worldbuilding_indexing`)
 and is not part of `yarn test` — run it with `yarn e2e`, which brings up the
 whole stack via `scripts/e2e-stack.sh`, or `yarn cy:open` / `yarn cy:run`
 against an already-running stack. Nothing covers competitions yet; that path is

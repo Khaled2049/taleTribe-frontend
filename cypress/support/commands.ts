@@ -23,11 +23,6 @@ declare global {
       /** Create a story through the New Story wizard; yields its storyId and
        *  leaves the browser on the editor route (/create/<storyId>). */
       createStory(title: string): Chainable<string>;
-      /** Poll a job doc until it reaches `completed` or `failed`. */
-      waitForJob(
-        jobId: string,
-        opts?: { tries?: number; intervalMs?: number }
-      ): Chainable<Record<string, unknown>>;
       /** Poll a Firestore doc until `predicate(doc)` is true; yields the doc.
        *  Handles eventual consistency (e.g. trigger-maintained counters). */
       pollDoc(
@@ -83,35 +78,6 @@ Cypress.Commands.add("createStory", (title: string) => {
   cy.location("pathname", { timeout: 20000 }).should("include", "/create/");
   return cy.location("pathname").then((p) => p.split("/")[2]);
 });
-
-Cypress.Commands.add(
-  "waitForJob",
-  (jobId: string, opts?: { tries?: number; intervalMs?: number }) => {
-    const tries = opts?.tries ?? 40;
-    const intervalMs = opts?.intervalMs ?? 1000;
-
-    const poll = (
-      remaining: number
-    ): Cypress.Chainable<Record<string, unknown>> =>
-      cy
-        .task<Record<string, unknown> | null>("getDoc", `jobs/${jobId}`)
-        .then((job) => {
-          const status = job?.status as string | undefined;
-          if (status === "completed" || status === "failed") {
-            return cy.wrap(job as Record<string, unknown>);
-          }
-          if (remaining <= 0) {
-            throw new Error(
-              `job ${jobId} did not settle (last status: ${status ?? "missing"})`
-            );
-          }
-          // eslint-disable-next-line cypress/no-unnecessary-waiting
-          return cy.wait(intervalMs).then(() => poll(remaining - 1));
-        });
-
-    return poll(tries);
-  }
-);
 
 Cypress.Commands.add(
   "pollDoc",

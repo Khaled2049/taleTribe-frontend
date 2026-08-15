@@ -2,7 +2,7 @@
  * Chapter-write trigger — the single chokepoint that keeps chat context cheap.
  *
  * Fires on any write to stories/{storyId}/chapters/{chapterId} (client SDK edits,
- * generateChapterTask, imports — all paths). It does two things:
+ * imports — all paths). It does two things:
  *
  *  1. (Step 2) Rebuilds `chapterIndex` on the story doc — a tiny
  *     {title, order, chapterNumber}[] array. Chat reads this instead of streaming

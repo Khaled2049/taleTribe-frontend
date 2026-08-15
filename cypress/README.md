@@ -52,8 +52,7 @@ yarn cy:open
   fields (`users.aiUsage`/`aiSettings`/`storyCount`, `jobs/*`).
 - **Auth**: specs seed an invited user (invite marked `completed`) and sign in
   through the real `/sign-in` form (`cy.login`).
-- **No fixed sleeps**: job/doc assertions poll (`cy.waitForJob`, `cy.pollDoc`,
-  `cy.pollDocs`).
+- **No fixed sleeps**: doc assertions poll (`cy.pollDoc`, `cy.pollDocs`).
 
 ## Emulator caveats (see flow.md §7)
 
@@ -70,8 +69,6 @@ yarn cy:open
 - **BYOK chat bypass** (`ai_chat.cy.ts`): needs a real provider key — BYOK
   instantiates the user's actual provider, which a seeded fake key can't satisfy
   against the mock stack.
-- **Failed chapter job** (`chapter_generation.cy.ts`): needs a per-request
-  failure hook in the stack (stopping the agent fails all requests).
 
 For real vector recall / BYOK, point the stack at a real GCP project with built
 vector indexes instead of the emulator.
