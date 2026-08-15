@@ -5,6 +5,7 @@ export interface Chapter {
   order: number;
   wordCount: number;
   userId: string;
+  revision?: number;
 }
 
 export interface Story {
@@ -28,6 +29,7 @@ export interface Story {
   copyright?: string;
   averageRating?: number;
   ratingsCount?: number;
+  revision?: number;
 }
 
 export interface StoryMetadata {

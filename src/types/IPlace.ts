@@ -10,4 +10,5 @@ export interface Place {
   notes?: string;
   userId: string;
   storyId?: string;
+  revision?: number;
 }

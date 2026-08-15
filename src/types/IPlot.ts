@@ -62,6 +62,7 @@ export interface PlotEvent {
   createdAt?: string;
   updatedAt?: string;
   notes?: string;
+  revision?: number;
 }
 
 // Default values for migrating old events
@@ -111,6 +112,7 @@ export interface PlotLine {
   name: string;
   description: string;
   events: PlotEvent[];
+  revision?: number;
 }
 
 export interface TemplateItem {

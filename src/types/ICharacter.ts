@@ -18,4 +18,5 @@ export interface Character {
   notes?: string;
   relationships?: CharacterRelationship[];
   userId: string;
+  revision?: number;
 }

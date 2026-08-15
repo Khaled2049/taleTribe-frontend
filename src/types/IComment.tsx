@@ -1,8 +1,3 @@
-export interface CommentLike {
-  userId: string;
-  commentId: string;
-}
-
 export interface Comment {
   id: string;
   storyId: string;
@@ -13,12 +8,5 @@ export interface Comment {
   createdAt: Date;
   updatedAt: Date;
   username?: string;
-  user?: user;
-  likes: CommentLike[];
   children?: Comment[];
 }
-
-type user = {
-  uid: string;
-  username: string;
-};
