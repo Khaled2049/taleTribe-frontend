@@ -21,6 +21,8 @@ interface ApiComment {
   message: string;
   userId: string;
   parentId?: string;
+  likeCount: number;
+  likedByMe: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,8 +48,17 @@ class StorySocialRepo {
     return response.json() as Promise<T>;
   }
 
+  // Anonymous readers get the public projection; a signed-in one sends their
+  // token so the server can fill in likedByMe rather than defaulting it false.
   private async publicRequest<T>(path: string): Promise<T> {
-    const response = await fetch(`${baseURL}${path}`);
+    const headers: Record<string, string> = {};
+    const user = auth.currentUser;
+    if (user) {
+      const token = await user.getIdToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (import.meta.env.DEV) headers["X-User-ID"] = user.uid;
+    }
+    const response = await fetch(`${baseURL}${path}`, { headers });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       throw new Error(data.error || `Public social request failed (${response.status})`);
@@ -63,6 +74,8 @@ class StorySocialRepo {
       message: comment.message,
       userId: comment.userId,
       parentId: comment.parentId || null,
+      likeCount: comment.likeCount ?? 0,
+      likedByMe: comment.likedByMe ?? false,
       createdAt: new Date(comment.createdAt),
       updatedAt: new Date(comment.updatedAt),
     };
@@ -95,6 +108,15 @@ class StorySocialRepo {
 
   deleteComment(storyId: string, chapterId: string, commentId: string) {
     return this.request<void>("DELETE", `/v1/stories/${storyId}/chapters/${chapterId}/comments/${commentId}`);
+  }
+
+  async setCommentLike(storyId: string, chapterId: string, commentId: string, liked: boolean): Promise<Comment> {
+    return this.comment(
+      await this.request<ApiComment>(
+        liked ? "PUT" : "DELETE",
+        `/v1/stories/${storyId}/chapters/${chapterId}/comments/${commentId}/likes`,
+      ),
+    );
   }
 }
 

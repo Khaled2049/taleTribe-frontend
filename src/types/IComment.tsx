@@ -5,6 +5,8 @@ export interface Comment {
   message: string;
   userId: string;
   parentId: string | null;
+  likeCount: number;
+  likedByMe: boolean;
   createdAt: Date;
   updatedAt: Date;
   username?: string;
