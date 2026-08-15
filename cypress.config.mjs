@@ -35,6 +35,7 @@ export default defineConfig({
       functionsBase: `http://127.0.0.1:5001/${PROJECT_ID}/us-central1`,
       agentUrl: "http://127.0.0.1:8000",
       creditProxyUrl: "http://127.0.0.1:8090",
+      storyDataUrl: "http://127.0.0.1:8084",
     },
     setupNodeEvents(on) {
       registerTasks(on);
