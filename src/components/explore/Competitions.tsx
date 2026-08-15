@@ -159,7 +159,9 @@ const Competitions: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen">
+    // Matches AllStories' container: these pages sit beside each other in the
+    // navbar, and used to share the explore shell's column before it was removed.
+    <div className="min-h-screen container mx-auto px-4 max-w-7xl">
       <header className="pt-8 pb-6">
         <h1 className="font-heading font-light text-[2.5rem] lg:text-[3rem] leading-[1] tracking-[-0.02em] text-ns-ink">
           Competitions
@@ -255,7 +257,7 @@ const Competitions: React.FC = () => {
                   </p>
                 </div>
                 <div className="h-px flex-1 min-w-8 bg-ns-border" />
-                <Link to="/explore/competitions/new">
+                <Link to="/competitions/new">
                   <Button variant="outline" className="whitespace-nowrap">
                     <Plus className="w-3.5 h-3.5 mr-1.5" />
                     New draft
@@ -279,7 +281,7 @@ const Competitions: React.FC = () => {
                     unfinished brief will stay here until you are ready to
                     publish it.
                   </p>
-                  <Link to="/explore/competitions/new">
+                  <Link to="/competitions/new">
                     <Button className="bg-ns-ink text-ns-bg hover:opacity-90">
                       <Plus className="w-3.5 h-3.5 mr-1.5" />
                       Start a competition
@@ -292,7 +294,7 @@ const Competitions: React.FC = () => {
                     {visibleDrafts.map((draft) => (
                       <Link
                         key={draft.id}
-                        to={`/explore/competitions/${draft.id}/edit`}
+                        to={`/competitions/${draft.id}/edit`}
                         className="group flex items-center justify-between gap-4 py-4 border-b border-ns-border px-1 transition-colors hover:bg-ns-surface-hover"
                       >
                         <div className="min-w-0">
@@ -342,14 +344,14 @@ const Competitions: React.FC = () => {
                   />
                 </div>
                 <Link
-                  to="/explore/competitions/how-it-works"
+                  to="/competitions/how-it-works"
                   className="hidden sm:inline-flex items-center gap-1.5 whitespace-nowrap font-ui text-[13px] font-semibold text-ns-ink-secondary hover:text-ns-ink transition-colors"
                 >
                   <HelpCircle className="w-3.5 h-3.5" />
                   How it works
                 </Link>
                 {canHost && (
-                  <Link to="/explore/competitions/new">
+                  <Link to="/competitions/new">
                     <Button variant="outline" className="whitespace-nowrap">
                       <Plus className="w-3.5 h-3.5 mr-1.5" />
                       Host a competition

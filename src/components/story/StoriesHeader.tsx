@@ -51,6 +51,11 @@ const StoriesHeader: React.FC<StoriesHeaderProps> = ({
       </div>
     );
   }
+
+  // Signed out there is no welcome block, so whatever follows would sit flush
+  // against the navbar. Mirrors the top padding of the signed-in branch above
+  // so the page starts at the same height either way.
+  return <div className="pt-4 sm:pt-8" aria-hidden="true" />;
 };
 
 export default StoriesHeader;

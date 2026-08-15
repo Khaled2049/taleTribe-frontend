@@ -15,4 +15,3 @@ export { default as Plot } from "./Story/Plot";
 export { default as BookClubs } from "./BookClub";
 export { default as CreateBookClub } from "./BookClub/CreateBookClub";
 export { default as BookClubDetails } from "./BookClub/BookClubDetails";
-export { default as Home } from "./Home";

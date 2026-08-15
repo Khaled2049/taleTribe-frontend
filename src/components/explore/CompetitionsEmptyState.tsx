@@ -40,7 +40,7 @@ export function CompetitionsEmptyState({
         ) : (
           <>
             {canHost && (
-              <Link to="/explore/competitions/new">
+              <Link to="/competitions/new">
                 <Button className="bg-ns-ink text-ns-bg hover:opacity-90">
                   Host a competition
                 </Button>
@@ -48,7 +48,7 @@ export function CompetitionsEmptyState({
             )}
             {/* Nothing to browse, so the explainer is the one useful thing here. */}
             <Link
-              to="/explore/competitions/how-it-works"
+              to="/competitions/how-it-works"
               className="font-ui text-[13px] font-semibold text-ns-accent hover:text-ns-accent-hover transition-colors"
             >
               See how competitions work

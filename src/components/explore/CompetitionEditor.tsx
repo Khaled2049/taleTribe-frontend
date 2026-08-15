@@ -162,7 +162,7 @@ const CompetitionEditor: React.FC = () => {
       ),
     );
     if (!competitionId) {
-      navigate(`/explore/competitions/${id}/edit`, { replace: true });
+      navigate(`/competitions/${id}/edit`, { replace: true });
     }
     return id;
   };
@@ -231,7 +231,7 @@ const CompetitionEditor: React.FC = () => {
           : "Published — it opens on the start date",
       );
       setPublishOpen(false);
-      navigate(`/explore/competitions/${id}`);
+      navigate(`/competitions/${id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to publish.";
       setError(message);
@@ -245,7 +245,7 @@ const CompetitionEditor: React.FC = () => {
     try {
       await discard.mutateAsync(competitionId);
       toast.success("Draft discarded");
-      navigate("/explore/competitions");
+      navigate("/competitions");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to discard draft.");
     }
@@ -258,7 +258,7 @@ const CompetitionEditor: React.FC = () => {
       {
         onSuccess: () => {
           toast.success("Competition cancelled and escrow refunded");
-          navigate(`/explore/competitions/${competitionId}`);
+          navigate(`/competitions/${competitionId}`);
         },
         onError: (err) =>
           toast.error(err instanceof Error ? err.message : "Failed to cancel."),
@@ -290,10 +290,10 @@ const CompetitionEditor: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen container mx-auto px-4 max-w-7xl">
       <div className="flex items-center justify-between gap-4 py-[22px] border-b border-ns-border">
         <Link
-          to="/explore/competitions"
+          to="/competitions"
           className="inline-flex items-center gap-2 font-ui text-[13px] font-semibold text-ns-ink-secondary hover:text-ns-ink transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />

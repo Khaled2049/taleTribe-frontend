@@ -11,7 +11,7 @@ import type {
  * Competition list, with the caller's joined-set folded in.
  *
  * The merge happens inside `queryFn` rather than in the component, mirroring
- * how usePostQueries enriches a feed page with the viewer's votes — so
+ * how useGuestbookQueries enriches a page with the viewer's votes — so
  * `isJoined` is part of the cached value and every mutation invalidating this
  * key gets a consistent snapshot back.
  *

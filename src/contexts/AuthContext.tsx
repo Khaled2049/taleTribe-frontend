@@ -5,7 +5,6 @@ type AuthContextType = Pick<
   AuthStore,
   | "user"
   | "loading"
-  | "fetchUsersOrderedByLastLogin"
   | "followUser"
   | "unfollowUser"
   | "updateBio"
@@ -17,7 +16,6 @@ export const useAuthContext = (): AuthContextType =>
     useShallow((state) => ({
       user: state.user,
       loading: state.loading,
-      fetchUsersOrderedByLastLogin: state.fetchUsersOrderedByLastLogin,
       followUser: state.followUser,
       unfollowUser: state.unfollowUser,
       updateBio: state.updateBio,

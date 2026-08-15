@@ -44,89 +44,91 @@ const HowCompetitionsWork = () => {
       <SEOHead
         title={`How competitions work - ${APP_NAME}`}
         description={`How ${APP_NAME} competitions move from a private draft through funded entry and blind community voting to a verifiable payout.`}
-        url="/explore/competitions/how-it-works"
-        canonical="/explore/competitions/how-it-works"
+        url="/competitions/how-it-works"
+        canonical="/competitions/how-it-works"
       />
+      <div className="container mx-auto px-4 max-w-7xl">
 
-      <div className="flex items-center py-[22px] border-b border-ns-border">
-        <Link
-          to="/explore/competitions"
-          className="inline-flex items-center gap-2 font-ui text-[13px] font-semibold text-ns-ink-secondary hover:text-ns-ink transition-colors"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          All competitions
-        </Link>
-      </div>
-
-      {/* Intro */}
-      <div className="relative overflow-hidden py-12 border-b border-ns-border">
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            backgroundImage:
-              "radial-gradient(80% 120% at 82% 0%, var(--ns-accent-subtle) 0%, transparent 62%), repeating-linear-gradient(105deg, rgba(212,169,74,.05) 0 1px, transparent 1px 13px)",
-          }}
-        />
-        <div className="relative">
-          <p className="font-ui text-[10px] font-bold uppercase tracking-[0.22em] text-ns-accent mb-5">
-            How competitions work
-          </p>
-          <h1 className="font-heading font-light text-[2.75rem] lg:text-[4rem] leading-[0.98] tracking-[-0.02em] text-ns-ink max-w-[20ch] text-balance">
-            A prize, a deadline, and a fair count
-          </h1>
-          <p className="font-body text-xl leading-[1.55] text-ns-ink-secondary max-w-[62ch] mt-5">
-            Every competition begins as a private draft, then moves through five
-            published stages on a clock that runs whether anyone is watching or
-            not. Here is what happens at each one — and, at every point, exactly
-            where the prize money is sitting.
-          </p>
+        <div className="flex items-center py-[22px] border-b border-ns-border">
+          <Link
+            to="/competitions"
+            className="inline-flex items-center gap-2 font-ui text-[13px] font-semibold text-ns-ink-secondary hover:text-ns-ink transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            All competitions
+          </Link>
         </div>
-      </div>
 
-      {/* The walkthrough */}
-      <div className="py-12 border-b border-ns-border">
-        <PhaseWalkthrough />
-      </div>
+        {/* Intro */}
+        <div className="relative overflow-hidden py-12 border-b border-ns-border">
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                "radial-gradient(80% 120% at 82% 0%, var(--ns-accent-subtle) 0%, transparent 62%), repeating-linear-gradient(105deg, rgba(212,169,74,.05) 0 1px, transparent 1px 13px)",
+            }}
+          />
+          <div className="relative">
+            <p className="font-ui text-[10px] font-bold uppercase tracking-[0.22em] text-ns-accent mb-5">
+              How competitions work
+            </p>
+            <h1 className="font-heading font-light text-[2.75rem] lg:text-[4rem] leading-[0.98] tracking-[-0.02em] text-ns-ink max-w-[20ch] text-balance">
+              A prize, a deadline, and a fair count
+            </h1>
+            <p className="font-body text-xl leading-[1.55] text-ns-ink-secondary max-w-[62ch] mt-5">
+              Every competition begins as a private draft, then moves through five
+              published stages on a clock that runs whether anyone is watching or
+              not. Here is what happens at each one — and, at every point, exactly
+              where the prize money is sitting.
+            </p>
+          </div>
+        </div>
 
-      {/* What's guaranteed */}
-      <div className="py-12 border-b border-ns-border">
-        <div className="flex items-center gap-4 mb-8">
-          <h2 className="font-heading text-[32px] text-ns-ink shrink-0">
-            What that gets you
+        {/* The walkthrough */}
+        <div className="py-12 border-b border-ns-border">
+          <PhaseWalkthrough />
+        </div>
+
+        {/* What's guaranteed */}
+        <div className="py-12 border-b border-ns-border">
+          <div className="flex items-center gap-4 mb-8">
+            <h2 className="font-heading text-[32px] text-ns-ink shrink-0">
+              What that gets you
+            </h2>
+            <div className="h-px flex-1 bg-ns-border" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-9">
+            {GUARANTEES.map((guarantee) => (
+              <div key={guarantee.title}>
+                <h3 className="font-heading text-[24px] leading-[1.2] text-ns-ink mb-2.5">
+                  {guarantee.title}
+                </h3>
+                <p className="font-body text-[16px] leading-[1.6] text-ns-ink-secondary max-w-[52ch]">
+                  {guarantee.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Out */}
+        <div className="py-12">
+          <h2 className="font-heading text-[32px] text-ns-ink">
+            Ready to enter one?
           </h2>
-          <div className="h-px flex-1 bg-ns-border" />
+          <p className="font-body text-[17px] leading-[1.6] text-ns-ink-secondary max-w-[52ch] mt-3">
+            You'll need a published story to enter, and one to your name before
+            you can vote — voting is open to writers.
+          </p>
+          <Link
+            to="/competitions"
+            className="inline-flex items-center gap-2 mt-6 rounded-[10px] bg-ns-ink px-[30px] py-[15px] font-ui text-sm font-semibold text-ns-bg hover:opacity-90 transition-opacity"
+          >
+            Browse open competitions
+            <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-9">
-          {GUARANTEES.map((guarantee) => (
-            <div key={guarantee.title}>
-              <h3 className="font-heading text-[24px] leading-[1.2] text-ns-ink mb-2.5">
-                {guarantee.title}
-              </h3>
-              <p className="font-body text-[16px] leading-[1.6] text-ns-ink-secondary max-w-[52ch]">
-                {guarantee.body}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Out */}
-      <div className="py-12">
-        <h2 className="font-heading text-[32px] text-ns-ink">
-          Ready to enter one?
-        </h2>
-        <p className="font-body text-[17px] leading-[1.6] text-ns-ink-secondary max-w-[52ch] mt-3">
-          You'll need a published story to enter, and one to your name before
-          you can vote — voting is open to writers.
-        </p>
-        <Link
-          to="/explore/competitions"
-          className="inline-flex items-center gap-2 mt-6 rounded-[10px] bg-ns-ink px-[30px] py-[15px] font-ui text-sm font-semibold text-ns-bg hover:opacity-90 transition-opacity"
-        >
-          Browse open competitions
-          <ArrowRight className="w-4 h-4" />
-        </Link>
       </div>
     </>
   );

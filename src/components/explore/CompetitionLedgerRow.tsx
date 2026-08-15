@@ -133,7 +133,7 @@ export function CompetitionLedgerRow({
   const prize = getPrizeDisplay(competition);
   const entryFee = getEntryFee(competition);
   const state = rowState(competition, now);
-  const detailUrl = `/explore/competitions/${competition.id}`;
+  const detailUrl = `/competitions/${competition.id}`;
   const entrants = `${competition.participants}${
     competition.maxParticipants ? ` / ${competition.maxParticipants}` : ""
   }`;

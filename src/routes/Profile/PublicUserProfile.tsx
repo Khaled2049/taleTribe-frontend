@@ -1,6 +1,8 @@
 import React, { lazy, Suspense, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  ArrowRight,
+  BookMarked,
   Briefcase,
   Calendar,
   Camera,
@@ -13,6 +15,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { usePublicProfile } from "@/hooks/queries/useUserQueries";
 import { EditableField } from "@/components/ui/editable-field";
 import { SEOHead } from "@/components/seo/SEOHead";
+import FollowButton from "@/components/common/FollowButton";
 import { storageService } from "@/services/StorageService";
 import { validateImageFile } from "@/utils/imageUpload";
 
@@ -222,6 +225,21 @@ const PublicUserProfile: React.FC = () => {
               ))}
             </div>
           )}
+
+          {!isSelf && userId && (
+            <div className="mt-5">
+              <FollowButton targetId={userId} />
+            </div>
+          )}
+
+          <Link
+            to={`/guestbook/${userId}`}
+            className="group mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-ns border border-ns-border bg-ns-surface font-ui text-[13px] font-medium text-ns-ink no-underline hover:border-ns-border-strong hover:bg-ns-surface-hover transition-colors"
+          >
+            <BookMarked className="w-3.5 h-3.5 text-ns-ink-muted" />
+            {isSelf ? "Your guestbook" : `Sign @${username}'s guestbook`}
+            <ArrowRight className="w-3.5 h-3.5 text-ns-ink-muted group-hover:translate-x-0.5 transition-transform" />
+          </Link>
 
           {/* Bio / details below */}
           {isSelf ? (

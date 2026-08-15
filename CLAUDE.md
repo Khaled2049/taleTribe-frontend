@@ -198,6 +198,49 @@ the real endpoints (`--list` for the roster, `--only=` to filter, `--reset` to
 clear). Three scenarios charge entry fees so the multi-funder escrow paths get
 exercised locally.
 
+### Guestbooks and the follow graph
+
+A guestbook is a per-user wall at `users/{ownerId}/guestbook/{entryId}`, with
+`replies` and `votes` subcollections. `ownerId` is a path segment rather than a
+field, which is what lets the rules grant the owner rights over anyone's entry
+without a lookup.
+
+**Who may post** is `publicProfiles/{uid}.guestbookPolicy`, one of `nobody |
+following | mutuals | followers | everyone`. A missing profile, a missing field,
+and a missing user doc all read as **`everyone`** — the setting is additive, so
+accounts that predate it keep the open wall they had. It gates entry creation and
+reply creation, and nothing else: votes and the `commentCount` bump stay
+ungated, because the reply create fails first.
+
+`mayPostOnWall()` in `firestore.rules` is the authority; `canPostOnWall()` in
+`src/lib/guestbookPolicy.ts` only decides whether a compose form renders. KEEP IN
+SYNC — the two matrices are asserted independently by
+`tests/rules/wallPolicy.rules.test.ts` and `tests/guestbookPolicy.test.ts`.
+
+Every `get()` in those rules is `exists()`-guarded. Rules `get()` on a missing
+document returns null and dereferencing `.data` **errors, which denies** — it
+does not fall back to a default, so an unguarded read fails closed for any
+account whose document is absent.
+
+**The follow graph** is bidirectional arrays: `users/{uid}.followers` and
+`.following`. Storing both sides is what makes the policy resolvable from one
+document in the rules, and lets a viewer answer "does the owner follow me?"
+(`ownerId ∈ me.followers`) from their own doc — another user's doc is unreadable.
+Follow and unfollow must stay a single `writeBatch`; a half-applied follow makes
+the rules and the UI disagree. The arrays cap out around 30k uids (1 MiB), at
+which point the shape becomes `users/{id}/followers/{uid}` documents.
+
+**Search** is a username prefix range over `publicProfiles.usernameLower`, which
+is derived — never accepted from a caller — in exactly two places:
+`PublicProfileService.upsertPublicProfile` and `functions/src/adminUserService.ts`.
+`publicProfiles` is listable by any signed-in member (capped at 30 per query),
+which is what makes bio/occupation/location enumerable; that is the accepted
+price of prefix search without a paid index.
+
+Client writes to `publicProfiles` are merges, so the update rule checks
+`diff().affectedKeys()`, not `keys()`. Using `keys()` there means any field the
+client does not own locks the owner out of their own profile permanently.
+
 ## Design System (Inkwell)
 
 Use CSS variable–backed Tailwind tokens for all styling — never hardcode colors.
@@ -221,7 +264,8 @@ Light theme: warm parchment (`#FDFCF9`) bg, sealing-wax red accent (`#B91C1C`). 
 - `layout/` — Navbar, Footer, SidebarPanel (+ `navbar/` subdir)
 - `story/` — StoryMetadata, StoriesHeader (+ `characters/`, `places/` subdirs)
 - `plot/` — Plot timeline and event editing
-- `community/` — Comments, votes, reporting
+- `community/` — Story/chapter comments
+- `guestbook/` — Per-user profile guestbook (entries, replies, votes)
 - `web3/` — Wallet connect, fee cards, transaction status
 - `common/` — Shared utilities (Modal, ConfirmDialog, ThemeToggle, Icons, etc.)
 - `chat/` — Chatbot and floating chat button

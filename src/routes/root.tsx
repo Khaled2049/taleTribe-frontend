@@ -214,7 +214,7 @@ export default function HomePage() {
                 </button>
               )}
               <button
-                onClick={() => navigate("/explore")}
+                onClick={() => navigate("/stories")}
                 className="inline-flex items-center gap-2.5 rounded-full border border-ns-border-strong bg-transparent hover:bg-ns-surface px-8 py-3.5 font-ui font-semibold text-ns-ink transition-all duration-300"
               >
                 Explore Stories
