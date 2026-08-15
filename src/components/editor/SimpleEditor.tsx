@@ -53,6 +53,8 @@ import { useAutosave } from "@/hooks/useAutosave";
 import { SaveStatusIndicator } from "@/components/editor/SaveStatusIndicator";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { InteractiveStoryPanel } from "@/components/editor/InteractiveStoryPanel";
+import { FloatingChatButton } from "../chat/FloatingChatButton";
+import { useCoWrite } from "@/hooks/useCoWrite";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { toast } from "sonner";
 import { summarizeChapter } from "@/api/ai";
@@ -97,8 +99,15 @@ export function SimpleEditor() {
 
   // Editor instance for header
   const [editor, setEditor] = useState<Editor | null>(null);
-  const [coWriteOpen, setCoWriteOpen] = useState(openInteractivePanelOnMount);
-  const openCoWrite = () => setCoWriteOpen(true);
+  const {
+    isInteractivePanelOpen,
+    setIsInteractivePanelOpen,
+    interactivePanelMode,
+    setInteractivePanelMode,
+    coWriteTurnCount,
+    setCoWriteTurnCount,
+    openCoWrite,
+  } = useCoWrite({ openInteractivePanelOnMount, editor });
 
   // Dialog states
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -968,17 +977,24 @@ export function SimpleEditor() {
             {/* ── Status Bar ── */}
             {state.currentChapter && (
               <div className="flex-shrink-0 border-t border-ns-border bg-ns-surface">
-                {coWriteOpen && editor && (
+                {isInteractivePanelOpen && editor && (
                   <div className="border-b border-ns-border bg-transparent px-3 py-3 sm:px-4 sm:py-4">
                     <div className="mx-auto w-full max-w-4xl">
                       <InteractiveStoryPanel
                         storyId={state.story?.id || ""}
                         chapterId={state.currentChapter?.id || ""}
-                        editor={editor!}
-                        mode="continuation"
-                        onClose={() => setCoWriteOpen(false)}
-                        turnCount={0}
-                        onChoiceInserted={() => triggerSave(editor.getHTML())}
+                        editor={editor}
+                        mode={interactivePanelMode}
+                        turnCount={coWriteTurnCount}
+                        onClose={() => {
+                          setIsInteractivePanelOpen(false);
+                          setCoWriteTurnCount(0);
+                        }}
+                        onChoiceInserted={() => {
+                          setInteractivePanelMode("continuation");
+                          setCoWriteTurnCount((n) => n + 1);
+                          triggerSave(editor.getHTML());
+                        }}
                       />
                     </div>
                   </div>
@@ -1220,7 +1236,7 @@ export function SimpleEditor() {
             </div>
           </SlideOverPanel>
 
-          {/* AI reads Firestore until the agents cutover; PostgreSQL stories stay manual for now. */}
+          {!isDemo && <FloatingChatButton storyId={state.story?.id} />}
 
           {/* ── Delete Chapter Dialog ── */}
           <ConfirmDialog
