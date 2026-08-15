@@ -8,14 +8,7 @@ import {
   orderBy,
   updateDoc,
   deleteDoc,
-  increment,
   where,
-  writeBatch,
-  serverTimestamp,
-  limit,
-  startAfter,
-  QueryDocumentSnapshot,
-  DocumentData,
 } from "firebase/firestore";
 import { auth, firestore } from "../config/firebase";
 import { Chapter, Story, StoryMetadata } from "@/types/IStory";
@@ -26,49 +19,8 @@ import { storageService } from "./StorageService";
 const WORD_LIMIT = 5000;
 const CHAPTER_LIMIT = 50;
 
-export const STORIES_PAGE_SIZE = 24;
-
-/** Cursor for paginated published-story queries (the last doc of the prior page). */
-export type StoryCursor = QueryDocumentSnapshot<DocumentData> | null;
-
-export interface PublishedStoriesPage {
-  stories: StoryMetadata[];
-  /** Cursor to fetch the next page, or null when there are no more pages. */
-  cursor: StoryCursor;
-}
-
 class StoriesRepo {
   private storiesCollection = collection(firestore, "stories");
-
-  /** Maps a Firestore story doc to the StoryMetadata shape used by lists. */
-  private mapStoryDoc(doc: QueryDocumentSnapshot<DocumentData>): StoryMetadata {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      title: data.title,
-      description: data.description,
-      chapterCount: data.chapterCount,
-      isPublished: data.isPublished,
-      updatedAt: data.updatedAt.toDate(),
-      createdAt: data.createdAt.toDate(),
-      author: data.author,
-      userId: data.userId,
-      views: data.views,
-      likes: data.likes,
-      coverImageUrl: data.coverImageUrl || "",
-      thumbnailUrl: data.thumbnailUrl || "",
-      tags: data.tags || [],
-      category: data.category || undefined,
-    };
-  }
-
-  private getStoryLikesCollection(storyId: string) {
-    return collection(doc(this.storiesCollection, storyId), "likes");
-  }
-
-  private getStoryRatingsCollection(storyId: string) {
-    return collection(doc(this.storiesCollection, storyId), "ratings");
-  }
 
   async getStoryList(): Promise<StoryMetadata[]> {
     const q = query(this.storiesCollection, orderBy("updatedAt", "desc"));
@@ -91,61 +43,6 @@ class StoriesRepo {
         thumbnailUrl: data.thumbnailUrl || "",
       };
     });
-  }
-
-  async getPublishedStories(
-    cursor: StoryCursor = null,
-    pageSize = STORIES_PAGE_SIZE,
-  ): Promise<PublishedStoriesPage> {
-    const q = query(
-      this.storiesCollection,
-      where("isPublished", "==", true),
-      orderBy("updatedAt", "desc"),
-      ...(cursor ? [startAfter(cursor)] : []),
-      limit(pageSize),
-    );
-    const querySnapshot = await getDocs(q);
-    const docs = querySnapshot.docs;
-    return {
-      stories: docs.map((doc) => this.mapStoryDoc(doc)),
-      // A full page implies there may be more; a short page is the last one.
-      cursor: docs.length === pageSize ? docs[docs.length - 1] : null,
-    };
-  }
-
-  async getPublishedStoriesByCategory(
-    category: string,
-    cursor: StoryCursor = null,
-    pageSize = STORIES_PAGE_SIZE,
-  ): Promise<PublishedStoriesPage> {
-    try {
-      const q = query(
-        this.storiesCollection,
-        where("isPublished", "==", true),
-        where("category", "==", category),
-        orderBy("updatedAt", "desc"),
-        ...(cursor ? [startAfter(cursor)] : []),
-        limit(pageSize),
-      );
-      const querySnapshot = await getDocs(q);
-      const docs = querySnapshot.docs;
-      return {
-        stories: docs.map((doc) => this.mapStoryDoc(doc)),
-        cursor: docs.length === pageSize ? docs[docs.length - 1] : null,
-      };
-    } catch (error: any) {
-      // Handle Firestore index errors gracefully
-      if (error?.code === "failed-precondition") {
-        console.error(
-          "Firestore index required. Please create a composite index for: isPublished, category, updatedAt",
-          error,
-        );
-        // Return empty page if index is missing - user will need to create the index
-        return { stories: [], cursor: null };
-      }
-      console.error("Error fetching stories by category:", error);
-      throw error;
-    }
   }
 
   async fetchNovelCoverUrls(novels: string[]): Promise<string[]> {
@@ -225,182 +122,6 @@ class StoriesRepo {
       console.error("Error getting user info:", error);
     }
     return "";
-  }
-
-  async incrementViewCount(storyId: string): Promise<void> {
-    const storyRef = doc(firestore, "stories", storyId);
-
-    try {
-      await updateDoc(storyRef, {
-        views: increment(1),
-      });
-    } catch (error) {
-      console.error("Error incrementing views: ", error);
-    }
-  }
-
-  async incrementLikeCount(storyId: string): Promise<void> {
-    const storyRef = doc(firestore, "stories", storyId);
-
-    try {
-      // Get the current document to check the like count
-      const storySnapshot = await getDoc(storyRef);
-
-      if (storySnapshot.exists()) {
-        const storyData = storySnapshot.data();
-        const currentLikes = storyData.likes || 0;
-
-        // Only increment if likes are less than 5
-        if (currentLikes < 5) {
-          await updateDoc(storyRef, {
-            likes: increment(1),
-          });
-        } else {
-          console.log(
-            "We get it you really like this story. No more likes allowed.",
-          );
-        }
-      }
-    } catch (error) {
-      console.error("Error incrementing likes: ", error);
-    }
-  }
-
-  async toggleStoryLike(storyId: string, userId: string): Promise<boolean> {
-    try {
-      const likesCollection = this.getStoryLikesCollection(storyId);
-      const likeRef = doc(likesCollection, userId);
-      const storyRef = doc(this.storiesCollection, storyId);
-      const batch = writeBatch(firestore);
-
-      // Get current like if exists
-      const currentLikeDoc = await getDoc(likeRef);
-      const hasLiked = currentLikeDoc.exists();
-
-      if (hasLiked) {
-        // Remove like
-        batch.delete(likeRef);
-        batch.update(storyRef, {
-          likes: increment(-1),
-        });
-      } else {
-        // Add like
-        batch.set(likeRef, {
-          userId,
-          timestamp: serverTimestamp(),
-        });
-        batch.update(storyRef, {
-          likes: increment(1),
-        });
-      }
-
-      await batch.commit();
-      return !hasLiked; // Return true if we added a like, false if we removed it
-    } catch (error) {
-      console.error("Error toggling story like:", error);
-      throw error;
-    }
-  }
-
-  async hasUserLikedStory(storyId: string, userId: string): Promise<boolean> {
-    try {
-      const likesCollection = this.getStoryLikesCollection(storyId);
-      const likeRef = doc(likesCollection, userId);
-      const likeDoc = await getDoc(likeRef);
-      return likeDoc.exists();
-    } catch (error) {
-      console.error("Error checking if user liked story:", error);
-      return false;
-    }
-  }
-
-  async getUserRating(storyId: string, userId: string): Promise<number | null> {
-    try {
-      const ratingsCollection = this.getStoryRatingsCollection(storyId);
-      const ratingRef = doc(ratingsCollection, userId);
-      const ratingDoc = await getDoc(ratingRef);
-      if (ratingDoc.exists()) {
-        return ratingDoc.data().rating as number;
-      }
-      return null;
-    } catch (error) {
-      console.error("Error getting user rating:", error);
-      return null;
-    }
-  }
-
-  async getStoryRatingStats(
-    storyId: string,
-  ): Promise<{ averageRating: number; ratingsCount: number }> {
-    try {
-      const ratingsCollection = this.getStoryRatingsCollection(storyId);
-      const ratingsSnapshot = await getDocs(ratingsCollection);
-
-      if (ratingsSnapshot.empty) {
-        return { averageRating: 0, ratingsCount: 0 };
-      }
-
-      let totalRating = 0;
-      let count = 0;
-      ratingsSnapshot.docs.forEach((doc) => {
-        const rating = doc.data().rating;
-        if (typeof rating === "number" && rating >= 1 && rating <= 5) {
-          totalRating += rating;
-          count++;
-        }
-      });
-
-      const averageRating = count > 0 ? totalRating / count : 0;
-      return {
-        averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal place
-        ratingsCount: count,
-      };
-    } catch (error) {
-      console.error("Error getting story rating stats:", error);
-      return { averageRating: 0, ratingsCount: 0 };
-    }
-  }
-
-  async submitStoryRating(
-    storyId: string,
-    userId: string,
-    rating: number,
-  ): Promise<void> {
-    try {
-      // Validate rating
-      if (rating < 1 || rating > 5) {
-        throw new Error("Rating must be between 1 and 5");
-      }
-
-      const ratingsCollection = this.getStoryRatingsCollection(storyId);
-      const ratingRef = doc(ratingsCollection, userId);
-      const storyRef = doc(this.storiesCollection, storyId);
-
-      // Check if user already rated
-      const existingRatingDoc = await getDoc(ratingRef);
-      if (existingRatingDoc.exists()) {
-        throw new Error("User has already rated this story");
-      }
-
-      // Create rating document
-      await setDoc(ratingRef, {
-        userId,
-        rating,
-        timestamp: serverTimestamp(),
-      });
-
-      // Recalculate average rating and count
-      const stats = await this.getStoryRatingStats(storyId);
-
-      // Update story document with new rating stats
-      await updateDoc(storyRef, {
-        averageRating: stats.averageRating,
-        ratingsCount: stats.ratingsCount,
-      });
-    } catch (error) {
-      console.error("Error submitting story rating:", error);
-      throw error;
-    }
   }
 
   async createStory(
@@ -541,45 +262,6 @@ class StoriesRepo {
       console.error("Error getting chapters:", error);
     }
     return [];
-  }
-
-  async getChapterMetaList(
-    storyId: string,
-  ): Promise<Omit<Chapter, "content">[]> {
-    try {
-      const chaptersCollection = collection(
-        doc(this.storiesCollection, storyId),
-        "chapters",
-      );
-      const q = query(chaptersCollection, orderBy("order"));
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((d) => {
-        const data = d.data() as Chapter;
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { content: _content, ...rest } = data;
-        return { ...rest, id: d.id };
-      });
-    } catch (error) {
-      console.error("Error getting chapter metadata:", error);
-    }
-    return [];
-  }
-
-  async getChapter(
-    storyId: string,
-    chapterId: string,
-  ): Promise<Chapter | null> {
-    const chapterRef = doc(
-      this.storiesCollection,
-      storyId,
-      "chapters",
-      chapterId,
-    );
-    const chapterSnap = await getDoc(chapterRef);
-    if (chapterSnap.exists()) {
-      return { id: chapterSnap.id, ...chapterSnap.data() } as Chapter;
-    }
-    return null;
   }
 
   async updateChapter(

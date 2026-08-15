@@ -117,8 +117,8 @@ const PlotTimeline: React.FC = () => {
 
   const addPlotLine = async () => {
     if (!storyId) return;
-    const plotId = await addPlotLineMutation.mutateAsync("New PlotLine");
-    setActivePlotLineId(plotId);
+    const plotLine = await addPlotLineMutation.mutateAsync("New PlotLine");
+    setActivePlotLineId(plotLine.id);
   };
 
   const addEvent = (plotLineId: string) => {
@@ -230,12 +230,12 @@ const PlotTimeline: React.FC = () => {
     }
 
     try {
-      const plotId = await addPlotLineMutation.mutateAsync(template.name);
+      const plotLine = await addPlotLineMutation.mutateAsync(template.name);
 
       // Sequential: each addEvent is an arrayUnion on the same document.
       for (const [idx, e] of template.events.entries()) {
         await addEventMutation.mutateAsync({
-          plotLineId: plotId,
+          plotLineId: plotLine.id,
           event: {
             ...DEFAULT_PLOT_EVENT_VALUES,
             content: e.content,
@@ -248,7 +248,7 @@ const PlotTimeline: React.FC = () => {
         });
       }
 
-      setActivePlotLineId(plotId);
+      setActivePlotLineId(plotLine.id);
     } catch (error) {
       console.error("Error adding plot line from template:", error);
       throw error;

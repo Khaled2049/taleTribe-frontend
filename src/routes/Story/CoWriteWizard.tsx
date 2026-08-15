@@ -24,13 +24,10 @@ import {
   Info,
 } from "lucide-react";
 import { toast } from "sonner";
-import { storiesRepo } from "@/services/StoriesRepo";
+import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
+import { storyWorldbuildingRepo } from "@/services/StoryWorldbuildingRepo";
 import { storageService } from "@/services/StorageService";
-import { characterService } from "@/services/CharacterService";
-import { placeService } from "@/services/PlaceService";
-import { plotService } from "@/services/PlotService";
 import {
-  DEFAULT_PLOT_EVENT_VALUES,
   StoryBeatType,
   PLOT_TEMPLATES,
 } from "@/types/IPlot";
@@ -108,7 +105,6 @@ const NEXT_LABELS = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const now = () => new Date().toISOString();
 
 // Reusable banner reminding users these steps are optional and feed the AI.
 const OptionalNote: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -283,7 +279,6 @@ const CoWriteWizard: React.FC<CoWriteWizardProps> = ({
     setIsSubmitting(true);
     try {
       const finalDescription = description;
-      const finalConflict = conflict;
 
       // 0. Upload cover image if one was chosen
       let coverImageUrl = "";
@@ -298,94 +293,57 @@ const CoWriteWizard: React.FC<CoWriteWizardProps> = ({
       }
 
       // 1. Create story
-      const storyId = await storiesRepo.createStory(
+      const story = await storyWorkspaceRepo.createStory({
         title,
-        finalDescription,
-        userId,
-        {
-          category,
-          tags,
-          targetAudience,
-          language,
-          copyright,
-          coverImageUrl,
-          thumbnailUrl,
-        },
+        description: finalDescription,
+        authorName: "",
+        category,
+        tags,
+        targetAudience,
+        language,
+        copyright,
+        coverImageUrl,
+        thumbnailUrl,
+        published: false,
+      });
+      const storyId = story.id;
+      await Promise.all(
+        characters.filter((character) => character.name.trim()).map(({ expanded: _expanded, age, ...character }) =>
+          storyWorldbuildingRepo.addCharacter(storyId, {
+            ...character,
+            age: age ? Number(age) : undefined,
+            relationships: [],
+            userId,
+          }),
+        ),
       );
-
-      // 2. Create plot (if any content)
-      const hasPlot = finalConflict.trim() || events.some((e) => e.name.trim());
-      if (hasPlot) {
-        const plotLineId = await plotService.addPlot(storyId, plotLineName);
-        let orderIndex = 0;
-
-        if (finalConflict.trim()) {
-          await plotService.addEvent(storyId, plotLineId, {
-            ...DEFAULT_PLOT_EVENT_VALUES,
-            name: "Central Conflict",
-            content: finalConflict,
-            storyBeat: "inciting_incident",
-            orderIndex: orderIndex++,
-            userId,
-            createdAt: now(),
-            updatedAt: now(),
-          });
+      await Promise.all(
+        places.filter((place) => place.name.trim()).map(({ expanded: _expanded, ...place }) =>
+          storyWorldbuildingRepo.addPlace(storyId, { ...place, userId, storyId }),
+        ),
+      );
+      if (plotLineName.trim() && (conflict.trim() || events.length > 0)) {
+        const line = await storyWorldbuildingRepo.addPlot(storyId, plotLineName.trim());
+        if (conflict.trim()) {
+          await storyWorldbuildingRepo.updatePlotMeta(storyId, { ...line, description: conflict });
         }
-
-        for (const ev of events.filter((e) => e.name.trim())) {
-          await plotService.addEvent(storyId, plotLineId, {
-            ...DEFAULT_PLOT_EVENT_VALUES,
-            name: ev.name,
-            content: ev.content,
-            storyBeat: ev.storyBeat,
-            orderIndex: orderIndex++,
-            userId,
-            createdAt: now(),
-            updatedAt: now(),
+        for (let index = 0; index < events.length; index += 1) {
+          const event = events[index];
+          if (!event.name.trim()) continue;
+          await storyWorldbuildingRepo.addEvent(storyId, line.id, {
+            name: event.name,
+            content: event.content,
+            characterIds: [],
+            locationId: null,
+            dependencies: [],
+            dependents: [],
+            tensionLevel: 5,
+            pacing: "moderate",
+            storyBeat: event.storyBeat,
+            orderIndex: index,
           });
         }
       }
-
-      // 3. Create characters
-      await Promise.all(
-        characters
-          .filter((c) => c.name.trim())
-          .map((c) =>
-            characterService.addCharacter(storyId, {
-              name: c.name,
-              age: c.age.trim() ? Number(c.age) : undefined,
-              soul: c.soul,
-              personality: c.personality,
-              voice: c.voice,
-              backstory: c.backstory,
-              affiliations: c.affiliations,
-              notes: c.notes,
-              relationships: [],
-              userId,
-              artUrl: "",
-            }),
-          ),
-      );
-
-      // 4. Create places
-      await Promise.all(
-        places
-          .filter((p) => p.name.trim())
-          .map((p) =>
-            placeService.addPlace(storyId, {
-              name: p.name,
-              description: p.description,
-              atmosphere: p.atmosphere,
-              geography: p.geography,
-              history: p.history,
-              significance: p.significance,
-              notes: p.notes,
-              userId,
-              storyId,
-              imageUrl: "",
-            }),
-          ),
-      );
 
       toast.success("Your story is ready — time to write!");
       onSuccess(storyId);

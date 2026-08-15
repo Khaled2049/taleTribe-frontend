@@ -7,12 +7,37 @@ import {
 import { usePublicClient } from "wagmi";
 import { formatEther, formatUnits } from "viem";
 import { queryKeys } from "./queryKeys";
-import { storiesRepo, StoryCursor } from "@/services/StoriesRepo";
+import { publicStoryRepo } from "@/services/PublicStoryRepo";
+import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
 import {
   tippingPlatformConfig,
   ZERO_ADDRESS,
 } from "@/blockchain/tippingPlatform";
 import { USDC_ADDRESS } from "@/blockchain/tokens";
+import { auth } from "@/config/firebase";
+import { storageService } from "@/services/StorageService";
+
+async function updateStoryCover(
+  storyId: string,
+  imageFile: File | null,
+  previewUrl: string | null,
+) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("You must be signed in to update the cover image.");
+  const story = await storyWorkspaceRepo.getStory(storyId);
+  if (!story) throw new Error("Story not found");
+  if (story.userId !== user.uid) throw new Error("You do not have permission to update this cover.");
+  if (story.coverImageUrl) await storageService.deleteCoverImage(story.coverImageUrl);
+  if (story.thumbnailUrl && story.thumbnailUrl !== story.coverImageUrl) await storageService.deleteCoverImage(story.thumbnailUrl);
+  let coverImageUrl = "";
+  let thumbnailUrl = "";
+  if (imageFile) {
+    ({ coverImageUrl, thumbnailUrl } = await storageService.uploadCoverImage(imageFile, user.uid, storyId));
+  } else if (previewUrl?.startsWith("data:")) {
+    ({ coverImageUrl, thumbnailUrl } = await storageService.uploadCoverImage(storageService.dataUrlToFile(previewUrl), user.uid, storyId));
+  }
+  return storyWorkspaceRepo.updateStory({ ...story, coverImageUrl, thumbnailUrl });
+}
 
 const toBigInt = (value: unknown): bigint => {
   if (typeof value === "bigint") return value;
@@ -20,7 +45,7 @@ const toBigInt = (value: unknown): bigint => {
 };
 
 export type StoryWithEarnings = Awaited<
-  ReturnType<typeof storiesRepo.getUserStories>
+  ReturnType<typeof storyWorkspaceRepo.getUserStories>
 >[number] & {
   earnings: {
     eth: string;
@@ -31,7 +56,7 @@ export type StoryWithEarnings = Awaited<
 /**
  * Cursor-paginated published stories for the discovery grid.
  * Pages are fetched on demand (infinite scroll); each page carries the
- * Firestore cursor for the next fetch. `getNextPageParam` returns undefined
+ * API cursor for the next fetch. `getNextPageParam` returns undefined
  * once the repo reports a null cursor, which sets `hasNextPage` to false.
  */
 export function usePublishedStories(category: string) {
@@ -39,9 +64,9 @@ export function usePublishedStories(category: string) {
     queryKey: queryKeys.stories.byCategory(category),
     queryFn: ({ pageParam }) =>
       category === "all"
-        ? storiesRepo.getPublishedStories(pageParam)
-        : storiesRepo.getPublishedStoriesByCategory(category, pageParam),
-    initialPageParam: null as StoryCursor,
+        ? publicStoryRepo.getPublishedStories(pageParam)
+        : publicStoryRepo.getPublishedStories(pageParam, category),
+    initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.cursor ?? undefined,
     staleTime: 1000 * 60 * 5, // 5 min — story lists are low-churn
   });
@@ -59,7 +84,7 @@ export function useUserStoriesWithEarnings(userId: string | undefined) {
     // Include chainId so a network switch invalidates stale earnings data.
     queryKey: [...queryKeys.user.stories(userId!), chainId] as const,
     queryFn: async () => {
-      const storyList = await storiesRepo.getUserStories(userId!);
+      const storyList = await storyWorkspaceRepo.getUserStories();
       return Promise.all(
         storyList.map(async (story) => {
           const [ethRaw, usdcRaw] = await Promise.all([
@@ -99,7 +124,7 @@ export function useUserStoriesWithEarnings(userId: string | undefined) {
 export function useDeleteStory(userId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (storyId: string) => storiesRepo.deleteStory(storyId),
+    mutationFn: (storyId: string) => storyWorkspaceRepo.deleteStoryByID(storyId),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.user.stories(userId!),
@@ -114,7 +139,11 @@ export function useDeleteStory(userId: string | undefined) {
 export function useTogglePublishStory(userId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (storyId: string) => storiesRepo.handlePublish(storyId),
+    mutationFn: async (storyId: string) => {
+      const story = await storyWorkspaceRepo.getStory(storyId);
+      if (!story) throw new Error("Story not found");
+      return storyWorkspaceRepo.updateStory({ ...story, isPublished: !story.isPublished });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.user.stories(userId!),
@@ -143,7 +172,7 @@ export function useUpdateStoryMetadata(userId: string | undefined) {
         language?: string;
         copyright?: string;
       };
-    }) => storiesRepo.updateStoryMetadata(storyId, data),
+    }) => storyWorkspaceRepo.updateStoryByID(storyId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.user.stories(userId!),
@@ -163,7 +192,7 @@ export function useUpdateStoryCover(userId: string | undefined) {
       storyId: string;
       imageFile: File | null;
       previewUrl: string | null;
-    }) => storiesRepo.updateStoryCoverImage(storyId, imageFile, previewUrl),
+    }) => updateStoryCover(storyId, imageFile, previewUrl),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.user.stories(userId!),

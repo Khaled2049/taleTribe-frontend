@@ -3,7 +3,6 @@ import { FaEye, FaThumbsUp, FaBook } from "react-icons/fa";
 import { ChevronRight, ChevronDown, Check } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { storiesRepo } from "../../services/StoriesRepo";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { APP_NAME } from "@/config/seo";
 import StoriesHeader from "@/components/story/StoriesHeader";
@@ -143,12 +142,8 @@ const AllStories: React.FC = () => {
     }
   };
 
-  const handleStoryClick = async (story: StoryMetadata) => {
-    const storyData = await storiesRepo.getStory(story.id);
-    if (storyData) {
-      storiesRepo.incrementViewCount(story.id);
-      navigate(`/story/${story.id}`);
-    }
+  const handleStoryClick = (story: StoryMetadata) => {
+    navigate(`/story/${story.id}`);
   };
 
   return (
