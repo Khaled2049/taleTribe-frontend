@@ -14,7 +14,7 @@ import {
 } from "@/hooks/queries/useCreditQueries";
 import SidebarBalanceCard from "@/components/explore/SidebarBalanceCard";
 import { useAccount, useChainId } from "wagmi";
-import { userService } from "@/services/UserService";
+import { profileRepo } from "@/services/ProfileRepo";
 import { getApiErrorMessage } from "@/api";
 import { Button } from "@/components/ui/button";
 import { WalletConnectButton } from "@/components/web3/WalletConnectButton";
@@ -273,7 +273,7 @@ const OwnerSettings: React.FC = () => {
     setSaveSuccess(false);
     setDeleteSuccess(false);
     try {
-      await userService.updateUserWalletAddress(user.uid, connectedAddress);
+      await profileRepo.updateMe({ walletAddress: connectedAddress });
       setSavedWalletAddress(connectedAddress);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -293,7 +293,7 @@ const OwnerSettings: React.FC = () => {
     setSaveSuccess(false);
     setDeleteSuccess(false);
     try {
-      await userService.clearUserWalletAddress(user.uid);
+      await profileRepo.updateMe({ walletAddress: "" });
       setSavedWalletAddress(null);
       setDeleteSuccess(true);
       setTimeout(() => setDeleteSuccess(false), 3000);

@@ -7,7 +7,6 @@ import { IUser } from "@/types/IUser";
 interface CommentListProps {
   comments: CommentType[];
   currentUser: IUser | null;
-  onLike: (commentId: string) => Promise<void>;
   onReply: (parentId: string, message: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onEdit: (commentId: string, newMessage: string) => Promise<void>;
@@ -18,7 +17,6 @@ export const CommentList: React.FC<CommentListProps> = React.memo(
     comments,
     currentUser,
 
-    onLike,
     onReply,
     onDelete,
     onEdit,
@@ -36,7 +34,6 @@ export const CommentList: React.FC<CommentListProps> = React.memo(
               comment={comment}
               allComments={comments}
               currentUser={currentUser}
-              onLike={onLike}
               onReply={onReply}
               onDelete={onDelete}
               onEdit={onEdit}

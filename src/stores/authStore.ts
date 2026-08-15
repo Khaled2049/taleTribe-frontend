@@ -1,17 +1,9 @@
 import { create } from "zustand";
 import { User as FirebaseUser } from "firebase/auth";
 import { firestore } from "@/config/firebase";
-import {
-  arrayRemove,
-  arrayUnion,
-  doc,
-  getDoc,
-  updateDoc,
-  writeBatch,
-} from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { IUser } from "@/types/IUser";
-import { publicProfileService } from "@/services/PublicProfileService";
-import { usernameKey, usernameService } from "@/services/UsernameService";
+import { profileRepo } from "@/services/ProfileRepo";
 import { appQueryClient } from "@/lib/queryClient";
 import { queryKeys } from "@/hooks/queries/queryKeys";
 
@@ -115,46 +107,29 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
               : "",
         };
 
+        let hydratedUser = newUser;
         const profileUsername =
           typeof userData.username === "string" && userData.username.trim().length > 0
             ? userData.username
             : firebaseUser.displayName || "";
         if (profileUsername) {
           try {
-            // Accounts created before the usernames index exists hold no claim,
-            // which would let anyone else take their name. Backfill once on
-            // login. Best-effort: "taken" here means two accounts already share
-            // a name and needs resolving by hand, but must not block sign-in.
-            const claim = await usernameService.claim(
-              profileUsername,
-              firebaseUser.uid,
-            );
-            if (claim === "taken") {
-              console.warn(
-                `Username "${profileUsername}" is already claimed by another account.`,
-              );
+            let profile = await profileRepo.getMe();
+            if (!profile) {
+              profile = await profileRepo.createMe({ username: profileUsername, photoURL: firebaseUser.photoURL || "", bio: typeof userData.bio === "string" ? userData.bio : "", occupation: typeof userData.occupation === "string" ? userData.occupation : "", location: typeof userData.location === "string" ? userData.location : "", walletAddress: typeof userData.walletAddress === "string" ? userData.walletAddress : "" });
             }
-
-            const existingPublicProfile =
-              await publicProfileService.getPublicProfile(firebaseUser.uid);
-            // createdAt doubles as a schema-version sentinel: docs written before
-            // profile fields went public lack it, so backfill them once on login.
-            if (!existingPublicProfile || !existingPublicProfile.createdAt) {
-              await publicProfileService.upsertPublicProfile(firebaseUser.uid, {
-                username: profileUsername,
-                ...(firebaseUser.photoURL ? { photoURL: firebaseUser.photoURL } : {}),
-                ...(typeof userData.bio === "string" ? { bio: userData.bio } : {}),
-                ...(typeof userData.occupation === "string"
-                  ? { occupation: userData.occupation }
-                  : {}),
-                ...(typeof userData.location === "string"
-                  ? { location: userData.location }
-                  : {}),
-                ...(typeof userData.createdAt === "string"
-                  ? { createdAt: userData.createdAt }
-                  : {}),
-              });
-            }
+            const follows = await profileRepo.getMyFollows();
+            hydratedUser = {
+              ...newUser,
+              username: profile.username,
+              photoURL: profile.photoURL || firebaseUser.photoURL,
+              bio: profile.bio ?? "",
+              occupation: profile.occupation ?? "",
+              location: profile.location ?? "",
+              walletAddress: profile.walletAddress,
+              following: follows.following,
+              followers: follows.followers,
+            };
           } catch (publicProfileError) {
             console.warn(
               "Error syncing public profile during hydration:",
@@ -162,7 +137,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
             );
           }
         }
-        set({ user: newUser, loading: false });
+        set({ user: hydratedUser, loading: false });
         return;
       }
 
@@ -183,19 +158,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if ((currentUser.following ?? []).includes(uid)) return;
 
     try {
-      // One batch, not two writes: the two arrays are read by different
-      // consumers — the rules check the target's `followers`, the UI checks the
-      // viewer's `following` — so a half-applied follow makes them disagree.
-      // Rules evaluate each document in a batch independently, so the existing
-      // follower and self-update branches still apply.
-      const batch = writeBatch(firestore);
-      batch.update(doc(firestore, "users", uid), {
-        followers: arrayUnion(currentUser.uid),
-      });
-      batch.update(doc(firestore, "users", currentUser.uid), {
-        following: arrayUnion(uid),
-      });
-      await batch.commit();
+      await profileRepo.setFollow(uid, true);
 
       set((state) => ({
         user: state.user
@@ -215,14 +178,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (!(currentUser.following ?? []).includes(uid)) return;
 
     try {
-      const batch = writeBatch(firestore);
-      batch.update(doc(firestore, "users", uid), {
-        followers: arrayRemove(currentUser.uid),
-      });
-      batch.update(doc(firestore, "users", currentUser.uid), {
-        following: arrayRemove(uid),
-      });
-      await batch.commit();
+      await profileRepo.setFollow(uid, false);
 
       set((state) => ({
         user: state.user
@@ -244,13 +200,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
 
     try {
-      const userDocRef = doc(firestore, "users", currentUser.uid);
-      await updateDoc(userDocRef, { bio });
       if (currentUser.username) {
-        await publicProfileService.upsertPublicProfile(currentUser.uid, {
-          username: currentUser.username,
-          bio,
-        });
+        await profileRepo.updateMe({ bio });
         // Refresh the live-resolved public profile so the owner's own surfaces
         // (author bios, etc.) reflect the change without waiting out staleTime.
         appQueryClient.invalidateQueries({
@@ -271,12 +222,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       throw new Error("User not authenticated");
     }
 
-    // Validate a username change and claim it before writing. Claiming first is
-    // what serializes concurrent claimants; if the profile write below fails we
-    // release the claim rather than stranding the name. Thrown errors propagate
-    // to the caller (e.g. the inline editor) so the specific message is shown.
-    let previousUsername: string | undefined;
-    let claimedUsername: string | undefined;
+    // The API owns case-insensitive username uniqueness.
     if (
       typeof data.username === "string" &&
       data.username !== currentUser.username
@@ -290,30 +236,14 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
           "Username can only contain letters, numbers, and underscores.",
         );
       }
-      const claim = await usernameService.claim(nextUsername, currentUser.uid);
-      if (claim === "taken") {
-        throw new Error("That username is already taken.");
-      }
-      // Only a claim this call created is ours to roll back — "already-owned"
-      // covers re-casing (alice -> Alice), which maps to the same index doc.
-      if (claim === "claimed") {
-        claimedUsername = nextUsername;
-      }
-      previousUsername = currentUser.username;
       data = { ...data, username: nextUsername };
     }
-
-    let userDocWritten = false;
     try {
       const filteredData = Object.fromEntries(
         Object.entries(data).filter(([, value]) => value !== undefined),
       );
 
       if (Object.keys(filteredData).length === 0) return;
-
-      const userDocRef = doc(firestore, "users", currentUser.uid);
-      await updateDoc(userDocRef, filteredData);
-      userDocWritten = true;
 
       const publicProfileData: {
         username?: string;
@@ -338,36 +268,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         publicProfileData.location = filteredData.location;
       }
       if (Object.keys(publicProfileData).length > 0) {
-        const usernameToSync = publicProfileData.username ?? currentUser.username;
-        if (usernameToSync) {
-          await publicProfileService.upsertPublicProfile(currentUser.uid, {
-            username: usernameToSync,
-            ...(publicProfileData.photoURL
-              ? { photoURL: publicProfileData.photoURL }
-              : {}),
-            ...(publicProfileData.bio !== undefined
-              ? { bio: publicProfileData.bio }
-              : {}),
-            ...(publicProfileData.occupation !== undefined
-              ? { occupation: publicProfileData.occupation }
-              : {}),
-            ...(publicProfileData.location !== undefined
-              ? { location: publicProfileData.location }
-              : {}),
-          });
-        }
+        await profileRepo.updateMe(publicProfileData);
       }
-
-      // Release the previous username so it becomes available again. Compare
-      // index keys, not display casing: re-casing alice -> Alice keeps the same
-      // mapping, and releasing it would drop the claim we still hold.
-      if (
-        previousUsername &&
-        typeof filteredData.username === "string" &&
-        usernameKey(previousUsername) !== usernameKey(filteredData.username)
-      ) {
-        await usernameService.release(previousUsername);
-      }
+      const privateData = Object.fromEntries(Object.entries(filteredData).filter(([key]) => key === "firstName" || key === "lastName" || key === "writingInterests"));
+      if (Object.keys(privateData).length) await updateDoc(doc(firestore, "users", currentUser.uid), privateData);
 
       // Refresh the live-resolved public profile so every surface that shows
       // this author's username/photo (feed, comments, story cards/bios) picks
@@ -386,15 +290,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         };
       });
     } catch (error) {
-      // The claim landed but the user doc never did, so nothing references the
-      // name. Release it, or it stays permanently unavailable to everyone else
-      // (rules only let the holding uid delete it). If the user doc did commit,
-      // keep the claim — it now backs a name the account actually uses, even
-      // though a later step here failed.
-      if (claimedUsername && !userDocWritten) {
-        await usernameService.release(claimedUsername);
-      }
       console.error("Error updating user profile:", error);
+      if (error instanceof Error && error.message.includes("username already taken")) {
+        throw new Error("That username is already taken.");
+      }
       throw new Error("Failed to update user profile");
     }
   },

@@ -10,7 +10,6 @@ interface CommentProps {
   comment: CommentType;
   allComments: CommentType[];
   currentUser: IUser | null;
-  onLike: (commentId: string) => Promise<void>;
   onReply: (parentId: string, message: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onEdit: (commentId: string, newMessage: string) => Promise<void>;
@@ -24,7 +23,6 @@ export const Comment: React.FC<CommentProps> = React.memo(
     comment,
     allComments,
     currentUser,
-    onLike,
     onReply,
     onDelete,
     onEdit,
@@ -224,7 +222,6 @@ export const Comment: React.FC<CommentProps> = React.memo(
                 comment={reply}
                 allComments={allComments}
                 currentUser={currentUser}
-                onLike={onLike}
                 onReply={onReply}
                 onDelete={onDelete}
                 onEdit={onEdit}

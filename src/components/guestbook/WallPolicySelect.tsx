@@ -7,12 +7,11 @@ import {
   GuestbookPolicy,
   normalizePolicy,
 } from "@/lib/guestbookPolicy";
-import { publicProfileService } from "@/services/PublicProfileService";
+import { profileRepo } from "@/services/ProfileRepo";
 import { queryKeys } from "@/hooks/queries/queryKeys";
 
 interface WallPolicySelectProps {
   userId: string;
-  username: string;
   current: unknown;
 }
 
@@ -23,7 +22,6 @@ interface WallPolicySelectProps {
  */
 const WallPolicySelect: React.FC<WallPolicySelectProps> = ({
   userId,
-  username,
   current,
 }) => {
   const queryClient = useQueryClient();
@@ -37,11 +35,11 @@ const WallPolicySelect: React.FC<WallPolicySelectProps> = ({
     setSaving(policy);
     setError(null);
     try {
-      await publicProfileService.setGuestbookPolicy(userId, username, policy);
+      await profileRepo.updateMe({ guestbookPolicy: policy });
       // The gate reads this profile, so the wall must re-render against the new
       // value rather than wait out staleTime.
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.user.publicProfile(userId),
+        queryKey: queryKeys.user.guestbookPolicy(userId),
       });
     } catch (err) {
       console.error("Error saving guestbook policy:", err);

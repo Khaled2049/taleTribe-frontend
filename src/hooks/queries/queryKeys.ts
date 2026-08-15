@@ -44,6 +44,8 @@ export const queryKeys = {
     stories: (userId: string) => ["user", userId, "stories"] as const,
     publicProfile: (userId: string) =>
       ["user", userId, "publicProfile"] as const,
+    guestbookPolicy: (userId: string) =>
+      ["user", userId, "guestbookPolicy"] as const,
     recentlyRead: (userId: string) => ["user", userId, "recentlyRead"] as const,
     aiCredits: (userId: string) => ["user", userId, "aiCredits"] as const,
   },

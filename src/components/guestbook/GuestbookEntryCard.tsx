@@ -11,8 +11,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { guestbookVoteService } from "@/services/GuestbookVoteService";
-import { guestbookService } from "@/services/GuestbookService";
+import { guestbookRepo } from "@/services/GuestbookRepo";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useAuthorUsername } from "@/hooks/queries/useUserQueries";
 import { formatRelativeTime } from "@/lib/relativeTime";
@@ -61,12 +60,7 @@ const GuestbookEntryCard: React.FC<GuestbookEntryCardProps> = ({
     setIsVoting(true);
 
     try {
-      await guestbookVoteService.voteEntry(
-        entry.ownerId,
-        entry.id,
-        currentUser.uid,
-        voteType,
-      );
+      await guestbookRepo.voteEntry(entry.ownerId, entry.id, voteType);
     } catch (error) {
       console.error("Error voting on guestbook entry:", error);
       setUpvoteCount(previousUpvotes);
@@ -82,7 +76,7 @@ const GuestbookEntryCard: React.FC<GuestbookEntryCardProps> = ({
 
     setIsDeleting(true);
     try {
-      await guestbookService.deleteEntry(entry.ownerId, entry.id);
+      await guestbookRepo.deleteEntry(entry.ownerId, entry.id);
       onEntryDeleted?.(entry.id);
       toast.success("Entry deleted");
     } catch (error) {
@@ -193,6 +187,7 @@ const GuestbookEntryCard: React.FC<GuestbookEntryCardProps> = ({
           <GuestbookReplies
             ownerId={entry.ownerId}
             entryId={entry.id}
+            entryAuthorId={entry.authorId}
             currentUser={currentUser}
             onReplyCountChange={setReplyCount}
             onHide={() => setRepliesExpanded(false)}

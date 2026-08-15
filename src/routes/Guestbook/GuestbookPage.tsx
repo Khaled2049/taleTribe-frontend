@@ -1,8 +1,8 @@
 import React from "react";
 import { Link, useParams } from "react-router-dom";
-import { User, UserX } from "lucide-react";
+import { UserX } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { usePublicProfile } from "@/hooks/queries/useUserQueries";
+import { useGuestbookPolicy, usePublicProfile } from "@/hooks/queries/useUserQueries";
 import { SEOHead } from "@/components/seo/SEOHead";
 import Guestbook from "@/components/guestbook/Guestbook";
 import GuestbookTabs from "@/components/guestbook/GuestbookTabs";
@@ -18,38 +18,12 @@ const GuestbookPage: React.FC = () => {
 
   // usePublicProfile no-ops while signed out; the sign-in prompt below covers it.
   const { data: profile, isLoading: profileLoading } = usePublicProfile(userId);
+  const { data: guestbookPolicy } = useGuestbookPolicy(userId);
 
   if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-ns-bg">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ns-accent"></div>
-      </div>
-    );
-  }
-
-  // Entries are world-readable, but the owner's @username comes from
-  // publicProfiles, which requires auth — so the page gates the same way
-  // /profile/:userId does rather than rendering a nameless guestbook.
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-ns-bg flex items-center justify-center px-4">
-        <div className="bg-ns-elevated border border-ns-border rounded-ns-xl p-8 max-w-sm w-full text-center">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-ns-surface border border-ns-border flex items-center justify-center">
-            <User className="w-6 h-6 text-ns-ink-muted" />
-          </div>
-          <h1 className="font-heading text-xl text-ns-ink mb-2">
-            Sign in to view guestbooks
-          </h1>
-          <p className="font-body text-sm text-ns-ink-secondary mb-6">
-            Guestbooks are only visible to signed-in members.
-          </p>
-          <Link
-            to="/sign-in"
-            className="inline-flex items-center justify-center px-4 py-2 rounded-ns bg-ns-accent text-white font-ui text-sm hover:opacity-90 transition-opacity"
-          >
-            Sign in
-          </Link>
-        </div>
       </div>
     );
   }
@@ -93,7 +67,7 @@ const GuestbookPage: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
         <div className="flex gap-8 items-start">
           <FollowingSidebar
-            following={user.following ?? []}
+            following={user?.following ?? []}
             activeUserId={userId}
           />
 
@@ -115,14 +89,14 @@ const GuestbookPage: React.FC = () => {
             </header>
 
             <FollowingStrip
-              following={user.following ?? []}
+              following={user?.following ?? []}
               activeUserId={userId}
             />
 
             <Guestbook
               ownerId={userId}
               currentUser={user}
-              guestbookPolicy={normalizePolicy(profile.guestbookPolicy)}
+              guestbookPolicy={normalizePolicy(guestbookPolicy)}
               ownerUsername={username}
             />
           </div>

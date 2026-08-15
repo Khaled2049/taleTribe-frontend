@@ -5,24 +5,20 @@ import { Comment as IComment } from "@/types/IComment";
 import { IUser } from "@/types/IUser";
 
 interface StoryCommentsSectionProps {
-  storyId: string;
-  chapterId: string;
   comments: IComment[];
   commentsLoading: boolean;
   currentUser: IUser | null;
-  onLike: (commentId: string) => Promise<void>;
+  onCreate: (message: string) => Promise<void>;
   onReply: (parentId: string, message: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onEdit: (commentId: string, newMessage: string) => Promise<void>;
 }
 
 export const StoryCommentsSection: React.FC<StoryCommentsSectionProps> = ({
-  storyId,
-  chapterId,
   comments,
   commentsLoading,
   currentUser,
-  onLike,
+  onCreate,
   onReply,
   onDelete,
   onEdit,
@@ -43,9 +39,8 @@ export const StoryCommentsSection: React.FC<StoryCommentsSectionProps> = ({
       {currentUser && (
         <div className="mb-10">
           <CommentInput
-            storyId={storyId}
-            chapterId={chapterId}
             currentUser={currentUser}
+            onSubmit={onCreate}
           />
         </div>
       )}
@@ -58,7 +53,6 @@ export const StoryCommentsSection: React.FC<StoryCommentsSectionProps> = ({
         <CommentList
           comments={comments}
           currentUser={currentUser}
-          onLike={onLike}
           onReply={onReply}
           onDelete={onDelete}
           onEdit={onEdit}

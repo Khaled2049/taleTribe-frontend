@@ -33,7 +33,6 @@ const PublicUserProfile: React.FC = () => {
   const { user, loading: authLoading, updateProfile } = useAuthContext();
   const isSelf = !!user && user.uid === userId;
 
-  // usePublicProfile no-ops while signed out; the sign-in prompt below covers it.
   const { data: profile, isLoading: profileLoading } = usePublicProfile(userId);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -58,8 +57,8 @@ const PublicUserProfile: React.FC = () => {
     setPhotoUploading(true);
     try {
       const photoURL = await storageService.uploadProfileImage(file, user.uid);
-      // updateProfile persists to the user doc and mirrors to publicProfiles,
-      // then invalidates the public-profile query so the avatar refreshes.
+      // updateProfile persists public fields through story-data and refreshes
+      // the public-profile query so the avatar updates immediately.
       await updateProfile({ photoURL });
     } catch (err) {
       setPhotoError(
@@ -74,31 +73,6 @@ const PublicUserProfile: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen bg-ns-bg">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ns-accent"></div>
-      </div>
-    );
-  }
-
-  // publicProfiles reads require auth, so ask visitors to sign in first.
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-ns-bg flex items-center justify-center px-4">
-        <div className="bg-ns-elevated border border-ns-border rounded-ns-xl p-8 max-w-sm w-full text-center">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-ns-surface border border-ns-border flex items-center justify-center">
-            <User className="w-6 h-6 text-ns-ink-muted" />
-          </div>
-          <h1 className="font-heading text-xl text-ns-ink mb-2">
-            Sign in to view profiles
-          </h1>
-          <p className="font-body text-sm text-ns-ink-secondary mb-6">
-            Member profiles are only visible to signed-in members.
-          </p>
-          <Link
-            to="/sign-in"
-            className="inline-flex items-center justify-center px-4 py-2 rounded-ns bg-ns-accent text-white font-ui text-sm hover:opacity-90 transition-opacity"
-          >
-            Sign in
-          </Link>
-        </div>
       </div>
     );
   }

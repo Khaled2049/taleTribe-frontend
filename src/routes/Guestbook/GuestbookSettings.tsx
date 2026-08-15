@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { User } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { usePublicProfile } from "@/hooks/queries/useUserQueries";
+import { useGuestbookPolicy } from "@/hooks/queries/useUserQueries";
 import { SEOHead } from "@/components/seo/SEOHead";
 import GuestbookTabs from "@/components/guestbook/GuestbookTabs";
 import WallPolicySelect from "@/components/guestbook/WallPolicySelect";
@@ -13,11 +13,9 @@ import WallPolicySelect from "@/components/guestbook/WallPolicySelect";
  */
 const GuestbookSettings: React.FC = () => {
   const { user, loading: authLoading } = useAuthContext();
-  const { data: profile, isLoading: profileLoading } = usePublicProfile(
-    user?.uid,
-  );
+  const { data: guestbookPolicy, isLoading: policyLoading } = useGuestbookPolicy(user?.uid);
 
-  if (authLoading || (user && profileLoading)) {
+  if (authLoading || (user && policyLoading)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-ns-bg">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ns-accent"></div>
@@ -46,9 +44,6 @@ const GuestbookSettings: React.FC = () => {
     );
   }
 
-  // Prefer the live auth value so a username edit shows without a refetch.
-  const username = user.username || profile?.username || "";
-
   return (
     <div className="min-h-screen bg-ns-bg">
       <SEOHead title="Guestbook settings" noindex />
@@ -61,8 +56,7 @@ const GuestbookSettings: React.FC = () => {
 
         <WallPolicySelect
           userId={user.uid}
-          username={username}
-          current={profile?.guestbookPolicy}
+          current={guestbookPolicy}
         />
       </div>
     </div>

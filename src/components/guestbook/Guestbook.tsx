@@ -3,7 +3,7 @@ import { Loader } from "lucide-react";
 import { useInView } from "react-intersection-observer";
 import { IGuestbookEntry } from "@/types/IGuestbookEntry";
 import { IUser } from "@/types/IUser";
-import { guestbookService } from "@/services/GuestbookService";
+import { guestbookRepo } from "@/services/GuestbookRepo";
 import { rateLimitMessage } from "@/services/rateLimitError";
 import GuestbookEntryCard from "./GuestbookEntryCard";
 import SignGuestbookForm from "./SignGuestbookForm";
@@ -83,14 +83,13 @@ const Guestbook: React.FC<GuestbookProps> = ({
     setIsSigning(true);
     setError(null);
 
-    const authorUsername = currentUser.username || "unknown";
     const tempId = `temp-${Date.now()}`;
     const optimisticEntry: IGuestbookEntry = {
       id: tempId,
       ownerId,
       content,
       createdAt: new Date(),
-      authorUsername,
+      authorUsername: currentUser.username || "unknown",
       authorId: currentUser.uid,
       commentCount: 0,
       upvoteCount: 0,
@@ -101,13 +100,9 @@ const Guestbook: React.FC<GuestbookProps> = ({
     addEntry(optimisticEntry);
 
     try {
-      const entryId = await guestbookService.addEntry(ownerId, {
-        content,
-        authorId: currentUser.uid,
-        authorUsername,
-      });
+      const created = await guestbookRepo.createEntry(ownerId, content);
       removeEntry(tempId);
-      addEntry({ ...optimisticEntry, id: entryId });
+      addEntry(created);
     } catch (err) {
       console.error("Error signing guestbook:", err);
       removeEntry(tempId);
