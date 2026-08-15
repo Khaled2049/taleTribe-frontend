@@ -10,7 +10,7 @@ import NextBookSection from "./components/NextBookSection";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { getAbsoluteUrl, APP_NAME } from "@/config/seo";
 import { useBookClub } from "@/hooks/queries/useBookClubQueries";
-import { publicProfileService } from "@/services/PublicProfileService";
+import { profileRepo } from "@/services/ProfileRepo";
 import { BookPickerDialog } from "@/components/common/BookPicker";
 import { hasBook } from "@/utils/bookMapping";
 import { IReadingProgress } from "@/types/IClub";
@@ -88,7 +88,7 @@ const BookClubDetails: React.FC = () => {
       previousMemberIdsRef.current = memberIdsString;
 
       try {
-        const profileMap = await publicProfileService.getPublicProfiles(
+        const profileMap = await profileRepo.getMany(
           club.members,
         );
         const memberInfos = club.members.map((memberId) => {

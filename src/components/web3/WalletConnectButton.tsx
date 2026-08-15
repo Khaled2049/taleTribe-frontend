@@ -28,7 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { userService } from "@/services/UserService";
+import { profileRepo } from "@/services/ProfileRepo";
 import { useChainId } from "wagmi";
 
 const TARGET_CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || "31337");
@@ -166,7 +166,7 @@ export const WalletConnectButton: React.FC = () => {
 
     setIsUpdatingWalletAddress(true);
     try {
-      await userService.updateUserWalletAddress(user.uid, address);
+      await profileRepo.updateMe({ walletAddress: address });
       setSavedWalletAddress(address);
       setShowReplaceWalletDialog(false);
       toast.success("Wallet address updated", {
