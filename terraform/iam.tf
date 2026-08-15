@@ -35,7 +35,8 @@ resource "google_project_iam_member" "github_cloudfunctions_developer" {
 }
 
 # IAM: Allow GitHub Actions to manage Cloud Tasks queues during deploy.
-# Required to deploy onTaskDispatched functions (e.g. generateChapterTask):
+# Required to deploy onTaskDispatched functions (indexChapterTask,
+# indexEntityTask, competitionAdvanceTask):
 # `firebase deploy` calls cloudtasks.queues.get/create/update to sync queue config.
 resource "google_project_iam_member" "github_cloudtasks_admin" {
   project = var.project_id
@@ -44,7 +45,8 @@ resource "google_project_iam_member" "github_cloudtasks_admin" {
 }
 
 # IAM: Allow the Cloud Functions runtime SA to enqueue Cloud Tasks.
-# The generateChapter HTTP enqueuer pushes work onto the generateChapterTask queue.
+# The write triggers and competition lifecycle push work onto the indexing and
+# competition-advance queues.
 resource "google_project_iam_member" "runtime_cloudtasks_enqueuer" {
   project = var.project_id
   role    = "roles/cloudtasks.enqueuer"
