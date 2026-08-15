@@ -564,41 +564,6 @@ class RateLimitService {
     await this.incrementDailyCount(userId, "promptResponseCount");
   }
 
-  // Reading Progress Rate Limiting
-  /**
-   * Check if user can update reading progress (hasn't exceeded hourly limit)
-   */
-  async canUpdateReadingProgress(userId: string): Promise<{
-    allowed: boolean;
-    count: number;
-    limit: number;
-    message?: string;
-  }> {
-    const count = await this.getHourlyCount(userId, "progressUpdateCount");
-    const limit = RATE_LIMITS.MAX_READING_PROGRESS_UPDATES_PER_HOUR;
-
-    if (count >= limit) {
-      return {
-        allowed: false,
-        count,
-        limit,
-        message: `You have reached the hourly limit of ${limit} progress updates. Please try again later.`,
-      };
-    }
-
-    return {
-      allowed: true,
-      count,
-      limit,
-    };
-  }
-
-  /**
-   * Increment progress update count
-   */
-  async incrementProgressUpdateCount(userId: string): Promise<void> {
-    await this.incrementHourlyCount(userId, "progressUpdateCount");
-  }
 }
 
 export const rateLimitService = new RateLimitService();

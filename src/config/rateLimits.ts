@@ -92,9 +92,4 @@ export const RATE_LIMITS = {
    */
   MAX_PROMPT_RESPONSE_LENGTH: 2000,
 
-  // Reading Progress Limits
-  /**
-   * Maximum reading progress updates per hour
-   */
-  MAX_READING_PROGRESS_UPDATES_PER_HOUR: 5,
 } as const;

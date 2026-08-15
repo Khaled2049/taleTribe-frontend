@@ -68,6 +68,23 @@ export async function verifyStoryOwnership(
   }
 }
 
+/** PostgreSQL stories are authorized by story-data using the original Firebase
+ * token. Firestore remains the first check while legacy stories exist. */
+async function verifyStoryDataOwnership(storyId: string, userId: string, idToken: string): Promise<boolean> {
+  const baseUrl = (process.env.STORY_DATA_URL || "http://localhost:8084").replace(/\/$/, "");
+  try {
+    const response = await fetch(`${baseUrl}/v1/stories/${encodeURIComponent(storyId)}`, {
+      // X-User-ID is accepted only by story-data AUTH_MODE=dev; production
+      // verifies the Firebase bearer token and ignores it.
+      headers: { Authorization: `Bearer ${idToken}`, "X-User-ID": userId },
+    });
+    return response.ok;
+  } catch (error) {
+    logger.warn("story-data ownership lookup failed", { storyId, error });
+    return false;
+  }
+}
+
 /**
  * Middleware to require authentication.
  */
@@ -192,7 +209,9 @@ export function requireStoryOwnership(
     }
 
     const db = admin.firestore();
-    const ownsStory = await verifyStoryOwnership(db, storyId, authContext.userId);
+    const ownsStory =
+      (await verifyStoryOwnership(db, storyId, authContext.userId)) ||
+      (await verifyStoryDataOwnership(storyId, authContext.userId, authContext.idToken));
 
     if (!ownsStory) {
       response

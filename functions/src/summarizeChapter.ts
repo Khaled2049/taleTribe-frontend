@@ -6,6 +6,7 @@ import * as logger from "firebase-functions/logger";
 import { requireStoryOwnership } from "./authService";
 import { callAgentWithRetry } from "./agentService";
 import { checkAiAccess, corsWithEncryption } from "./aiSettings";
+import { getStoryDataChapter, putStoryDataSummary } from "./storyDataClient";
 
 const db = admin.firestore();
 
@@ -41,13 +42,11 @@ export const summarizeChapter = onRequest(
         .doc(storyId)
         .collection("chapters")
         .doc(chapterId);
-      const chapterSnap = await chapterRef.get();
-      if (!chapterSnap.exists) {
-        response.status(404).json({ error: "Chapter not found" });
-        return;
-      }
-
-      const content = (chapterSnap.data()?.content ?? "").toString();
+      let pgChapter: Awaited<ReturnType<typeof getStoryDataChapter>> | null = null;
+      try { pgChapter = await getStoryDataChapter(storyId, chapterId, idToken, userId); } catch { /* legacy Firestore story */ }
+      const chapterSnap = pgChapter ? null : await chapterRef.get();
+      if (!pgChapter && !chapterSnap?.exists) { response.status(404).json({ error: "Chapter not found" }); return; }
+      const content = pgChapter ? pgChapter.content : (chapterSnap?.data()?.content ?? "").toString();
       if (!content.trim()) {
         response
           .status(400)
@@ -86,10 +85,11 @@ export const summarizeChapter = onRequest(
         return;
       }
 
-      await chapterRef.set(
-        { summary, summarizedAt: Timestamp.now() },
-        { merge: true },
-      );
+      if (pgChapter) {
+        await putStoryDataSummary(storyId, chapterId, summary, pgChapter.revision, idToken, userId);
+      } else {
+        await chapterRef.set({ summary, summarizedAt: Timestamp.now() }, { merge: true });
+      }
 
       response.status(200).json({ summary });
     } catch (error) {
