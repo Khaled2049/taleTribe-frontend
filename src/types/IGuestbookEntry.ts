@@ -1,10 +1,13 @@
-export interface IPost {
+import { FirestoreDate } from "@/lib/relativeTime";
+
+export interface IGuestbookEntry {
   id: string;
+  /** Whose guestbook this entry sits in. Also the parent path segment. */
+  ownerId: string;
   content: string;
-  createdAt: Date | any; // Firestore Timestamp compatible
+  createdAt: FirestoreDate;
   authorUsername: string;
   authorId: string;
-  bookClubId?: string;
   commentCount: number;
   upvoteCount: number;
   downvoteCount: number;

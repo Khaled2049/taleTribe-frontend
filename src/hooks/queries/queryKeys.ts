@@ -20,8 +20,8 @@ export const queryKeys = {
   plots: {
     byStory: (storyId: string) => ["plots", storyId] as const,
   },
-  posts: {
-    feed: (feedType: string) => ["posts", "feed", feedType] as const,
+  guestbook: {
+    byOwner: (ownerId: string) => ["guestbook", ownerId] as const,
   },
   comments: {
     byChapter: (storyId: string, chapterId: string) =>
@@ -30,6 +30,13 @@ export const queryKeys = {
   bookClubs: {
     all: () => ["bookClubs"] as const,
     detail: (clubId: string) => ["bookClubs", clubId] as const,
+  },
+  people: {
+    search: (term: string) => ["people", "search", term] as const,
+    recent: () => ["people", "recent"] as const,
+    // Sorted so a reordered follow array does not read as a different query.
+    following: (uids: readonly string[]) =>
+      ["people", "following", [...uids].sort()] as const,
   },
   user: {
     walletAddress: (userId: string) =>

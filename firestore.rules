@@ -22,13 +22,70 @@ service cloud.firestore {
         : 0;
     }
 
-    // True if the requester owns the parent post. Used so a post author can
-    // cascade-delete the post's child docs (comments/votes/reports) created by
-    // other users — the deletePost() batch in PostService relies on this.
-    function isPostAuthor(postId) {
+    // True if the requester wrote the parent guestbook entry. Lets an entry
+    // author cascade-delete child docs (replies/votes) created by other users —
+    // deleteEntry() in GuestbookService relies on this. The guestbook owner
+    // needs no equivalent: ownerId is a path segment, so their check is free.
+    function isEntryAuthor(ownerId, entryId) {
       return request.auth != null
-        && exists(/databases/$(database)/documents/posts/$(postId))
-        && get(/databases/$(database)/documents/posts/$(postId)).data.authorId == request.auth.uid;
+        && exists(/databases/$(database)/documents/users/$(ownerId)/guestbook/$(entryId))
+        && get(/databases/$(database)/documents/users/$(ownerId)/guestbook/$(entryId)).data.authorId == request.auth.uid;
+    }
+
+    // Vote counters may move by at most one in each direction and never below
+    // zero. NOTE: this bounds the size of a forged bump but does not require a
+    // matching votes/{uid} document — a determined client can still inflate a
+    // count by repeating the write. Nothing ranks by these numbers, so the
+    // exposure is a wrong display, not a wrong ordering.
+    function voteCountersBounded() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvoteCount', 'downvoteCount'])
+        && request.resource.data.upvoteCount >= 0
+        && request.resource.data.downvoteCount >= 0
+        && request.resource.data.upvoteCount >= resource.data.upvoteCount - 1
+        && request.resource.data.upvoteCount <= resource.data.upvoteCount + 1
+        && request.resource.data.downvoteCount >= resource.data.downvoteCount - 1
+        && request.resource.data.downvoteCount <= resource.data.downvoteCount + 1;
+    }
+
+    // Who may sign a wall. The policy lives on publicProfiles because the client
+    // must read it to decide whether to render a compose form, and cannot read
+    // the owner's user doc. Every access is exists()-guarded: get() on a missing
+    // document returns null, and dereferencing .data on null errors — which
+    // denies rather than falling through to the default.
+    //
+    // A missing profile, a missing field, and a missing user doc all read as
+    // 'everyone'. That is what makes this setting additive: no migration, and no
+    // behaviour change for an account that never touches it.
+    function guestbookPolicyOf(ownerId) {
+      return exists(/databases/$(database)/documents/publicProfiles/$(ownerId))
+        ? get(/databases/$(database)/documents/publicProfiles/$(ownerId)).data.get('guestbookPolicy', 'everyone')
+        : 'everyone';
+    }
+
+    // The follow graph is stored on both sides, so both directions come off the
+    // owner's single document.
+    function wallRelationAllows(ownerId, policy) {
+      let owner = get(/databases/$(database)/documents/users/$(ownerId)).data;
+      let uid = request.auth.uid;
+      let isFollower = owner.get('followers', []).hasAny([uid]);
+      let isFollowed = owner.get('following', []).hasAny([uid]);
+      return (policy == 'followers' && isFollower)
+        || (policy == 'following' && isFollowed)
+        || (policy == 'mutuals' && isFollower && isFollowed);
+    }
+
+    // Gates entries and replies alike. The owner is never locked out of their
+    // own page, whatever the setting says. KEEP IN SYNC with canPostOnWall() in
+    // src/lib/guestbookPolicy.ts, which decides whether the form is shown.
+    function mayPostOnWall(ownerId) {
+      let policy = guestbookPolicyOf(ownerId);
+      return request.auth != null && (
+        request.auth.uid == ownerId
+        || policy == 'everyone'
+        || (policy != 'nobody'
+            && exists(/databases/$(database)/documents/users/$(ownerId))
+            && wallRelationAllows(ownerId, policy))
+      );
     }
 
     // Invites collection for invite-only signup
@@ -67,69 +124,6 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null && request.resource.data.content.size() <= 10000;
       allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-    }
-
-    match /posts/{postId} {
-      allow read: if true;
-      allow create: if request.auth != null;
-      // counters must change by exactly ±1 and stay >= 0 — prevents arbitrary value injection.
-      allow update: if request.auth != null && (
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentCount']) &&
-         request.resource.data.commentCount >= 0 &&
-         (request.resource.data.commentCount == resource.data.commentCount + 1 ||
-          request.resource.data.commentCount == resource.data.commentCount - 1)) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvoteCount', 'downvoteCount']) &&
-         request.resource.data.upvoteCount >= 0 &&
-         request.resource.data.downvoteCount >= 0 &&
-         request.resource.data.upvoteCount >= resource.data.upvoteCount - 1 &&
-         request.resource.data.upvoteCount <= resource.data.upvoteCount + 1 &&
-         request.resource.data.downvoteCount >= resource.data.downvoteCount - 1 &&
-         request.resource.data.downvoteCount <= resource.data.downvoteCount + 1) ||
-        resource.data.authorId == request.auth.uid
-      );
-      allow delete: if request.auth != null && resource.data.authorId == request.auth.uid;
-
-      match /reports/{reportId} {
-        // get is per-doc (own report or post author); list can't reference reportId,
-        // so it's restricted to the post author (needed for the deletePost cascade).
-        allow get: if request.auth != null && (reportId == request.auth.uid || isPostAuthor(postId));
-        allow list: if isPostAuthor(postId);
-        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-        // Reports immutable after create
-        allow update: if false;
-        allow delete: if request.auth != null && (reportId == request.auth.uid || isPostAuthor(postId));
-      }
-
-      match /votes/{voteId} {
-        allow read: if true;
-        allow create: if request.auth != null && voteId == request.auth.uid;
-        allow update: if request.auth != null && voteId == request.auth.uid;
-        allow delete: if request.auth != null && (voteId == request.auth.uid || isPostAuthor(postId));
-      }
-
-      match /comments/{commentId} {
-        allow read: if true;
-        allow create: if request.auth != null;
-        // vote counter delta bounded to ±1, non-negative.
-        allow update: if request.auth != null && (
-          resource.data.authorId == request.auth.uid ||
-          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvoteCount', 'downvoteCount']) &&
-           request.resource.data.upvoteCount >= 0 &&
-           request.resource.data.downvoteCount >= 0 &&
-           request.resource.data.upvoteCount >= resource.data.upvoteCount - 1 &&
-           request.resource.data.upvoteCount <= resource.data.upvoteCount + 1 &&
-           request.resource.data.downvoteCount >= resource.data.downvoteCount - 1 &&
-           request.resource.data.downvoteCount <= resource.data.downvoteCount + 1)
-        );
-        allow delete: if request.auth != null && (resource.data.authorId == request.auth.uid || isPostAuthor(postId));
-
-        match /votes/{voteId} {
-          allow read: if true;
-          allow create: if request.auth != null && voteId == request.auth.uid;
-          allow update: if request.auth != null && voteId == request.auth.uid;
-          allow delete: if request.auth != null && (voteId == request.auth.uid || isPostAuthor(postId));
-        }
-      }
     }
 
     match /plotTemplates/{templateId} {
@@ -469,19 +463,50 @@ service cloud.firestore {
     }
 
     match /publicProfiles/{userId} {
+      function ownerWritableKeys() {
+        return ["username", "usernameLower", "photoURL", "updatedAt", "bio",
+                "occupation", "location", "createdAt", "guestbookPolicy"];
+      }
+
+      function validProfile() {
+        return request.resource.data.username is string &&
+          request.resource.data.updatedAt is string &&
+          // Derived by PublicProfileService.upsertPublicProfile, never typed by
+          // a user: the search key must not diverge from the display name.
+          request.resource.data.usernameLower == request.resource.data.username.lower() &&
+          (!("photoURL" in request.resource.data) || request.resource.data.photoURL is string) &&
+          (!("bio" in request.resource.data) || request.resource.data.bio is string) &&
+          (!("occupation" in request.resource.data) || request.resource.data.occupation is string) &&
+          (!("location" in request.resource.data) || request.resource.data.location is string) &&
+          (!("createdAt" in request.resource.data) || request.resource.data.createdAt is string) &&
+          (!("guestbookPolicy" in request.resource.data) ||
+            request.resource.data.guestbookPolicy in ['nobody', 'following', 'mutuals', 'followers', 'everyone']);
+      }
+
       allow get: if request.auth != null;
-      allow list: if false;
-      allow create, update: if request.auth != null &&
+
+      // The people directory. This is the only listable collection carrying
+      // usernames, and opening it makes bio/occupation/location enumerable by
+      // any signed-in member — the accepted price of prefix search without a
+      // paid index. The limit bounds one request's cost; it does not stop a
+      // client paging the whole directory, and is not meant to.
+      allow list: if request.auth != null && request.query.limit <= 30;
+
+      allow create: if request.auth != null &&
         request.auth.uid == userId &&
-        request.resource.data.keys().hasOnly(["username", "photoURL", "updatedAt", "bio", "occupation", "location", "createdAt"]) &&
-        request.resource.data.keys().hasAll(["username", "updatedAt"]) &&
-        request.resource.data.username is string &&
-        request.resource.data.updatedAt is string &&
-        (!("photoURL" in request.resource.data) || request.resource.data.photoURL is string) &&
-        (!("bio" in request.resource.data) || request.resource.data.bio is string) &&
-        (!("occupation" in request.resource.data) || request.resource.data.occupation is string) &&
-        (!("location" in request.resource.data) || request.resource.data.location is string) &&
-        (!("createdAt" in request.resource.data) || request.resource.data.createdAt is string);
+        request.resource.data.keys().hasOnly(ownerWritableKeys()) &&
+        request.resource.data.keys().hasAll(["username", "usernameLower", "updatedAt"]) &&
+        validProfile();
+
+      // affectedKeys(), not keys(): every write here is a merge, so keys()
+      // describes the whole resulting document. Any field the client does not
+      // own — the stray displayName an old backfill wrote — would otherwise
+      // lock the owner out of their own profile permanently.
+      allow update: if request.auth != null &&
+        request.auth.uid == userId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(ownerWritableKeys()) &&
+        validProfile();
+
       allow delete: if false;
     }
 
@@ -556,12 +581,99 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
-      // create now requires userId == auth.uid — prevents posting into other users' subcollections.
-      match /posts/{postId} {
+      // A public wall on a private parent. `allow read` here is independent of
+      // users/{userId} above, which stays owner-only — subcollection rules do
+      // not inherit. Anyone may page through anyone's guestbook.
+      match /guestbook/{entryId} {
         allow read: if true;
-        allow create: if request.auth != null && userId == request.auth.uid;
-        allow update: if request.auth != null && resource.data.authorId == request.auth.uid;
-        allow delete: if request.auth != null && resource.data.authorId == request.auth.uid;
+
+        // Whoever the owner's policy admits may sign, but only as themselves,
+        // and only with counters starting at zero.
+        allow create: if request.auth != null
+          && mayPostOnWall(userId)
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.ownerId == userId
+          && request.resource.data.content is string
+          && request.resource.data.content.size() > 0
+          && request.resource.data.content.size() <= 10000
+          && request.resource.data.upvoteCount == 0
+          && request.resource.data.downvoteCount == 0
+          && request.resource.data.commentCount == 0;
+
+        allow update: if request.auth != null && (
+          // Author edits their own text. ownerId/authorId/createdAt are
+          // immutable because they are absent from the allowed key set.
+          (resource.data.authorId == request.auth.uid &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['content', 'updatedAt'])) ||
+          // Reply counter. Rises one at a time, but may fall by more than one:
+          // deleting a reply takes its whole nested subtree with it.
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentCount']) &&
+           request.resource.data.commentCount >= 0 &&
+           request.resource.data.commentCount <= resource.data.commentCount + 1) ||
+          voteCountersBounded()
+        );
+
+        // The entry's author anywhere, or the owner of this guestbook. The
+        // owner branch is what replaces a report flow: you can always clear
+        // your own page.
+        allow delete: if request.auth != null &&
+          (resource.data.authorId == request.auth.uid || request.auth.uid == userId);
+
+        match /votes/{voterId} {
+          allow read: if true;
+          allow create, update: if request.auth != null
+            && voterId == request.auth.uid
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.voteType in ['up', 'down'];
+          allow delete: if request.auth != null && (
+            voterId == request.auth.uid ||
+            request.auth.uid == userId ||
+            isEntryAuthor(userId, entryId)
+          );
+        }
+
+        match /replies/{replyId} {
+          allow read: if true;
+
+          // Same gate as the entry: a closed wall must not stay talkable in its
+          // threads. The commentCount bump on the parent needs no gate of its
+          // own — this create fails first, since addReply() writes the reply
+          // before incrementing.
+          allow create: if request.auth != null
+            && mayPostOnWall(userId)
+            && request.resource.data.authorId == request.auth.uid
+            && request.resource.data.content is string
+            && request.resource.data.content.size() > 0
+            && request.resource.data.content.size() <= 10000
+            && request.resource.data.upvoteCount == 0
+            && request.resource.data.downvoteCount == 0;
+
+          allow update: if request.auth != null && (
+            (resource.data.authorId == request.auth.uid &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['content', 'updatedAt'])) ||
+            voteCountersBounded()
+          );
+
+          // Reply author, guestbook owner, or the entry's author.
+          allow delete: if request.auth != null && (
+            resource.data.authorId == request.auth.uid ||
+            request.auth.uid == userId ||
+            isEntryAuthor(userId, entryId)
+          );
+
+          match /votes/{voterId} {
+            allow read: if true;
+            allow create, update: if request.auth != null
+              && voterId == request.auth.uid
+              && request.resource.data.userId == request.auth.uid
+              && request.resource.data.voteType in ['up', 'down'];
+            allow delete: if request.auth != null && (
+              voterId == request.auth.uid ||
+              request.auth.uid == userId ||
+              isEntryAuthor(userId, entryId)
+            );
+          }
+        }
       }
     }
 

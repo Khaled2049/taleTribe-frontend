@@ -17,6 +17,7 @@
     "src/lib/competitionListing.ts",
     "src/lib/competitionDraft.ts",
     "src/lib/pagination.ts",
+    "src/lib/guestbookPolicy.ts",
     "src/types/ICompetition.ts",
     // Settlement arithmetic is NOT duplicated into src/lib the way money.ts and
     // competitionPhase.ts are — a divergence would change who gets paid — so the

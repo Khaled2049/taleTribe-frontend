@@ -16,7 +16,7 @@ Disallow: /forgot-password
 Allow: /
 Allow: /stories
 Allow: /story/
-Allow: /explore
+Allow: /competitions
 Allow: /book-clubs
 Allow: /book-clubs/
 Allow: /library

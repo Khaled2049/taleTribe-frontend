@@ -425,8 +425,9 @@ const AllStories: React.FC = () => {
             )}
           </div>
 
-          {/* Right: genre sidebar — desktop only */}
-          <aside className="hidden lg:block w-40 shrink-0">
+          {/* Right: genre sidebar — desktop only. The offset drops it clear of
+              the page heading in the column beside it, which starts lower. */}
+          <aside className="hidden lg:block w-40 shrink-0 mt-12">
             <div className="flex items-center h-9 mb-3 border-b border-ns-border">
               <span className="font-ui text-[11px] tracking-[1.5px] uppercase text-ns-ink-muted">
                 Genres

@@ -1,20 +1,20 @@
 import React, { useState } from "react";
-import { IClub } from "@/types/IClub";
 
-interface PostCreationFormProps {
-  onSubmit: (content: string, bookClubId?: string) => Promise<void>;
-  bookClubs?: IClub[];
+interface SignGuestbookFormProps {
+  onSubmit: (content: string) => Promise<void>;
   isLoading?: boolean;
+  isOwnGuestbook?: boolean;
 }
 
-const PostCreationForm: React.FC<PostCreationFormProps> = ({
+const SignGuestbookForm: React.FC<SignGuestbookFormProps> = ({
   onSubmit,
   isLoading = false,
+  isOwnGuestbook = false,
 }) => {
   const [content, setContent] = useState("");
   const maxCharacters = 280;
 
-  const submitPost = async () => {
+  const submitEntry = async () => {
     if (!content.trim() || isLoading) return;
     try {
       await onSubmit(content.trim());
@@ -27,13 +27,13 @@ const PostCreationForm: React.FC<PostCreationFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    await submitPost();
+    await submitEntry();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      submitPost();
+      submitEntry();
     }
   };
 
@@ -50,10 +50,13 @@ const PostCreationForm: React.FC<PostCreationFormProps> = ({
         value={content}
         onChange={(e) => setContent(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="What are you reading?"
+        placeholder={
+          isOwnGuestbook ? "Leave a note on your own page…" : "Sign the guestbook…"
+        }
         rows={2}
         maxLength={maxCharacters}
         disabled={isLoading}
+        aria-label="Guestbook entry"
         className="
           w-full resize-none bg-transparent border-0 outline-none
           font-body text-ns-ink placeholder:text-ns-ink-muted
@@ -87,11 +90,11 @@ const PostCreationForm: React.FC<PostCreationFormProps> = ({
             disabled:opacity-40 disabled:cursor-not-allowed
           "
         >
-          {isLoading ? "Posting…" : "Post"}
+          {isLoading ? "Signing…" : "Sign"}
         </button>
       </div>
     </form>
   );
 };
 
-export default PostCreationForm;
+export default SignGuestbookForm;

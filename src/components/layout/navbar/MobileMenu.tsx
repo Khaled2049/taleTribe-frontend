@@ -5,11 +5,13 @@ import { useState } from "react";
 import {
   Shield,
   HelpCircle,
+  BookMarked,
   BookOpen,
   LogOut,
   X,
   Loader2,
   Compass,
+  Trophy,
   Users,
   ChevronRight,
   Moon,
@@ -24,10 +26,19 @@ interface MobileMenuProps {
   onClose: () => void;
 }
 
-const discoverItems = [
-  { to: "/explore", label: "Explore", icon: Compass },
+/**
+ * Mirrors NavLinks.tsx — this is the mobile half of that nav. The guestbook
+ * link needs a uid and so only exists for a signed-in viewer, exactly as on
+ * desktop; this menu also renders for signed-out visitors.
+ */
+const buildDiscoverItems = (uid?: string) => [
+  { to: "/stories", label: "Stories", icon: Compass },
+  { to: "/competitions", label: "Competitions", icon: Trophy },
   { to: "/book-clubs", label: "Book Clubs", icon: Users },
-] as const;
+  ...(uid
+    ? [{ to: `/guestbook/${uid}`, label: "Guestbook", icon: BookMarked }]
+    : []),
+];
 
 const accountItems = [
   { icon: Shield, label: "Privacy Policy", to: "/privacy-policy" },
@@ -159,7 +170,7 @@ const MobileMenu = ({ isOpen, onClose }: MobileMenuProps) => {
                 <nav aria-label="Discover" className="mb-4">
                   <SectionLabel>Discover</SectionLabel>
                   <div className="space-y-0.5">
-                    {discoverItems.map((item) => {
+                    {buildDiscoverItems(user.uid).map((item) => {
                       const Icon = item.icon;
                       const isActive = pathname.startsWith(item.to);
                       return (
@@ -226,7 +237,7 @@ const MobileMenu = ({ isOpen, onClose }: MobileMenuProps) => {
                 <nav aria-label="Discover">
                   <SectionLabel>Discover</SectionLabel>
                   <div className="space-y-0.5">
-                    {discoverItems.map((item) => {
+                    {buildDiscoverItems().map((item) => {
                       const Icon = item.icon;
                       const isActive = pathname.startsWith(item.to);
                       return (

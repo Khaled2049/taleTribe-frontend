@@ -4,14 +4,10 @@ import { firestore } from "@/config/firebase";
 import {
   arrayRemove,
   arrayUnion,
-  collection,
   doc,
   getDoc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { IUser } from "@/types/IUser";
 import { publicProfileService } from "@/services/PublicProfileService";
@@ -34,19 +30,30 @@ export interface AuthStore {
   user: IUser | null;
   loading: boolean;
   hydrateUser: (firebaseUser: FirebaseUser | null) => Promise<void>;
-  fetchUsersOrderedByLastLogin: (userLimit: number) => Promise<IUser[]>;
   followUser: (uid: string) => Promise<void>;
   unfollowUser: (uid: string) => Promise<void>;
   updateBio: (bio: string) => Promise<void>;
   updateProfile: (data: ProfileUpdateData) => Promise<void>;
 }
 
+/**
+ * Older accounts seeded `followers`/`following` with the literal string
+ * "default". It matches no uid, so it is harmless to the wall-policy checks, but
+ * it inflates any length and renders as a ghost row. A user cannot strip it from
+ * their own `followers` — the rules forbid self-writes to that field — so it is
+ * filtered on read here and cleared by `backfill-follow-graph.js`.
+ */
+const realUids = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((id): id is string => typeof id === "string" && id !== "default")
+    : [];
+
 const getFallbackUser = (firebaseUser: FirebaseUser): IUser => ({
   ...firebaseUser,
   createdAt: new Date().toISOString(),
   username: firebaseUser.displayName || "",
-  followers: ["default"],
-  following: ["default"],
+  followers: [],
+  following: [],
   stories: [],
   likedPosts: [],
   savedPosts: [],
@@ -88,9 +95,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
             typeof userData.lastName === "string"
               ? userData.lastName
               : undefined,
-          followers: userData.followers,
-          following: userData.following,
-          stories: userData.posts,
+          followers: realUids(userData.followers),
+          following: realUids(userData.following),
+          stories: userData.stories ?? [],
           likedPosts: userData.likedPosts,
           savedPosts: userData.savedPosts,
           lastLogin: userData.lastLogin,
@@ -166,53 +173,33 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       throw error;
     }
   },
-  fetchUsersOrderedByLastLogin: async (userLimit) => {
-    try {
-      const usersCollection = collection(firestore, "users");
-      const usersQuery = query(
-        usersCollection,
-        orderBy("lastLogin", "desc"),
-        limit(userLimit),
-      );
-      const usersSnapshot = await getDocs(usersQuery);
-
-      return usersSnapshot.docs.map((snapshot) => {
-        const data = snapshot.data();
-        return {
-          ...data,
-          uid: snapshot.id,
-        } as IUser;
-      });
-    } catch (error) {
-      console.error("Error fetching users ordered by last login:", error);
-      throw new Error("Failed to fetch users");
-    }
-  },
   followUser: async (uid) => {
     const currentUser = get().user;
     if (!currentUser) {
       throw new Error("User not authenticated");
     }
+    // The rules reject a follow that is already recorded (`!followers.hasAny`),
+    // so a redundant call is a guaranteed failure, not a no-op.
+    if ((currentUser.following ?? []).includes(uid)) return;
 
     try {
-      const targetUserRef = doc(firestore, "users", uid);
-      await updateDoc(targetUserRef, {
+      // One batch, not two writes: the two arrays are read by different
+      // consumers — the rules check the target's `followers`, the UI checks the
+      // viewer's `following` — so a half-applied follow makes them disagree.
+      // Rules evaluate each document in a batch independently, so the existing
+      // follower and self-update branches still apply.
+      const batch = writeBatch(firestore);
+      batch.update(doc(firestore, "users", uid), {
         followers: arrayUnion(currentUser.uid),
       });
-
-      await updateDoc(doc(firestore, "users", currentUser.uid), {
+      batch.update(doc(firestore, "users", currentUser.uid), {
         following: arrayUnion(uid),
       });
+      await batch.commit();
 
       set((state) => ({
         user: state.user
-          ? {
-              ...state.user,
-              // Mirror arrayUnion: only append if not already present
-              following: state.user.following?.includes(uid)
-                ? state.user.following
-                : [...(state.user.following ?? []), uid],
-            }
+          ? { ...state.user, following: [...(state.user.following ?? []), uid] }
           : null,
       }));
     } catch (error) {
@@ -225,16 +212,17 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (!currentUser) {
       throw new Error("User not authenticated");
     }
+    if (!(currentUser.following ?? []).includes(uid)) return;
 
     try {
-      const targetUserRef = doc(firestore, "users", uid);
-      await updateDoc(targetUserRef, {
+      const batch = writeBatch(firestore);
+      batch.update(doc(firestore, "users", uid), {
         followers: arrayRemove(currentUser.uid),
       });
-
-      await updateDoc(doc(firestore, "users", currentUser.uid), {
+      batch.update(doc(firestore, "users", currentUser.uid), {
         following: arrayRemove(uid),
       });
+      await batch.commit();
 
       set((state) => ({
         user: state.user

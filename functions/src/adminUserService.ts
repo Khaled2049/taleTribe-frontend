@@ -160,6 +160,9 @@ export const createUserByAdmin = onRequest(
           transaction.create(userRef, userDoc);
           transaction.set(publicProfileRef, {
             username,
+            // The other writer is PublicProfileService.upsertPublicProfile.
+            // KEEP IN SYNC: rules require usernameLower == username.lower().
+            usernameLower: username.trim().toLowerCase(),
             bio: userDoc.bio,
             occupation: userDoc.occupation,
             location: userDoc.location,

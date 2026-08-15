@@ -342,7 +342,7 @@ const UserStories = () => {
                     Stories you start reading will show up here.
                   </p>
                   <button
-                    onClick={() => navigate("/explore/stories")}
+                    onClick={() => navigate("/stories")}
                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-ns-accent hover:bg-ns-accent-hover text-white text-sm font-ui font-medium rounded-ns transition-colors"
                   >
                     <BookOpen className="w-4 h-4" />

@@ -1,8 +1,5 @@
 import {
   collection,
-  query,
-  where,
-  getDocs,
   Timestamp,
   doc,
   getDoc,
@@ -14,7 +11,6 @@ import { firestore } from "@/config/firebase";
 import { RATE_LIMITS } from "@/config/rateLimits";
 
 class RateLimitService {
-  private postsCollection = collection(firestore, "posts");
   private userActivityCollection = collection(firestore, "userActivity");
 
   /**
@@ -26,25 +22,6 @@ class RateLimitService {
     const month = String(now.getUTCMonth() + 1).padStart(2, "0");
     const day = String(now.getUTCDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
-  }
-
-  /**
-   * Get the start of today in UTC
-   */
-  private getTodayStart(): Date {
-    const now = new Date();
-    const todayStart = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate(),
-        0,
-        0,
-        0,
-        0,
-      ),
-    );
-    return todayStart;
   }
 
   /**
@@ -75,33 +52,9 @@ class RateLimitService {
       const activityDocRef = this.getUserActivityDocRef(userId, dateString);
       const activityDoc = await getDoc(activityDocRef);
 
-      if (activityDoc.exists()) {
-        return activityDoc.data().postCount || 0;
-      }
-
-      // Fallback: query posts if activity doc doesn't exist
-      const todayStart = this.getTodayStart();
-      const todayStartTimestamp = Timestamp.fromDate(todayStart);
-
-      const postsQuery = query(
-        this.postsCollection,
-        where("authorId", "==", userId),
-        where("createdAt", ">=", todayStartTimestamp),
-      );
-
-      const snapshot = await getDocs(postsQuery);
-      const count = snapshot.size;
-
-      // Update activity doc for future queries
-      await setDoc(activityDocRef, {
-        userId,
-        date: dateString,
-        postCount: count,
-        commentCount: 0,
-        lastUpdated: Timestamp.now(),
-      });
-
-      return count;
+      // No activity doc means no activity today. incrementPostCount() creates
+      // it on the user's first action, so the counter is accurate from then on.
+      return activityDoc.exists() ? activityDoc.data().postCount || 0 : 0;
     } catch (error) {
       console.error("Error getting today's post count:", error);
       // If there's an error, allow the action (fail open)
@@ -118,55 +71,7 @@ class RateLimitService {
       const activityDocRef = this.getUserActivityDocRef(userId, dateString);
       const activityDoc = await getDoc(activityDocRef);
 
-      if (activityDoc.exists()) {
-        return activityDoc.data().commentCount || 0;
-      }
-
-      // Fallback: query comments if activity doc doesn't exist
-      // This is less efficient but works as a fallback
-      const todayStart = this.getTodayStart();
-      const todayStartTimestamp = Timestamp.fromDate(todayStart);
-
-      // Query recent posts (last 7 days) to check for comments
-      const recentPostsQuery = query(
-        this.postsCollection,
-        where(
-          "createdAt",
-          ">=",
-          Timestamp.fromDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
-        ),
-      );
-
-      const postsSnapshot = await getDocs(recentPostsQuery);
-      let totalComments = 0;
-
-      for (const postDoc of postsSnapshot.docs) {
-        const commentsCollection = collection(
-          this.postsCollection,
-          postDoc.id,
-          "comments",
-        );
-
-        const commentsQuery = query(
-          commentsCollection,
-          where("authorId", "==", userId),
-          where("createdAt", ">=", todayStartTimestamp),
-        );
-
-        const commentsSnapshot = await getDocs(commentsQuery);
-        totalComments += commentsSnapshot.size;
-      }
-
-      // Update activity doc for future queries
-      await setDoc(activityDocRef, {
-        userId,
-        date: dateString,
-        postCount: 0,
-        commentCount: totalComments,
-        lastUpdated: Timestamp.now(),
-      });
-
-      return totalComments;
+      return activityDoc.exists() ? activityDoc.data().commentCount || 0 : 0;
     } catch (error) {
       console.error("Error getting today's comment count:", error);
       // If there's an error, allow the action (fail open)

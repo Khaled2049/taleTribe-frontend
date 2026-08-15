@@ -13,31 +13,7 @@
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://thetaletribe.web.app/explore</loc>
-    <lastmod>2026-04-03</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://thetaletribe.web.app/explore/stories</loc>
-    <lastmod>2026-04-03</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://thetaletribe.web.app/explore/book-lists</loc>
-    <lastmod>2026-04-03</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://thetaletribe.web.app/explore/competitions</loc>
-    <lastmod>2026-04-03</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://thetaletribe.web.app/explore/announcements</loc>
+    <loc>https://thetaletribe.web.app/competitions</loc>
     <lastmod>2026-04-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>

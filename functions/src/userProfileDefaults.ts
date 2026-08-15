@@ -13,7 +13,6 @@ export interface UserProfileDocument {
   followers: string[];
   following: string[];
   stories: string[];
-  posts: string[];
   likedPosts: string[];
   savedPosts: string[];
   lastLogin: string;
@@ -37,10 +36,9 @@ export function buildUserProfileDefaults(
     username: input.username,
     email: input.email,
     createdAt: nowIso,
-    followers: ["default"],
-    following: ["default"],
+    followers: [],
+    following: [],
     stories: [],
-    posts: [],
     likedPosts: [],
     savedPosts: [],
     lastLogin: nowIso,

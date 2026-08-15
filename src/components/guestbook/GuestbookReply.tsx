@@ -7,63 +7,75 @@ import {
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
-import { IPostComment } from "@/types/IPostComment";
+import { IGuestbookReply } from "@/types/IGuestbookReply";
 import { IUser } from "@/types/IUser";
-import VoteButtons from "@/components/community/VoteButtons";
-import { voteService } from "@/services/VoteService";
+import VoteButtons from "./VoteButtons";
+import { guestbookVoteService } from "@/services/GuestbookVoteService";
+import { rateLimitMessage } from "@/services/rateLimitError";
 import { useAuthorUsername } from "@/hooks/queries/useUserQueries";
+import { useGuestbookPolicy } from "./guestbookPolicyContext";
+import { formatRelativeTime } from "@/lib/relativeTime";
 
-interface PostCommentProps {
-  comment: IPostComment;
-  allComments: IPostComment[];
+interface GuestbookReplyProps {
+  ownerId: string;
+  reply: IGuestbookReply;
+  allReplies: IGuestbookReply[];
   currentUser: IUser | null;
   onReply: (parentId: string, content: string) => Promise<void>;
-  onDelete: (commentId: string) => Promise<void>;
-  onEdit: (commentId: string, content: string) => Promise<void>;
+  onDelete: (replyId: string) => Promise<void>;
+  onEdit: (replyId: string, content: string) => Promise<void>;
   depth: number;
 }
 
 const MAX_DEPTH = 3;
 
-export const PostComment: React.FC<PostCommentProps> = React.memo(
-  ({ comment, allComments, currentUser, onReply, onDelete, onEdit, depth }) => {
+export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
+  ({
+    ownerId,
+    reply,
+    allReplies,
+    currentUser,
+    onReply,
+    onDelete,
+    onEdit,
+    depth,
+  }) => {
     const [isEditing, setIsEditing] = useState(false);
-    const [editedContent, setEditedContent] = useState(comment.content);
+    const [editedContent, setEditedContent] = useState(reply.content);
     const [isReplying, setIsReplying] = useState(false);
+    const { canPost } = useGuestbookPolicy();
     const [replyContent, setReplyContent] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [upvoteCount, setUpvoteCount] = useState(comment.upvoteCount || 0);
-    const [downvoteCount, setDownvoteCount] = useState(
-      comment.downvoteCount || 0,
-    );
+    const [upvoteCount, setUpvoteCount] = useState(reply.upvoteCount || 0);
+    const [downvoteCount, setDownvoteCount] = useState(reply.downvoteCount || 0);
     const [userVote, setUserVote] = useState<"up" | "down" | null>(
-      comment.userVote || null,
+      reply.userVote || null,
     );
     const [isVoting, setIsVoting] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
 
-    const replies = useMemo(
-      () => allComments.filter((c) => c.parentId === comment.id),
-      [allComments, comment.id],
+    const children = useMemo(
+      () => allReplies.filter((r) => r.parentId === reply.id),
+      [allReplies, reply.id],
     );
 
     // Live-resolve the author's current username (falls back to the stored copy
     // while the profile loads) so username changes show up here too.
     const authorUsername = useAuthorUsername(
-      comment.authorId,
-      comment.authorUsername,
+      reply.authorId,
+      reply.authorUsername,
     );
 
     const handleEdit = async () => {
       if (editedContent.trim() === "") return;
       setIsLoading(true);
       try {
-        await onEdit(comment.id, editedContent.trim());
+        await onEdit(reply.id, editedContent.trim());
         setIsEditing(false);
         setError(null);
       } catch {
-        setError("Failed to update comment");
+        setError("Failed to update reply");
       } finally {
         setIsLoading(false);
       }
@@ -73,22 +85,12 @@ export const PostComment: React.FC<PostCommentProps> = React.memo(
       if (replyContent.trim() === "") return;
       setIsLoading(true);
       try {
-        await onReply(comment.id, replyContent.trim());
+        await onReply(reply.id, replyContent.trim());
         setReplyContent("");
         setIsReplying(false);
         setError(null);
-      } catch (err: any) {
-        if (
-          err?.code === "RATE_LIMIT_EXCEEDED" ||
-          err?.message?.includes("daily limit")
-        ) {
-          setError(
-            err.message ||
-              "You have reached the daily comment limit. Please try again tomorrow.",
-          );
-        } else {
-          setError("Failed to post reply");
-        }
+      } catch (err) {
+        setError(rateLimitMessage(err, "Failed to post reply"));
       } finally {
         setIsLoading(false);
       }
@@ -115,14 +117,15 @@ export const PostComment: React.FC<PostCommentProps> = React.memo(
       setIsVoting(true);
 
       try {
-        await voteService.voteComment(
-          comment.postId,
-          comment.id,
+        await guestbookVoteService.voteReply(
+          ownerId,
+          reply.entryId,
+          reply.id,
           currentUser.uid,
           voteType,
         );
       } catch (error) {
-        console.error("Error voting on comment:", error);
+        console.error("Error voting on reply:", error);
         setUpvoteCount(previousUpvotes);
         setDownvoteCount(previousDownvotes);
         setUserVote(previousVote);
@@ -131,35 +134,12 @@ export const PostComment: React.FC<PostCommentProps> = React.memo(
       }
     };
 
-    const formatDate = (date: Date | any) => {
-      if (!date) return "Just now";
-      const d = date instanceof Date ? date : date.toDate();
-      const now = new Date();
-      const diffMs = now.getTime() - d.getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffDays = Math.floor(diffMs / 86400000);
-
-      if (diffMins < 1) return "Just now";
-      if (diffMins < 60) return `${diffMins}m`;
-      if (diffHours < 24) return `${diffHours}h`;
-      if (diffDays < 7) return `${diffDays}d`;
-      return d.toLocaleDateString();
-    };
-
-    const hasReplies = replies.length > 0;
+    const hasChildren = children.length > 0;
 
     return (
-      <div
-        className={
-          depth > 0
-            ? "mt-1.5 pl-3 border-l border-ns-border"
-            : "mt-1.5"
-        }
-      >
+      <div className={depth > 0 ? "mt-1.5 pl-3 border-l border-ns-border" : "mt-1.5"}>
         <div className="flex items-start gap-1.5">
-          {/* Collapse toggle */}
-          {hasReplies ? (
+          {hasChildren ? (
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="mt-1 text-ns-ink-muted hover:text-ns-ink transition-colors flex-shrink-0"
@@ -183,21 +163,19 @@ export const PostComment: React.FC<PostCommentProps> = React.memo(
                 </p>
               )}
 
-              {/* Comment Header */}
               <div className="flex items-center gap-2 mb-1">
                 <Link
-                  to={`/profile/${comment.authorId}`}
+                  to={`/profile/${reply.authorId}`}
                   onClick={(e) => e.stopPropagation()}
                   className="font-ui font-semibold text-ns-ink text-xs no-underline hover:text-ns-accent hover:underline transition-colors"
                 >
                   @{authorUsername}
                 </Link>
                 <span className="font-ui text-[10px] text-ns-ink-muted">
-                  {formatDate(comment.createdAt)}
+                  {formatRelativeTime(reply.createdAt)}
                 </span>
               </div>
 
-              {/* Content */}
               {!isCollapsed && (
                 <>
                   {isEditing ? (
@@ -234,11 +212,10 @@ export const PostComment: React.FC<PostCommentProps> = React.memo(
                     </div>
                   ) : (
                     <p className="font-body text-xs text-ns-ink leading-relaxed whitespace-pre-wrap break-words">
-                      {comment.content}
+                      {reply.content}
                     </p>
                   )}
 
-                  {/* Actions */}
                   <div className="flex items-center gap-3 mt-2">
                     <VoteButtons
                       upvoteCount={upvoteCount}
@@ -249,7 +226,7 @@ export const PostComment: React.FC<PostCommentProps> = React.memo(
                       disabled={!currentUser}
                       size="sm"
                     />
-                    {depth < MAX_DEPTH && (
+                    {depth < MAX_DEPTH && currentUser && canPost && (
                       <button
                         onClick={() => setIsReplying(!isReplying)}
                         disabled={isLoading}
@@ -259,7 +236,7 @@ export const PostComment: React.FC<PostCommentProps> = React.memo(
                         Reply
                       </button>
                     )}
-                    {currentUser?.uid === comment.authorId && (
+                    {currentUser?.uid === reply.authorId && (
                       <>
                         <button
                           onClick={() => setIsEditing(true)}
@@ -270,7 +247,7 @@ export const PostComment: React.FC<PostCommentProps> = React.memo(
                           Edit
                         </button>
                         <button
-                          onClick={() => onDelete(comment.id)}
+                          onClick={() => onDelete(reply.id)}
                           disabled={isLoading}
                           className="flex items-center gap-1 font-ui text-[10px] text-ns-ink-muted hover:text-ns-destructive transition-colors"
                         >
@@ -281,7 +258,6 @@ export const PostComment: React.FC<PostCommentProps> = React.memo(
                     )}
                   </div>
 
-                  {/* Reply Form */}
                   {isReplying && (
                     <div className="mt-2 space-y-1.5">
                       <textarea
@@ -326,37 +302,36 @@ export const PostComment: React.FC<PostCommentProps> = React.memo(
                 </>
               )}
 
-              {/* Collapsed preview */}
               {isCollapsed && (
                 <div className="flex items-center gap-1.5 font-ui text-xs text-ns-ink-muted">
                   <Link
-                    to={`/profile/${comment.authorId}`}
+                    to={`/profile/${reply.authorId}`}
                     onClick={(e) => e.stopPropagation()}
                     className="text-ns-ink font-medium no-underline hover:text-ns-accent hover:underline transition-colors"
                   >
                     @{authorUsername}
                   </Link>
                   <span className="text-[10px]">
-                    {formatDate(comment.createdAt)}
+                    {formatRelativeTime(reply.createdAt)}
                   </span>
-                  {hasReplies && (
+                  {hasChildren && (
                     <span className="text-[10px]">
-                      · {replies.length}{" "}
-                      {replies.length === 1 ? "reply" : "replies"}
+                      · {children.length}{" "}
+                      {children.length === 1 ? "reply" : "replies"}
                     </span>
                   )}
                 </div>
               )}
             </div>
 
-            {/* Nested Replies */}
-            {hasReplies && !isCollapsed && (
+            {hasChildren && !isCollapsed && (
               <div className="mt-1">
-                {replies.map((reply) => (
-                  <PostComment
-                    key={reply.id}
-                    comment={reply}
-                    allComments={allComments}
+                {children.map((child) => (
+                  <GuestbookReply
+                    key={child.id}
+                    ownerId={ownerId}
+                    reply={child}
+                    allReplies={allReplies}
                     currentUser={currentUser}
                     onReply={onReply}
                     onDelete={onDelete}
@@ -373,4 +348,4 @@ export const PostComment: React.FC<PostCommentProps> = React.memo(
   },
 );
 
-PostComment.displayName = "PostComment";
+GuestbookReply.displayName = "GuestbookReply";
