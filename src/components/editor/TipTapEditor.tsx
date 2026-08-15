@@ -40,7 +40,6 @@ import { Extension } from "@tiptap/core";
 import Suggestion from "@tiptap/suggestion";
 import { slashCommandSuggestion } from "./SlashCommandExtension";
 import { SuggestionMenu } from "./SuggestionMenu";
-import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import {
   ImageIcon,
   Loader,
@@ -89,7 +88,6 @@ interface TipTapEditorProps {
   userId?: string;
   onEditorReady?: (editor: Editor | null) => void;
   onOpenCoWrite?: () => void;
-  onChapterGenerated?: (chapterId: string, content: string) => void;
 }
 
 export const TipTapEditor: React.FC<TipTapEditorProps> = ({
@@ -102,7 +100,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   userId,
   onEditorReady,
   onOpenCoWrite,
-  onChapterGenerated,
 }) => {
   const { requireAuth } = useDemoMode();
   // Keep a ref so plugins always read the current ids without stale closure
@@ -130,8 +127,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
 
   pasteErrorRef.current = showError;
 
-  // Confirm dialog shown before generating into a chapter that already has prose
-  const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
 
   // ── Feature hooks ──────────────────────────────────────────────────────────
 
@@ -141,36 +136,9 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     showSuggestionMenu,
     setShowSuggestionMenu,
     isGenerating,
-    generationProgress,
     fetchNextLineSuggestions,
-    generateChapter,
   } = useAiSuggestions({ storyId, chapterId });
 
-  // Run generation, then hand the result to the parent for cache/editor sync.
-  // We deliberately do NOT write to the editor or trigger a save here: the
-  // worker already persisted the content to Firestore, and the parent refreshes
-  // the in-memory cache (by chapter id) so a re-save can't clobber the wrong
-  // chapter or throw on the word limit.
-  const runGenerateChapter = useCallback(async () => {
-    const result = await generateChapter();
-    if (!result) return;
-    // The parent (handleChapterGenerated) cancels any pending autosave of the
-    // pre-generation text — which the user accepted overwriting via the dialog —
-    // before applying the generated content.
-    onChapterGenerated?.(result.chapterId, result.content);
-  }, [generateChapter, onChapterGenerated]);
-
-  // Confirm before overwriting a chapter that already has prose; empty chapters
-  // generate straight away.
-  const requestGenerateChapter = useCallback(async () => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    if (editor.getText().trim()) {
-      setGenerateConfirmOpen(true);
-      return;
-    }
-    await runGenerateChapter();
-  }, [runGenerateChapter]);
 
   const { isEnhancing, handleTextEnhancement } = useTextEnhancement({
     editor: editorRef.current,
@@ -280,9 +248,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 if (requireAuth())
                   await fetchNextLineSuggestions(editorInstance);
               },
-              async () => {
-                if (requireAuth()) await requestGenerateChapter();
-              },
               () => {
                 if (requireAuth()) openImagePrompt();
               },
@@ -296,7 +261,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     });
   }, [
     fetchNextLineSuggestions,
-    requestGenerateChapter,
     openImagePrompt,
     onOpenCoWrite,
     requireAuth,
@@ -462,21 +426,20 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         </div>
       </div>
 
-      {/* Loading indicator for generation */}
+      {/* Loading indicator for next-line suggestions */}
       {isGenerating && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-ns-elevated border border-ns-border rounded-lg p-6 shadow-xl transition-colors w-72">
             <div className="flex items-center gap-3">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ns-accent"></div>
               <span className="text-ns-ink">
-                Generating
-                {generationProgress > 0 ? ` ${generationProgress}%` : "…"}
+                Generating…
               </span>
             </div>
             <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-ns-surface">
               <div
                 className="h-full rounded-full bg-ns-accent transition-all duration-500 ease-out"
-                style={{ width: `${Math.max(generationProgress, 5)}%` }}
+                style={{ width: "35%" }}
               />
             </div>
           </div>
@@ -501,20 +464,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           <p className="text-sm">{editorError}</p>
         </div>
       )}
-
-      {/* Confirm overwrite before generating into a non-empty chapter */}
-      <ConfirmDialog
-        open={generateConfirmOpen}
-        onOpenChange={setGenerateConfirmOpen}
-        title="Replace chapter content?"
-        description="This chapter already has text. Generating a chapter will replace its current content. This can't be undone."
-        confirmLabel="Generate"
-        cancelLabel="Cancel"
-        variant="danger"
-        onConfirm={() => {
-          void runGenerateChapter();
-        }}
-      />
 
       {/* Image Generation Modal */}
       {imagePromptOpen && (

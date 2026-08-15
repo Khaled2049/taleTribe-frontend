@@ -31,11 +31,10 @@ import {
   X,
 } from "lucide-react";
 
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useAuthContext } from "../../contexts/AuthContext";
 import { useDemoMode } from "@/contexts/DemoModeContext";
-import { storiesRepo } from "../../services/StoriesRepo";
-import { summarizeChapter as summarizeChapterApi } from "@/api/ai";
+import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
 import { Chapter, Story } from "@/types/IStory";
 
 // Import components
@@ -53,12 +52,10 @@ import { useEditorState } from "@/hooks/useEditorState";
 import { useAutosave } from "@/hooks/useAutosave";
 import { SaveStatusIndicator } from "@/components/editor/SaveStatusIndicator";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
-import { FloatingChatButton } from "../chat/FloatingChatButton";
-import { useCoWrite } from "@/hooks/useCoWrite";
 import { InteractiveStoryPanel } from "@/components/editor/InteractiveStoryPanel";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import { useTogglePublishStory } from "@/hooks/queries/useStoryQueries";
 import { toast } from "sonner";
+import { summarizeChapter } from "@/api/ai";
 
 const DEMO_STORY: Story = {
   id: "demo",
@@ -84,7 +81,6 @@ const DEMO_CHAPTER: Chapter = {
 };
 
 export function SimpleEditor() {
-  const navigate = useNavigate();
   const { isDemo, requireAuth } = useDemoMode();
   const { storyId } = useParams<{ storyId: string }>();
   const [searchParams] = useSearchParams();
@@ -94,22 +90,15 @@ export function SimpleEditor() {
   // Use the new consolidated state hook
   const { state, actions } = useEditorState();
   const { isLgUp } = useBreakpoint();
-  const togglePublish = useTogglePublishStory(user?.uid);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   // Network status
   const { isOnline } = useNetworkStatus();
 
   // Editor instance for header
   const [editor, setEditor] = useState<Editor | null>(null);
-  const {
-    isInteractivePanelOpen,
-    setIsInteractivePanelOpen,
-    interactivePanelMode,
-    setInteractivePanelMode,
-    coWriteTurnCount,
-    setCoWriteTurnCount,
-    openCoWrite,
-  } = useCoWrite({ openInteractivePanelOnMount, editor });
+  const [coWriteOpen, setCoWriteOpen] = useState(openInteractivePanelOnMount);
+  const openCoWrite = () => setCoWriteOpen(true);
 
   // Dialog states
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -154,9 +143,9 @@ export function SimpleEditor() {
 
       // Save chapter
       if (state.currentChapter) {
-        await storiesRepo.updateChapter(
-          state.story.id,
-          state.currentChapter.id,
+        const savedChapter = await storyWorkspaceRepo.updateChapter(
+          state.story,
+          state.currentChapter,
           state.chapterTitle,
           content,
         );
@@ -165,21 +154,19 @@ export function SimpleEditor() {
         // MUST be included — otherwise the in-memory chapters cache keeps the
         // old text and switching back to this chapter shows stale content
         // (Firestore is correct, only the cache is stale).
-        const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
-        actions.updateChapterInList(state.currentChapter.id, {
-          title: state.chapterTitle,
-          content,
-          wordCount,
+      actions.updateChapterInList(state.currentChapter.id, {
+          ...savedChapter,
         });
       }
 
       // Only update story metadata if it changed (optimization)
       if (state.metadataChanged) {
-        await storiesRepo.updateStory(
-          state.story.id,
-          state.storyTitle,
-          state.storyDescription,
-        );
+        const savedStory = await storyWorkspaceRepo.updateStory({
+          ...state.story,
+          title: state.storyTitle,
+          description: state.storyDescription,
+        });
+        actions.replaceStory(savedStory);
         actions.clearMetadataChanged();
       }
     },
@@ -201,7 +188,6 @@ export function SimpleEditor() {
     flushSave,
     saveState,
     isDirty,
-    cancelPendingSave,
     resetSaveState,
   } = useAutosave({
     onSave: performSave,
@@ -215,9 +201,9 @@ export function SimpleEditor() {
       actions.setLoading(true);
       resetSaveState();
 
-      const story = await storiesRepo.getStory(loadStoryId);
+      const story = await storyWorkspaceRepo.getStory(loadStoryId);
       if (story) {
-        const storyChapters = await storiesRepo.getChapters(loadStoryId);
+        const storyChapters = await storyWorkspaceRepo.getChapters(story);
         const firstChapter = storyChapters.length > 0 ? storyChapters[0] : null;
         actions.loadStory(story, storyChapters, firstChapter, {
           leftSidebarOpen: isLgUp,
@@ -251,18 +237,13 @@ export function SimpleEditor() {
     }
 
     try {
-      const newChapterId = await storiesRepo.addChapter(
-        state.story.id,
+      const newChapter = await storyWorkspaceRepo.createChapter(
+        state.story,
         "New Chapter",
+        state.chapters.length,
       );
-      const newChapter = await storiesRepo.getChapter(
-        state.story.id,
-        newChapterId,
-      );
-      if (newChapter) {
-        actions.addChapter(newChapter);
-        resetSaveState();
-      }
+      actions.addChapter(newChapter);
+      resetSaveState();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to add chapter.",
@@ -275,26 +256,18 @@ export function SimpleEditor() {
     if (!requireAuth()) return;
     if (!state.story || !state.currentChapter) return;
 
-    // Save any pending edits first so the summary reflects the latest text
-    // (the endpoint reads chapter content from Firestore).
+    // Save any pending edits first so PostgreSQL has the latest chapter text.
     if (isDirty && state.currentChapter?.content) {
       await forceSave();
     }
 
     setIsSummarizing(true);
     try {
-      const { summary } = await summarizeChapterApi({
-        storyId: state.story.id,
-        chapterId: state.currentChapter.id,
-      });
-      setSummaryResult(summary);
+      const result = await summarizeChapter({ storyId: state.story.id, chapterId: state.currentChapter.id });
+      setSummaryResult(result.summary);
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to summarize chapter.",
-      );
-    } finally {
-      setIsSummarizing(false);
-    }
+      toast.error(error instanceof Error ? error.message : "Failed to summarize chapter.");
+    } finally { setIsSummarizing(false); }
   };
 
   // Copy the generated summary to the clipboard.
@@ -321,19 +294,20 @@ export function SimpleEditor() {
     const wasPublished = state.story.isPublished;
 
     try {
-      await togglePublish.mutateAsync(state.story.id);
-      actions.setStoryPublished(!wasPublished);
+      setIsPublishing(true);
+      const savedStory = await storyWorkspaceRepo.updateStory({ ...state.story, isPublished: !wasPublished });
+      actions.replaceStory(savedStory);
 
       if (!wasPublished) {
-        // Just published — take author to public reader page
-        toast.success("Story published! Your readers can now find it.");
-        navigate(`/story/${state.story.id}`);
+        toast.success("Story marked published. Public discovery will be available after its migration.");
       } else {
         // Just unpublished — stay in editor
         toast.success("Story unpublished.");
       }
     } catch {
       toast.error("Failed to update publish status. Please try again.");
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -395,17 +369,6 @@ export function SimpleEditor() {
     triggerSave(content);
   };
 
-  // Apply AI-generated chapter content. The worker already persisted it to
-  const handleChapterGenerated = (genChapterId: string, content: string) => {
-    cancelPendingSave();
-    const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
-    actions.updateChapterInList(genChapterId, { content, wordCount });
-    if (state.currentChapter?.id === genChapterId) {
-      actions.updateChapterContent(content);
-    }
-    resetSaveState();
-  };
-
   // Handle chapter delete request
   const handleChapterDeleteRequest = (chapterId: string) => {
     setChapterToDelete(chapterId);
@@ -417,7 +380,9 @@ export function SimpleEditor() {
     if (isDemo || !state.story || !chapterToDelete) return;
 
     try {
-      await storiesRepo.deleteChapter(state.story.id, chapterToDelete);
+      const chapter = state.chapters.find((item) => item.id === chapterToDelete);
+      if (!chapter) throw new Error("Chapter not found");
+      await storyWorkspaceRepo.deleteChapter(state.story, chapter);
       actions.deleteChapter(chapterToDelete);
       resetSaveState();
     } catch (error) {
@@ -971,7 +936,6 @@ export function SimpleEditor() {
                     userId={user?.uid}
                     onEditorReady={setEditor}
                     onOpenCoWrite={openCoWrite}
-                    onChapterGenerated={handleChapterGenerated}
                   />
                 </div>
               </div>
@@ -1004,23 +968,17 @@ export function SimpleEditor() {
             {/* ── Status Bar ── */}
             {state.currentChapter && (
               <div className="flex-shrink-0 border-t border-ns-border bg-ns-surface">
-                {isInteractivePanelOpen && editor && (
+                {coWriteOpen && editor && (
                   <div className="border-b border-ns-border bg-transparent px-3 py-3 sm:px-4 sm:py-4">
                     <div className="mx-auto w-full max-w-4xl">
                       <InteractiveStoryPanel
                         storyId={state.story?.id || ""}
                         chapterId={state.currentChapter?.id || ""}
-                        editor={editor}
-                        mode={interactivePanelMode}
-                        turnCount={coWriteTurnCount}
-                        onClose={() => {
-                          setIsInteractivePanelOpen(false);
-                          setCoWriteTurnCount(0);
-                        }}
-                        onChoiceInserted={() => {
-                          setInteractivePanelMode("continuation");
-                          setCoWriteTurnCount((n) => n + 1);
-                        }}
+                        editor={editor!}
+                        mode="continuation"
+                        onClose={() => setCoWriteOpen(false)}
+                        turnCount={0}
+                        onChoiceInserted={() => triggerSave(editor.getHTML())}
                       />
                     </div>
                   </div>
@@ -1090,7 +1048,7 @@ export function SimpleEditor() {
                   <div className="flex items-center justify-end flex-shrink-0">
                     <button
                       onClick={() => setPublishDialogOpen(true)}
-                      disabled={togglePublish.isPending || isDemo}
+                      disabled={isPublishing || isDemo}
                       title={
                         isDemo ? "Sign in to publish your story" : undefined
                       }
@@ -1100,7 +1058,7 @@ export function SimpleEditor() {
                           : "bg-ns-accent text-white hover:bg-ns-accent-hover"
                       }`}
                     >
-                      {togglePublish.isPending ? (
+                      {isPublishing ? (
                         <Loader className="w-3.5 h-3.5 animate-spin" />
                       ) : (
                         <Upload className="w-3.5 h-3.5" />
@@ -1167,7 +1125,7 @@ export function SimpleEditor() {
                     </button>
                     <button
                       onClick={() => setPublishDialogOpen(true)}
-                      disabled={togglePublish.isPending || isDemo}
+                      disabled={isPublishing || isDemo}
                       title={
                         isDemo ? "Sign in to publish your story" : undefined
                       }
@@ -1178,7 +1136,7 @@ export function SimpleEditor() {
                       }`}
                       aria-label={isPublished ? "Unpublish story" : "Publish story"}
                     >
-                      {togglePublish.isPending ? (
+                      {isPublishing ? (
                         <Loader className="w-3.5 h-3.5 animate-spin" />
                       ) : (
                         <Upload className="w-3.5 h-3.5" />
@@ -1262,7 +1220,7 @@ export function SimpleEditor() {
             </div>
           </SlideOverPanel>
 
-          {!isDemo && <FloatingChatButton storyId={state.story?.id} />}
+          {/* AI reads Firestore until the agents cutover; PostgreSQL stories stay manual for now. */}
 
           {/* ── Delete Chapter Dialog ── */}
           <ConfirmDialog
@@ -1287,7 +1245,7 @@ export function SimpleEditor() {
             }
             confirmLabel={isPublished ? "Unpublish" : "Publish"}
             cancelLabel={isPublished ? "Keep published" : "Cancel"}
-            isLoading={togglePublish.isPending}
+            isLoading={isPublishing}
             onConfirm={handlePublish}
           />
 

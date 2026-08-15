@@ -32,6 +32,7 @@ type EditorAction =
   | { type: "SELECT_CHAPTER"; payload: Chapter }
   | { type: "UPDATE_STORY_TITLE"; payload: string }
   | { type: "UPDATE_STORY_DESCRIPTION"; payload: string }
+  | { type: "REPLACE_STORY"; payload: Story }
   | { type: "UPDATE_CHAPTER_TITLE"; payload: string }
   | { type: "UPDATE_CHAPTER_CONTENT"; payload: string }
   | { type: "ADD_CHAPTER"; payload: Chapter }
@@ -107,6 +108,9 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         storyDescription: action.payload,
         metadataChanged: true,
       };
+
+    case "REPLACE_STORY":
+      return { ...state, story: action.payload };
 
     case "UPDATE_CHAPTER_TITLE":
       return {
@@ -232,6 +236,9 @@ export function useEditorState() {
 
       updateStoryDescription: (description: string) =>
         dispatch({ type: "UPDATE_STORY_DESCRIPTION", payload: description }),
+
+      replaceStory: (story: Story) =>
+        dispatch({ type: "REPLACE_STORY", payload: story }),
 
       updateChapterTitle: (title: string) =>
         dispatch({ type: "UPDATE_CHAPTER_TITLE", payload: title }),

@@ -10,18 +10,12 @@ setGlobalOptions({
 admin.initializeApp();
 
 // Export new agent endpoints
-export { generateChapter } from "./generateChapter";
-export { generateChapterTask } from "./generateChapterTask";
 export { summarizeChapter } from "./summarizeChapter";
 export {
   brainstormIdeas,
   brainstormCharacter,
   brainstormPlot,
 } from "./brainstormIdeas";
-export {
-  getJobStatus,
-  getStoryJobsEndpoint as getStoryJobs,
-} from "./jobEndpoints";
 export { authenticate } from "./authenticate";
 export { generateNextLines } from "./generateNextLines";
 export { generateStoryChoices } from "./generateStoryChoices";
