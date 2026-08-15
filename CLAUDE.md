@@ -106,10 +106,23 @@ All routes are defined in `src/main.tsx` using React Router v7. Every route is l
 
 **Cloud Functions API** (`src/api/index.ts`): Custom HTTP client that auto-attaches the Firebase Auth bearer token. Dev base URL points to local emulator (`localhost:5001`). Throws `ApiError` on failure.
 
-**Firestore Services** (`src/services/`): All Firestore reads/writes go through service modules. Key ones:
-- `StoriesRepo.ts` — story/chapter CRUD; enforces `WORD_LIMIT = 5000` and `CHAPTER_LIMIT = 50`
+**story-data repos** (`src/services/*Repo.ts`): stories, chapters, worldbuilding,
+social, guestbooks, profiles, public reads and reading history are served by the
+`story-data` PostgreSQL API, reached over the `/story-data` Vite proxy with the
+caller's Firebase ID token. Each repo currently hand-rolls its own `request()`;
+only `StoryWorkspaceRepo` and `StoryWorldbuildingRepo` send `If-Match`.
+
+**Remaining Firestore services** (`src/services/`):
+- `StoriesRepo.ts` — pre-cutover story/chapter CRUD (`WORD_LIMIT = 5000`,
+  `CHAPTER_LIMIT = 50`). Still read by `SubmissionPicker`, `StoryRow` and
+  `epubExport`, which therefore see nothing for stories created after the
+  cutover — a known gap, not a supported path.
+- `ChatService.ts` — AI chat messages; realtime, stays on Firestore
+- `RateLimitService.tsx` — `userActivity` counters
 - `StorageService.ts` — Firebase Storage uploads (covers, images)
 - `ImageGenerationService.ts` — triggers AI image gen via Cloud Function
+
+Do not add new Firestore access for a domain story-data owns.
 
 **Custom Hooks** (`src/hooks/`): `useAutosave()` handles periodic draft saves to Firestore. `useEditorState()` manages TipTap state. Web3 hooks (`useEarnings`, `useTippingContract`, `useWalletState`, `useTokenBalance`) wrap Wagmi.
 

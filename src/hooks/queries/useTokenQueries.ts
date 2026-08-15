@@ -4,15 +4,13 @@ import { tokenService } from "@/services/TokenService";
 import type { ITokenBalance, MinorUnits } from "@/types/IToken";
 
 /**
- * TALE balance, seeded by the API and kept live by a Firestore snapshot.
+ * TALE balance, polled from story-data.
  *
- * The initial fetch goes through the endpoint on purpose: it materializes the
- * free starting grant, which a brand-new user has no document for yet. Once
- * that has run, `onSnapshot` on tokenAccounts/{accountId} pushes every later
- * change straight into the cache — so spending TALE on a competition updates
- * the header without a refetch or a manual invalidation.
- *
- * Follows the realtime-into-cache pattern documented in useCommentQueries.ts.
+ * The fetch materializes the free starting grant, which a brand-new user has
+ * no row for yet. Firestore's onSnapshot backed this before the cutover; the
+ * balance now lives in PostgreSQL, so a mutation that moves TALE must write
+ * the returned balance into the cache (as useClaimFaucet does) or the header
+ * lags by up to the poll interval.
  */
 export function useTokenBalanceQuery(userId: string | undefined) {
   const enabled = Boolean(userId);

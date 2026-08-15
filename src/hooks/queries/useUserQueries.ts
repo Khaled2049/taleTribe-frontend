@@ -26,7 +26,7 @@ export function useSetWalletAddress(userId: string | null | undefined) {
 
 export function usePublicProfile(userId: string | undefined) {
   return useQuery({
-    queryKey: queryKeys.user.guestbookPolicy(userId!),
+    queryKey: queryKeys.user.publicProfile(userId!),
     queryFn: () => profileRepo.get(userId!),
     enabled: !!userId,
     staleTime: 1000 * 60 * 5,
@@ -35,7 +35,7 @@ export function usePublicProfile(userId: string | undefined) {
 
 export function useGuestbookPolicy(userId: string | undefined) {
   return useQuery({
-    queryKey: queryKeys.user.publicProfile(userId!),
+    queryKey: queryKeys.user.guestbookPolicy(userId!),
     queryFn: async () => (await profileRepo.get(userId!))?.guestbookPolicy || "everyone",
     enabled: !!userId,
     staleTime: 1000 * 60 * 5,
