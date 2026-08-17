@@ -49,6 +49,7 @@ jobs:
           VITE_CHAIN_ID: "1"
           VITE_MAX_AI_USAGE: "100"
           VITE_APP_NAME: NovelSync
+          VITE_STORY_DATA_URL: https://story-data.placeholder.invalid
 
   functions:
     name: Functions Type-check & Audit
