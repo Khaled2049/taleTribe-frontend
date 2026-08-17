@@ -22,8 +22,6 @@ class BookClubRepo {
   createBookClub(club: IClub): Promise<string> { return this.request<IClub>("POST", "/v1/book-clubs", club, true).then((x) => x.id); }
   getBookClubs(): Promise<IClub[]> { return this.request<IClub[]>("GET", "/v1/book-clubs"); }
   getBookClub(id: string): Promise<IClub | undefined> { return this.request<IClub>("GET", `/v1/book-clubs/${id}`).catch((e) => { if (e.message === "not found") return undefined; throw e; }); }
-  // Club records now use React Query refetching. This compatibility helper is retained for callers outside the hook.
-  subscribeToBookClub(id: string, callback: (club: IClub | null) => void) { let alive = true; const load = async () => callback(alive ? (await this.getBookClub(id)) || null : null); void load(); const timer = window.setInterval(() => void load(), 15_000); return () => { alive = false; window.clearInterval(timer); }; }
   updateBookClub(id: string, club: IClub) { return this.request<IClub>("PATCH", `/v1/book-clubs/${id}`, club, true); }
   updateMeetUp(id: string, meetUp: string) { return this.settings(id, { meetUp }); }
   updateBookOfTheMonth(id: string, book: IBookOfTheMonth) { return this.settings(id, { bookOfTheMonth: book }); }
@@ -45,13 +43,11 @@ class BookClubRepo {
   createReadingSchedule(id: string, schedule: IReadingSchedule) { return this.settings(id, { readingSchedule: schedule }); }
   updateReadingSchedule(id: string, schedule: IReadingSchedule) { return this.settings(id, { readingSchedule: schedule }); }
   createDiscussionPrompt(id: string, prompt: Omit<IDiscussionPrompt, "id">) { return this.request<IDiscussionPrompt>("POST", `/v1/book-clubs/${id}/prompts`, prompt, true).then((x) => x.id); }
-  updateDiscussionPrompt(_id: string, _promptId: string, _updates: Partial<IDiscussionPrompt>) { return Promise.reject(new Error("Discussion prompts cannot be edited.")); }
   addPromptResponse(id: string, promptId: string, response: Omit<IPromptResponse, "id">) { return this.request<IPromptResponse>("POST", `/v1/book-clubs/${id}/prompts/${promptId}/responses`, response, true).then((x) => x.id); }
   createPoll(id: string, poll: Omit<IPoll, "id">) { return this.request<IPoll>("POST", `/v1/book-clubs/${id}/polls`, poll, true).then((x) => x.id); }
   voteOnPoll(id: string, pollId: string, _userId: string, optionIndex: number) { return this.request<void>("PUT", `/v1/book-clubs/${id}/polls/${pollId}/vote`, { optionIndex }, true); }
   closePoll(id: string, pollId: string) { return this.request<void>("PUT", `/v1/book-clubs/${id}/polls/${pollId}/close`, undefined, true); }
   updateReadingProgress(id: string, _userId: string, currentChapter: number, notes?: string) { return this.request<IReadingProgress>("PUT", `/v1/book-clubs/${id}/progress/me`, { currentChapter, notes: notes || null }, true); }
-  getMemberProgress(id: string, userId: string) { return this.request<IReadingProgress[]>("GET", `/v1/book-clubs/${id}/progress`, undefined, true).then((x) => x.find((p) => p.userId === userId) || null); }
-  getAllMemberProgress(id: string, callback: (progress: IReadingProgress[]) => void) { let alive = true; const load = () => this.request<IReadingProgress[]>("GET", `/v1/book-clubs/${id}/progress`, undefined, true).then((x) => { if (alive) callback(x); }).catch(console.error); load(); const timer = window.setInterval(load, 15_000); return () => { alive = false; window.clearInterval(timer); }; }
+  getMemberProgress(id: string) { return this.request<IReadingProgress[]>("GET", `/v1/book-clubs/${id}/progress`, undefined, true); }
 }
 export const bookClubRepo = new BookClubRepo();

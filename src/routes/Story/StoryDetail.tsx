@@ -4,13 +4,12 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { publicStoryRepo } from "@/services/PublicStoryRepo";
 import { Chapter, Story } from "@/types/IStory";
 import { storySocialRepo } from "@/services/StorySocialRepo";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useComments } from "@/hooks/queries/useCommentQueries";
+import { useComments, useCommentCache } from "@/hooks/queries/useCommentQueries";
 import { StoryLoadingState } from "./components/StoryLoadingState";
 import { StoryErrorState } from "./components/StoryErrorState";
 import { StorySynopsis } from "./components/StorySynopsis";
@@ -69,7 +68,6 @@ function withTimeout<T>(
 const StoryDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuthContext();
-  const queryClient = useQueryClient();
 
   const [viewMode, setViewMode] = useState<ViewMode>("details");
   const [hoveredHeroStar, setHoveredHeroStar] = useState<number | null>(null);
@@ -90,6 +88,10 @@ const StoryDetail: React.FC = () => {
   });
 
   const { data: comments = [], isPending: commentsLoading } = useComments(
+    id,
+    state.currentChapter?.id,
+  );
+  const { upsert: upsertComment, remove: removeComment } = useCommentCache(
     id,
     state.currentChapter?.id,
   );
@@ -439,33 +441,30 @@ const StoryDetail: React.FC = () => {
   );
 
   // --- Comment Logic ---
-  const refreshComments = useCallback(() => {
-    if (!id || !state.currentChapter) return Promise.resolve();
-    return queryClient.invalidateQueries({
-      queryKey: ["comments", id, state.currentChapter.id],
-    });
-  }, [id, state.currentChapter, queryClient]);
-
+  // Each write returns the affected comment, so the thread is patched in place
+  // rather than re-fetched whole.
   const handleCreateComment = useCallback(
     async (message: string) => {
       if (!id || !state.currentChapter) return;
-      await storySocialRepo.createComment(id, state.currentChapter.id, message);
-      await refreshComments();
+      upsertComment(
+        await storySocialRepo.createComment(id, state.currentChapter.id, message),
+      );
     },
-    [id, state.currentChapter, refreshComments],
+    [id, state.currentChapter, upsertComment],
   );
 
   const handleReply = useCallback(
     async (parentId: string, message: string) => {
       if (!id || !state.currentChapter) return;
       try {
-        await storySocialRepo.createComment(id, state.currentChapter.id, message, parentId);
-        await refreshComments();
+        upsertComment(
+          await storySocialRepo.createComment(id, state.currentChapter.id, message, parentId),
+        );
       } catch (error) {
         console.error("Error adding reply:", error);
       }
     },
-    [id, state.currentChapter, refreshComments],
+    [id, state.currentChapter, upsertComment],
   );
 
   const handleDelete = useCallback(
@@ -473,25 +472,40 @@ const StoryDetail: React.FC = () => {
       if (!id || !state.currentChapter) return;
       try {
         await storySocialRepo.deleteComment(id, state.currentChapter.id, commentId);
-        await refreshComments();
+        removeComment(commentId);
       } catch (error) {
         console.error("Error deleting comment:", error);
       }
     },
-    [id, state.currentChapter, refreshComments],
+    [id, state.currentChapter, removeComment],
   );
 
   const handleEdit = useCallback(
     async (commentId: string, newMessage: string) => {
       if (!id || !state.currentChapter) return;
       try {
-        await storySocialRepo.updateComment(id, state.currentChapter.id, commentId, newMessage);
-        await refreshComments();
+        upsertComment(
+          await storySocialRepo.updateComment(id, state.currentChapter.id, commentId, newMessage),
+        );
       } catch (error) {
         console.error("Error updating comment:", error);
       }
     },
-    [id, state.currentChapter, refreshComments],
+    [id, state.currentChapter, upsertComment],
+  );
+
+  const handleCommentLike = useCallback(
+    async (commentId: string, liked: boolean) => {
+      if (!id || !state.currentChapter) return;
+      try {
+        upsertComment(
+          await storySocialRepo.setCommentLike(id, state.currentChapter.id, commentId, liked),
+        );
+      } catch (error) {
+        console.error("Error updating comment like:", error);
+      }
+    },
+    [id, state.currentChapter, upsertComment],
   );
 
   // --- Effects ---
@@ -760,6 +774,7 @@ const StoryDetail: React.FC = () => {
                   onReply={handleReply}
                   onDelete={handleDelete}
                   onEdit={handleEdit}
+                  onLike={handleCommentLike}
                 />
               )}
             </main>

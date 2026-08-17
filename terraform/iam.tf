@@ -34,24 +34,10 @@ resource "google_project_iam_member" "github_cloudfunctions_developer" {
   member  = "serviceAccount:${data.google_service_account.github_actions.email}"
 }
 
-# IAM: Allow GitHub Actions to manage Cloud Tasks queues during deploy.
-# Required to deploy onTaskDispatched functions (indexChapterTask,
-# indexEntityTask, competitionAdvanceTask):
-# `firebase deploy` calls cloudtasks.queues.get/create/update to sync queue config.
-resource "google_project_iam_member" "github_cloudtasks_admin" {
-  project = var.project_id
-  role    = "roles/cloudtasks.admin"
-  member  = "serviceAccount:${data.google_service_account.github_actions.email}"
-}
-
-# IAM: Allow the Cloud Functions runtime SA to enqueue Cloud Tasks.
-# The write triggers and competition lifecycle push work onto the indexing and
-# competition-advance queues.
-resource "google_project_iam_member" "runtime_cloudtasks_enqueuer" {
-  project = var.project_id
-  role    = "roles/cloudtasks.enqueuer"
-  member  = "serviceAccount:${local.appengine_service_account}"
-}
+# Cloud Tasks grants (github_cloudtasks_admin, runtime_cloudtasks_enqueuer) were
+# removed with the Firestore indexing stack: no onTaskDispatched function remains,
+# so nothing syncs a queue at deploy time or enqueues at runtime. Indexing is now
+# the story-data `indexing_outbox` table, polled by taleTribe-agents.
 
 # IAM: Allow GitHub Actions to add secret versions (principle of least privilege)
 # Note: Secrets must be pre-created; this SA can only add/update versions, not delete secrets

@@ -3,7 +3,6 @@ import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { requireStoryOwnership } from "./authService";
-import { callAgentWithRetry } from "./agentService";
 import { deleteChatSession } from "./chatService";
 import { corsOptions } from "./corsConfig";
 
@@ -31,21 +30,7 @@ export const clearChatSession = onRequest(
       // Delete Firestore chat messages + session doc
       await deleteChatSession(db, storyId, chatId);
 
-      // Clear story-scoped brain memory via agent
-      const agentResult = await callAgentWithRetry("clearMemory", {
-        storyId,
-        userId,
-      }, 3, 1000, userId, undefined, idToken);
-
-      if (!agentResult.success) {
-        logger.warn("Brain memory clear failed — chat deleted but memory may persist", {
-          storyId,
-          userId,
-          error: agentResult.error,
-        });
-      }
-
-      logger.info("Chat session and brain memory cleared", { storyId, chatId, userId });
+      logger.info("Chat session cleared", { storyId, chatId, userId });
       response.status(200).json({ success: true });
     } catch (error) {
       logger.error("Error in clearChatSession", { error, storyId: request.body?.storyId });

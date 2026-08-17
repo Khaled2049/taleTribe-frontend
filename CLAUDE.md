@@ -11,7 +11,9 @@ yarn build:analyze    # Build with bundle analysis (opens stats.html)
 yarn lint             # ESLint — fails on any warnings
 yarn preview          # Preview production build locally
 yarn start:emulator   # Start Firebase emulators (runs from functions/)
-yarn kill-ports       # Kill ports used by Firebase emulators
+yarn kill-ports       # Delegates to ../../kill-ports at the workspace root,
+                      # which frees the emulator/agent/Vite ports and stops the
+                      # story-data + creditProxy containers
 yarn test             # Vitest unit suite (tests/, excludes tests/rules/)
 yarn test:watch       # Vitest in watch mode
 yarn test:rules       # Firestore rules tests — needs a running emulator
@@ -113,10 +115,6 @@ caller's Firebase ID token. Each repo currently hand-rolls its own `request()`;
 only `StoryWorkspaceRepo` and `StoryWorldbuildingRepo` send `If-Match`.
 
 **Remaining Firestore services** (`src/services/`):
-- `StoriesRepo.ts` — pre-cutover story/chapter CRUD (`WORD_LIMIT = 5000`,
-  `CHAPTER_LIMIT = 50`). Still read by `SubmissionPicker`, `StoryRow` and
-  `epubExport`, which therefore see nothing for stories created after the
-  cutover — a known gap, not a supported path.
 - `ChatService.ts` — AI chat messages; realtime, stays on Firestore
 - `RateLimitService.tsx` — `userActivity` counters
 - `StorageService.ts` — Firebase Storage uploads (covers, images)
@@ -136,8 +134,8 @@ Firestore subcollection pattern: `stories/{id}/chapters`, `stories/{id}/chats/{i
 - **Chat**: Real-time Firestore subcollection + Cloud Function (`/sendChatMessage`) with story-context RAG
 - **Brainstorm / Text Enhancement**: API calls to Cloud Functions
 - **Daily quota**: UI display uses `VITE_MAX_AI_USAGE` (default 100) and user profile fields (`aiUsage`, `lastAiUsageDate`). Server-side enforcement is in `functions/src/aiSettings.ts` (`checkAiAccess` → `consumePlatformDailyQuota`), controlled by `MAX_AI_USAGE` env var. Keep `VITE_MAX_AI_USAGE` aligned with `MAX_AI_USAGE`. BYOK users bypass quota.
-- **Indexing budget**: write-triggered (re)embedding is metered separately from the chat quota via `consumeIndexingBudget` (`functions/src/usageBudget.ts`), controlled by `MAX_INDEX_USAGE` (default 300/day), stored on the user doc as `indexUsage`/`lastIndexUsageDate`. Counts one unit per debounced embedding pass (not per autosave). Applies to BYOK users too — indexing uses the platform embedder regardless. Deletes are never gated.
-- **Per-user story cap**: `users.storyCount` is maintained by the `onStoryWrite` trigger (`functions/src/storyCountTrigger.ts`); `firestore.rules` blocks story creation past `MAX_STORIES_PER_USER` (literal `100` in rules — keep both in sync). Soft cap; the indexing budget is the hard cost ceiling.
+- **Indexing budget**: (re)embedding is metered separately from the chat quota, at `MAX_INDEX_USAGE` (default 300/day) per user. It lives entirely in `taleTribe-agents` now — the outbox consumer (`postgres_context.py`, `indexing_usage` table in story-data) charges it; no Function is involved. A unit is one embedding pass, not one autosave: nothing collapses the outbox on the write side, so the consumer drops events superseded by a higher revision of the same source in the batch. Applies to BYOK users too: indexing uses the platform embedder regardless. Deletes are never gated. Over budget, an event is deferred to the next UTC day rather than dropped, so the index goes stale but never loses the write.
+- **Per-user story cap**: enforced by story-data. `users.storyCount` and the `onStoryWrite` trigger are the pre-cutover mechanism and no longer fire. Soft cap; the indexing budget is the hard cost ceiling.
 
 ### Web3
 Wagmi config in `src/blockchain/config.ts`. Target chain from `VITE_CHAIN_ID` (default 31337 for local Anvil). Tipping contract ABI in `src/blockchain/abi/TippingPlatform.abi.json`. Wallet state machine: `DISCONNECTED → CONNECTING → CONNECTED → READY` (or `WRONG_NETWORK / ERROR`).
@@ -309,7 +307,6 @@ Cloud Functions read a separate set (`functions/src/`):
 
 ```
 MAX_AI_USAGE                # daily chat/AI quota — keep aligned with VITE_MAX_AI_USAGE
-MAX_INDEX_USAGE             # daily embedding budget (default 300)
 MAX_STORAGE_UPLOADS_PER_DAY
 AI_MAX_INSTANCES            # max concurrent instances for AI functions
 ESCROW_PROVIDER             # "ledger" (default). Anything else throws — it will

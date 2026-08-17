@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { queryKeys } from "@/hooks/queries/queryKeys";
 import { formatMinorUnits, formatTokenAmount } from "@/lib/money";
-import { storiesRepo } from "@/services/StoriesRepo";
+import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
 import {
   TALE_SYMBOL,
   type ITokenAmount,
@@ -50,7 +50,7 @@ const SubmissionPicker: React.FC<SubmissionPickerProps> = ({
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const { data: stories, isLoading } = useQuery({
     queryKey: [...queryKeys.user.stories(userId), "picker"] as const,
-    queryFn: () => storiesRepo.getUserStories(userId),
+    queryFn: () => storyWorkspaceRepo.getUserStories(),
     enabled: open,
   });
 

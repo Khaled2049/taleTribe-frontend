@@ -8,6 +8,8 @@ import {
 } from "@/types/IClub";
 import { bookClubRepo } from "../bookClubRepo";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/hooks/queries/queryKeys";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,6 +90,7 @@ const ReadingPaceSection: React.FC<ReadingPaceSectionProps> = ({
   membersById,
 }) => {
   const { user } = useAuthContext();
+  const queryClient = useQueryClient();
   const schedule = club.readingSchedule;
 
   const totalChapters =
@@ -111,11 +114,20 @@ const ReadingPaceSection: React.FC<ReadingPaceSectionProps> = ({
     setIsSavingProgress(true);
     try {
       const ownNotes = progress.find((p) => p.userId === user.uid)?.notes;
-      await bookClubRepo.updateReadingProgress(
+      const saved = await bookClubRepo.updateReadingProgress(
         club.id,
         user.uid,
         chapterDraft,
         ownNotes ?? undefined,
+      );
+      // Without this the viewer's own dot and Save button wait for the next
+      // poll, up to 15 seconds after their write already succeeded.
+      queryClient.setQueryData<IReadingProgress[]>(
+        queryKeys.bookClubs.progress(club.id),
+        (current) => [
+          ...(current ?? []).filter((p) => p.userId !== saved.userId),
+          saved,
+        ],
       );
     } catch (error) {
       console.error("Error updating reading progress:", error);

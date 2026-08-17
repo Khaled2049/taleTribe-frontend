@@ -19,6 +19,8 @@ jobs:
   terraform-apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
     permissions:
       contents: read
       id-token: write
@@ -41,7 +43,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.5.0
+          terraform_version: 1.14.4
           terraform_wrapper: false
 
       - name: Terraform Init
@@ -113,6 +115,7 @@ jobs:
   build:
     name: Build Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -162,6 +165,7 @@ jobs:
     name: Deploy Firebase
     needs: [terraform-apply, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write

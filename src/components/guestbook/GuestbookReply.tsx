@@ -12,7 +12,6 @@ import { IUser } from "@/types/IUser";
 import VoteButtons from "./VoteButtons";
 import { guestbookRepo } from "@/services/GuestbookRepo";
 import { rateLimitMessage } from "@/services/rateLimitError";
-import { useAuthorUsername } from "@/hooks/queries/useUserQueries";
 import { useGuestbookPolicy } from "./guestbookPolicyContext";
 import { formatRelativeTime } from "@/lib/relativeTime";
 
@@ -64,10 +63,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
 
     // Live-resolve the author's current username (falls back to the stored copy
     // while the profile loads) so username changes show up here too.
-    const authorUsername = useAuthorUsername(
-      reply.authorId,
-      reply.authorUsername,
-    );
+    const authorUsername = reply.authorUsername || "unknown";
 
     const handleEdit = async () => {
       if (editedContent.trim() === "") return;

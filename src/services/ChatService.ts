@@ -4,6 +4,7 @@ import {
   setDoc,
   getDocs,
   query,
+  where,
   orderBy,
   onSnapshot,
   Unsubscribe,
@@ -27,9 +28,16 @@ class ChatService {
     try {
       const chatsRef = collection(this.storiesCollection, storyId, "chats");
 
-      // Check if a chat already exists (get most recent)
+      // Filtered by owner because the read rule is a field compare on the
+      // session's uid — an unfiltered list could return someone else's and is
+      // denied outright.
       const chatsSnapshot = await getDocs(
-        query(chatsRef, orderBy("updatedAt", "desc"), limit(1)),
+        query(
+          chatsRef,
+          where("userId", "==", userId),
+          orderBy("updatedAt", "desc"),
+          limit(1),
+        ),
       );
 
       if (!chatsSnapshot.empty) {

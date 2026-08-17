@@ -11,52 +11,17 @@ admin.initializeApp();
 
 // Export new agent endpoints
 export { summarizeChapter } from "./summarizeChapter";
-export {
-  brainstormIdeas,
-  brainstormCharacter,
-  brainstormPlot,
-} from "./brainstormIdeas";
-export { authenticate } from "./authenticate";
+export { brainstormIdeas } from "./brainstormIdeas";
 export { generateNextLines } from "./generateNextLines";
 export { generateStoryChoices } from "./generateStoryChoices";
-export { searchBooks, getBookDetails } from "./booksApi";
+export { searchBooks } from "./booksApi";
 export { generateCoverImage } from "./generateCoverImage";
 export { sendChatMessage } from "./sendChatMessage";
-export { onChapterWrite } from "./chapterIndexTrigger";
-export { onStoryWrite } from "./storyCountTrigger";
-export { indexChapterTask } from "./indexChapterTask";
-export { indexEntityTask } from "./indexEntityTask";
-export {
-  onCharacterWrite,
-  onPlaceWrite,
-  onPlotWrite,
-} from "./entityIndexTrigger";
-export {
-  onCharacterCascade,
-  onPlaceCascade,
-} from "./entityCascadeTrigger";
 export { clearChatSession } from "./clearChatSession";
 export { enhanceText } from "./enhanceText";
 export { enhanceWizardInput } from "./enhanceWizardInput";
 export { onInviteApproved } from "./inviteService";
-export {
-  joinCompetition,
-  saveCompetitionDraft,
-  publishCompetition,
-  discardCompetitionDraft,
-  updateCompetition,
-  cancelCompetition,
-} from "./competitionEndpoints";
-export {
-  submitToCompetition,
-  withdrawSubmission,
-  castCompetitionVote,
-  advanceCompetitionPhase,
-} from "./competitionEntryEndpoints";
-export { competitionAdvanceTask } from "./competitionAdvanceTask";
-export { settleCompetitionEndpoint as settleCompetition } from "./competitionSettlementEndpoints";
 export { createUserByAdmin, setUserAdmin } from "./adminUserService";
-export { createStoryByAdmin } from "./adminStoryEndpoint";
 export {
   saveAiSettings,
   deleteAiSettings,
@@ -64,8 +29,3 @@ export {
 } from "./aiSettingsEndpoints";
 export { reserveStorageUpload } from "./storageUploadEndpoints";
 export { getCreditBalance, purchaseCredits } from "./creditEndpoints";
-export {
-  getTokenBalance,
-  claimTokenFaucet,
-  adminGrantTokens,
-} from "./tokenEndpoints";

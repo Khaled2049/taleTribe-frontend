@@ -2,9 +2,11 @@
  * Per-user daily usage budgets, backed by a transactional counter on the user doc.
  *
  * One generic helper drives every budget so they share the same atomic
- * read-modify-write and fail-closed semantics. Used for:
- *  - the AI quota (chat/generation) — see consumePlatformDailyQuota in aiSettings.ts
- *  - the indexing budget (write-triggered embedding) — see consumeIndexingBudget below
+ * read-modify-write and fail-closed semantics. Used for the AI quota
+ * (chat/generation) — see consumePlatformDailyQuota in aiSettings.ts.
+ *
+ * The indexing budget left with the Firestore write triggers; embedding is now
+ * metered by the agents' outbox consumer against `indexing_usage` in story-data.
  *
  * Each budget stores a usage count + the date it applies to on `users/{uid}`; the
  * count resets the first time it is consumed on a new UTC day.
@@ -71,26 +73,3 @@ export async function consumeDailyBudget(
   }
 }
 
-/** Daily ceiling for write-triggered (re)indexing passes. Override with MAX_INDEX_USAGE. */
-function getIndexingBudgetLimit(): number {
-  const parsed = Number.parseInt(process.env.MAX_INDEX_USAGE || "300", 10);
-  if (Number.isNaN(parsed) || parsed <= 0) return 300;
-  return parsed;
-}
-
-/**
- * Consume one indexing unit for a story owner. Each unit is one debounced embedding
- * pass (a chapter or entity (re)index), NOT one autosave — the debounce already
- * collapses bursts. This bounds the unmetered embedding/chunk-write cost a user can
- * drive by editing content, independently of the chat/generation AI quota.
- *
- * Applies to BYOK users too: indexing uses the platform embedder regardless of a
- * user's own LLM key, so the platform pays for it either way.
- */
-export async function consumeIndexingBudget(userId: string): Promise<boolean> {
-  return consumeDailyBudget(userId, {
-    usageField: "indexUsage",
-    dateField: "lastIndexUsageDate",
-    limit: getIndexingBudgetLimit(),
-  });
-}

@@ -17,11 +17,9 @@ set -euo pipefail
 
 FRONTEND_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPOS_DIR="$(cd "$FRONTEND_DIR/.." && pwd)"
-WORKSPACE_DIR="$(cd "$REPOS_DIR/.." && pwd)"
 AGENTS_DIR="$REPOS_DIR/taleTribe-agents"
 STORY_DATA_DIR="$REPOS_DIR/story-data"
-# creditProxy is a sibling of the workspace, not a repos/ checkout.
-CREDIT_DIR="$WORKSPACE_DIR/../creditProxy"
+CREDIT_DIR="$REPOS_DIR/creditProxy"
 
 CREDIT_PROXY_PORT="${CREDIT_PROXY_PORT:-8090}"
 STORY_DATA_URL="${STORY_DATA_URL:-http://127.0.0.1:8084}"
@@ -112,8 +110,11 @@ else
   echo "Starting taleTribe-agents on :8000..."
   (
     cd "$AGENTS_DIR"
-    # shellcheck disable=SC1091
-    [ -f venv/bin/activate ] && source venv/bin/activate
+    # The venv interpreter is invoked directly rather than through `activate`,
+    # whose VIRTUAL_ENV is an absolute path baked in at creation time and so
+    # breaks whenever the checkout moves.
+    AGENT_PYTHON="python3"
+    [ -x venv/bin/python ] && AGENT_PYTHON="$PWD/venv/bin/python"
     CREDIT_PROXY_URL="http://localhost:$CREDIT_PROXY_PORT" \
     GOOGLE_CLOUD_PROJECT=story-6f89f \
     USE_MOCK=true \
@@ -121,7 +122,7 @@ else
     STORY_DATA_DATABASE_URL='postgres://postgres:postgres@localhost:5433/story_data?sslmode=disable' \
     INDEXING_WORKER_ENABLED=true \
     CORS_ORIGINS='["http://localhost:5173"]' \
-    python server.py
+    "$AGENT_PYTHON" server.py
   ) &
   PIDS+=($!)
   wait_for "http://localhost:8000/health" "taleTribe-agents"

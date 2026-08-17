@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
 import { bookClubRepo } from "@/routes/BookClub/bookClubRepo";
-import { IClub } from "@/types/IClub";
+import { IClub, IReadingProgress } from "@/types/IClub";
 
 export function useBookClub(clubId: string | undefined) {
   const queryClient = useQueryClient();
@@ -18,6 +18,18 @@ export function useBookClub(clubId: string | undefined) {
     enabled: !!clubId,
     staleTime: 15_000,
     refetchOnWindowFocus: true,
+  });
+}
+
+// Member progress is polled rather than pushed — story-data has no realtime
+// channel, so another member's chapter change lands on the next interval.
+export function useClubProgress(clubId: string | undefined, enabled = true) {
+  return useQuery<IReadingProgress[]>({
+    queryKey: queryKeys.bookClubs.progress(clubId!),
+    queryFn: () => bookClubRepo.getMemberProgress(clubId!),
+    enabled: !!clubId && enabled,
+    refetchInterval: 15_000,
+    staleTime: 15_000,
   });
 }
 

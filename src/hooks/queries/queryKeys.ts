@@ -30,6 +30,7 @@ export const queryKeys = {
   bookClubs: {
     all: () => ["bookClubs"] as const,
     detail: (clubId: string) => ["bookClubs", clubId] as const,
+    progress: (clubId: string) => ["bookClubs", clubId, "progress"] as const,
   },
   people: {
     search: (term: string) => ["people", "search", term] as const,
@@ -48,6 +49,9 @@ export const queryKeys = {
       ["user", userId, "guestbookPolicy"] as const,
     recentlyRead: (userId: string) => ["user", userId, "recentlyRead"] as const,
     aiCredits: (userId: string) => ["user", userId, "aiCredits"] as const,
+    // Sorted by the caller so a reordered list is not a different query.
+    profileNames: (uids: readonly string[]) =>
+      ["user", "profileNames", uids] as const,
   },
   earnings: {
     story: (storyId: string, chainId: number) =>

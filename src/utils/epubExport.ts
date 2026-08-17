@@ -187,7 +187,7 @@ export function downloadBlob(blob: Blob, filename: string): void {
 
 /**
  * Builds a minimal, valid EPUB 3 package in memory. `chapters` must already
- * be in reading order (storiesRepo.getChapters returns them orderBy("order")).
+ * be in reading order (story-data returns them ordered by position).
  */
 export async function buildEpub(
   story: EpubStoryInput,

@@ -12,6 +12,7 @@ interface StoryCommentsSectionProps {
   onReply: (parentId: string, message: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onEdit: (commentId: string, newMessage: string) => Promise<void>;
+  onLike: (commentId: string, liked: boolean) => Promise<void>;
 }
 
 export const StoryCommentsSection: React.FC<StoryCommentsSectionProps> = ({
@@ -22,6 +23,7 @@ export const StoryCommentsSection: React.FC<StoryCommentsSectionProps> = ({
   onReply,
   onDelete,
   onEdit,
+  onLike,
 }) => {
   return (
     <section>
@@ -56,6 +58,7 @@ export const StoryCommentsSection: React.FC<StoryCommentsSectionProps> = ({
           onReply={onReply}
           onDelete={onDelete}
           onEdit={onEdit}
+          onLike={onLike}
         />
       )}
     </section>

@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { guestbookRepo } from "@/services/GuestbookRepo";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
-import { useAuthorUsername } from "@/hooks/queries/useUserQueries";
 import { formatRelativeTime } from "@/lib/relativeTime";
 import { toast } from "sonner";
 
@@ -87,7 +86,7 @@ const GuestbookEntryCard: React.FC<GuestbookEntryCardProps> = ({
     }
   };
 
-  const authorUsername = useAuthorUsername(entry.authorId, entry.authorUsername);
+  const authorUsername = entry.authorUsername || "unknown";
   const initials = authorUsername.charAt(0).toUpperCase();
   const isAuthor = currentUser?.uid === entry.authorId;
   // The guestbook owner can clear anything off their own page — that is the

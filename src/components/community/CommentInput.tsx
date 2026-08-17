@@ -30,6 +30,7 @@ export const CommentInput: React.FC<CommentInputProps> = ({
   return (
     <form onSubmit={handleSubmit} className="mb-6 p-4 bg-opacity-50 w-full">
       <Textarea
+        data-cy="comment-input"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         placeholder={
@@ -50,6 +51,7 @@ export const CommentInput: React.FC<CommentInputProps> = ({
       />
       {currentUser && (
         <Button
+          data-cy="comment-submit"
           type="submit"
           disabled={!message.trim()}
           className={`mt-3 w-full py-2 text-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 

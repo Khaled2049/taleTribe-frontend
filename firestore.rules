@@ -2,25 +2,21 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function storyIsVisibleTo(storyId) {
-      let s = get(/databases/$(database)/documents/stories/$(storyId)).data;
-      return s.isPublished == true || (request.auth != null && s.userId == request.auth.uid);
-    }
-
-    function clubMembers(data) {
-      let members = data.get("members", []);
-      return members is list ? members : [];
-    }
-
-    // Per-user story cap. Reads the denormalized counter maintained by the
-    // onStoryWrite Cloud Function; treats a missing user doc / field as 0. Bounds the
-    // total embedding/storage cost one account can drive (soft cap — see
-    // storyCountTrigger.ts). Keep MAX_STORIES_PER_USER in sync with that doc.
-    function userStoryCount(uid) {
-      return exists(/databases/$(database)/documents/users/$(uid))
-        ? get(/databases/$(database)/documents/users/$(uid)).data.get("storyCount", 0)
-        : 0;
-    }
+    // Firestore is default-deny: a path with no matching rule is refused, so
+    // this file only needs blocks for what a browser actually touches. After
+    // the PostgreSQL cutover that is a short list — stories, chapters,
+    // worldbuilding, social, guestbooks, profiles, book club records and
+    // competitions are all served by story-data over HTTP, where authorization
+    // lives in Go rather than here.
+    //
+    // What remains in Firestore, and why:
+    //   invites       — signup gate, needs unauthenticated reads
+    //   users         — BYOK settings and the AI usage counters
+    //   userActivity  — client-side rate limits for the two features below
+    //   stories/chats — AI chat transcripts, kept for realtime
+    //   bookClubs     — club chat, kept for realtime
+    //   mcpAccess     — MCP allowlist requests
+    //   mcpOauth*     — MCP server state, Admin SDK only
 
     // Invites collection for invite-only signup
     match /invites/{email} {
@@ -48,159 +44,37 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    match /messages/{messageId} {
-      allow read: if true;
-      allow create: if request.auth != null && request.resource.data.content.size() <= 10000;
-      allow update, delete: if request.auth != null && resource.data.creator == request.auth.uid;
-    }
-
-    match /comments/{commentId} {
-      allow read: if true;
-      allow create: if request.auth != null && request.resource.data.content.size() <= 10000;
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-    }
-
-    match /plotTemplates/{templateId} {
-      allow read: if true;
-      // enforce userId on create so ownership is consistent with update/delete.
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-    }
-
+    // The story document itself lives in PostgreSQL. This block exists only as
+    // the parent path for chat sessions, which stayed in Firestore for their
+    // realtime listener — hence no rules on the story document.
     match /stories/{storyId} {
-      allow read: if resource.data.isPublished == true
-                  || (request.auth != null && resource.data.userId == request.auth.uid);
-      allow create: if request.auth != null
-                    && request.resource.data.userId == request.auth.uid
-                    && userStoryCount(request.auth.uid) < 100; // MAX_STORIES_PER_USER
 
-      allow update: if (
-        // Unauthenticated view increment: exactly +1 only.
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']) &&
-        request.resource.data.views == resource.data.views + 1
-      ) ||
-      (request.auth != null && (
-        // likes delta bounded to ±1, non-negative — prevents arbitrary counter injection.
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) &&
-         request.resource.data.likes >= 0 &&
-         (request.resource.data.likes == resource.data.likes + 1 ||
-          request.resource.data.likes == resource.data.likes - 1)) ||
-        // averageRating bounded to valid 1–5 range.
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['averageRating']) &&
-         request.resource.data.averageRating >= 1 &&
-         request.resource.data.averageRating <= 5) ||
-        // ratingsCount increment-only (ratings are permanent).
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ratingsCount']) &&
-         request.resource.data.ratingsCount >= 0 &&
-         request.resource.data.ratingsCount == resource.data.ratingsCount + 1) ||
-        // combined averageRating+ratingsCount — both constraints must hold.
-        (request.resource.data.diff(resource.data).affectedKeys().hasAll(['averageRating', 'ratingsCount']) &&
-         request.resource.data.diff(resource.data).affectedKeys().size() == 2 &&
-         request.resource.data.averageRating >= 1 &&
-         request.resource.data.averageRating <= 5 &&
-         request.resource.data.ratingsCount >= 0 &&
-         request.resource.data.ratingsCount == resource.data.ratingsCount + 1) ||
-        resource.data.userId == request.auth.uid
-      ));
-
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
-
-      match /likes/{likeId} {
-        allow read: if true;
-        allow create: if request.auth != null &&
-          request.resource.data.userId == request.auth.uid &&
-          likeId == request.auth.uid;
-        allow delete: if request.auth != null && likeId == request.auth.uid;
-      }
-
-      match /ratings/{ratingId} {
-        allow read: if true;
-        allow create: if request.auth != null &&
-          request.resource.data.userId == request.auth.uid &&
-          ratingId == request.auth.uid &&
-          request.resource.data.rating >= 1 &&
-          request.resource.data.rating <= 5;
-      }
-
-      match /chapters/{chapterId} {
-        allow read: if storyIsVisibleTo(storyId);
-        allow create: if request.auth != null &&
-          get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid &&
-          (!('content' in request.resource.data) || request.resource.data.content.size() <= 100000);
-        allow update: if request.auth != null &&
-          get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid &&
-          (!('content' in request.resource.data) || request.resource.data.content.size() <= 100000);
-        allow delete: if request.auth != null &&
-          get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid;
-
-        match /comments/{commentId} {
-          allow read: if true;
-          allow create: if request.auth != null &&
-            request.resource.data.userId == request.auth.uid;
-          allow update: if request.auth != null &&
-            resource.data.userId == request.auth.uid &&
-            request.resource.data.userId == request.auth.uid &&
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['message', 'updatedAt']);
-          allow delete: if request.auth != null &&
-            resource.data.userId == request.auth.uid;
-
-          match /likes/{likeId} {
-            allow read: if true;
-            // constrain likeId == auth.uid — prevents multiple likes per user on same comment.
-            allow create: if request.auth != null &&
-              likeId == request.auth.uid &&
-              request.resource.data.userId == request.auth.uid;
-            allow delete: if request.auth != null &&
-              likeId == request.auth.uid;
-          }
-        }
-      }
-
-      match /plots/{plotId} {
-        allow read: if storyIsVisibleTo(storyId);
-        allow create: if request.auth != null &&
-          get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid;
-        allow update, delete: if request.auth != null &&
-          get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid;
-      }
-
-      match /characters/{characterId} {
-        allow read: if storyIsVisibleTo(storyId);
-        allow create: if request.auth != null &&
-          get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid;
-        allow update, delete: if request.auth != null &&
-          get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid;
-      }
-
-      match /places/{placeId} {
-        allow read: if storyIsVisibleTo(storyId);
-        allow create: if request.auth != null &&
-          get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid;
-        allow update, delete: if request.auth != null &&
-          get(/databases/$(database)/documents/stories/$(storyId)).data.userId == request.auth.uid;
-      }
-
+      // Chat sessions are the last Firestore-resident part of a story, and the
+      // story document itself no longer exists here — it is in PostgreSQL. A
+      // get() on a missing doc returns null and dereferencing .data denies, so
+      // ownership is a field compare against the session's own denormalized
+      // uid.
+      //
+      // The client lists these with a userId filter; a resource-based read rule
+      // denies any query that could return someone else's session.
       match /chats/{chatId} {
-        allow read, write: if request.auth != null &&
-          request.auth.uid == get(/databases/$(database)/documents/stories/$(storyId)).data.userId;
+        allow read: if request.auth != null &&
+          resource.data.userId == request.auth.uid;
+        allow create: if request.auth != null &&
+          request.resource.data.userId == request.auth.uid;
+        allow update, delete: if request.auth != null &&
+          resource.data.userId == request.auth.uid;
 
+        // Messages carry no owner of their own and are written only by Cloud
+        // Functions, so they inherit the session's. exists() first: an
+        // unguarded get() on a missing parent errors, which denies.
         match /messages/{messageId} {
-          allow read, write: if request.auth != null &&
-            request.auth.uid == get(/databases/$(database)/documents/stories/$(storyId)).data.userId;
+          allow read: if request.auth != null &&
+            exists(/databases/$(database)/documents/stories/$(storyId)/chats/$(chatId)) &&
+            get(/databases/$(database)/documents/stories/$(storyId)/chats/$(chatId)).data.userId == request.auth.uid;
+          allow write: if false;
         }
       }
-    }
-
-
-    // Async generation jobs (chapter/story/brainstorm). Created and updated
-    // ONLY by Cloud Functions via the Admin SDK. Owners may read their own job
-    // to observe progress/completion in realtime (replaces HTTP polling). The
-    // owner uid is denormalized onto the job doc so this is a cheap field
-    // compare — no cross-doc story lookup.
-    match /jobs/{jobId} {
-      allow read: if request.auth != null &&
-        resource.data.userId == request.auth.uid;
-      allow write: if false;
     }
 
     match /bookClubs/{clubId} {
@@ -220,91 +94,11 @@ service cloud.firestore {
         allow delete: if request.auth != null &&
           resource.data.senderId == request.auth.uid;
       }
-
     }
 
-    // Competitions are read-only to every client. Creating one debits the
-    // creator's TALE into escrow, and updating one changes the terms people
-    // entered under, so all mutation runs in Cloud Functions via the Admin SDK
-    // (competitionEndpoints.ts: createCompetition / updateCompetition /
-    // cancelCompetition / joinCompetition).
-    //
-    // The previous rules allowed create for ANY authenticated user who set
-    // creatorId to their own uid — the admin gate was only a `disabled`
-    // attribute on a button — and allowed the creator to rewrite every field,
-    // including participantsCount, which joinCompetition maintains in a
-    // transaction. With a real prize pool attached, that would have meant any
-    // user writing themselves a funded competition and editing their own
-    // prize.
-    //
-    // Deletion is gone entirely: a competition holding escrow cannot be
-    // removed, only cancelled and refunded.
-    // Drafts are private to their creator. `published` is denormalized from the
-    // phase specifically so this rule and the explore query can both match on a
-    // field — an inequality on `phase` would force the query's first orderBy
-    // onto `phase` and destroy the createdAt sort.
-    //
-    // Any client listing this collection must constrain on `published` or on
-    // `creatorId`; an unconstrained list is rejected outright, which is the
-    // intended behaviour and is covered by the rules tests.
-    match /competitions/{competitionId} {
-      // `.get(field, default)` rather than `.published`: reading a property that
-      // is absent is an ERROR in rules, not false, so a document written before
-      // this field existed would be unreadable rather than merely unlisted.
-      // Defaulting to false fails closed: an unflagged document stays private
-      // to its creator instead of leaking.
-      allow read: if resource.data.get('published', false) == true
-                  || (request.auth != null
-                      && request.auth.uid == resource.data.get('creatorId', ''));
-      allow write: if false;
-
-      match /participants/{userId} {
-        allow read: if request.auth != null;
-        allow create, update, delete: if false;
-      }
-
-      // What each entrant paid, and whether it is still held.
-      //
-      // `list` MUST stay false. Unlike `participants`, these carry amounts, so
-      // an enumerable collection would hand any signed-in client the roster of
-      // who paid what. A reader only ever needs their own.
-      match /contributions/{userId} {
-        allow get: if request.auth != null && request.auth.uid == userId;
-        allow list: if false;
-        allow write: if false;
-      }
-
-      // Entries are a public gallery — they link to stories that are already
-      // published, so there is nothing here that isn't public anyway. Written
-      // only by submitToCompetition / withdrawSubmission, which enforce story
-      // ownership, the published requirement, and the entry deadline.
-      match /submissions/{userId} {
-        allow read: if true;
-        allow write: if false;
-      }
-
-      // A ballot is readable only by the voter who cast it, so the UI can show
-      // "you backed these three".
-      //
-      // `list` MUST stay false. A client able to list this subcollection could
-      // read every ballot and reconstruct the exact standings that the voting
-      // phase exists to hide — without ever reading a document it isn't
-      // entitled to. Denying `get` alone would not be enough.
-      match /votes/{voterId} {
-        allow get: if request.auth != null && request.auth.uid == voterId;
-        allow list: if false;
-        allow write: if false;
-      }
-
-      // Running vote tallies. Denied to every client, which is what makes
-      // "results are hidden until settlement" a property of the database rather
-      // than of the UI. Settlement reads this single document instead of every
-      // submission, which is also what keeps that transaction bounded.
-      match /private/{document=**} {
-        allow read, write: if false;
-      }
-    }
-
+    // Client-side daily/hourly counters. Only two features still use them —
+    // book club chat and book search — because everything story-data owns is
+    // metered server-side, in the same transaction as the write.
     match /userActivity/{activityId} {
       allow read: if request.auth != null && (
         activityId.matches(request.auth.uid + '_.*') ||
@@ -315,43 +109,17 @@ service cloud.firestore {
         activityId.matches(request.auth.uid + '_.*') &&
         request.resource.data.userId == request.auth.uid;
 
-      // Counts can only increase — prevents resetting to 0 to bypass rate limits.
-      // added upper bounds (10 000) to prevent MAX_INT injection.
+      // Counts can only increase — prevents resetting to 0 to bypass rate
+      // limits — and are bounded to prevent MAX_INT injection.
       allow update: if request.auth != null &&
         activityId.matches(request.auth.uid + '_.*') &&
         request.resource.data.userId == resource.data.userId &&
-        request.resource.data.get('postCount', 0)            >= resource.data.get('postCount', 0) &&
-        request.resource.data.get('commentCount', 0)         >= resource.data.get('commentCount', 0) &&
-        request.resource.data.get('messageCount', 0)         >= resource.data.get('messageCount', 0) &&
-        request.resource.data.get('bookSearchCount', 0)      >= resource.data.get('bookSearchCount', 0) &&
-        request.resource.data.get('pollCount', 0)            >= resource.data.get('pollCount', 0) &&
-        request.resource.data.get('voteChangeCount', 0)      >= resource.data.get('voteChangeCount', 0) &&
-        request.resource.data.get('promptCount', 0)          >= resource.data.get('promptCount', 0) &&
-        request.resource.data.get('promptResponseCount', 0)  >= resource.data.get('promptResponseCount', 0) &&
-        request.resource.data.get('progressUpdateCount', 0)  >= resource.data.get('progressUpdateCount', 0) &&
-        request.resource.data.get('postCount', 0)            <= 10000 &&
-        request.resource.data.get('commentCount', 0)         <= 10000 &&
-        request.resource.data.get('messageCount', 0)         <= 10000 &&
-        request.resource.data.get('bookSearchCount', 0)      <= 10000 &&
-        request.resource.data.get('pollCount', 0)            <= 10000 &&
-        request.resource.data.get('voteChangeCount', 0)      <= 10000 &&
-        request.resource.data.get('promptCount', 0)          <= 10000 &&
-        request.resource.data.get('promptResponseCount', 0)  <= 10000 &&
-        request.resource.data.get('progressUpdateCount', 0)  <= 10000;
+        request.resource.data.get('messageCount', 0)    >= resource.data.get('messageCount', 0) &&
+        request.resource.data.get('bookSearchCount', 0) >= resource.data.get('bookSearchCount', 0) &&
+        request.resource.data.get('messageCount', 0)    <= 10000 &&
+        request.resource.data.get('bookSearchCount', 0) <= 10000;
 
       allow delete: if false;
-    }
-
-    // private lists were readable by all authenticated users — now owner-only when not public.
-    match /bookLists/{listId} {
-      allow read: if resource.data.isPublic == true ||
-                   (request.auth != null && resource.data.userId == request.auth.uid);
-      allow create: if request.auth != null &&
-                       request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null &&
-                      resource.data.userId == request.auth.uid;
-      allow delete: if request.auth != null &&
-                       resource.data.userId == request.auth.uid;
     }
 
     match /users/{userId} {
@@ -364,48 +132,28 @@ service cloud.firestore {
         !('isAdmin' in request.resource.data);
       allow read: if request.auth != null && request.auth.uid == userId;
 
-      // own-profile branch also blocks sensitive BYOK/admin fields (to prevent
-      // self-elevating hasCustomAiProvider to bypass AI quotas) and every quota
-      // counter. The counters are maintained solely by the Admin SDK —
-      // consumeDailyBudget (usageBudget.ts) for the aiUsage/indexUsage/faucetUsage
-      // pairs and onStoryWrite (storyCountTrigger.ts) for storyCount — and no
-      // client code writes them. Leaving one writable lets a user reset their own
-      // ceiling: zeroing indexUsage/lastIndexUsageDate buys unlimited embedding
-      // passes, zeroing storyCount defeats the per-user story cap in
-      // userStoryCount(), and zeroing faucetUsage/lastFaucetDate mints unlimited
-      // TALE from the once-a-day faucet.
-      allow update: if request.auth != null && (
-        (userId == request.auth.uid &&
-         request.resource.data.followers == resource.data.followers &&
-         !request.resource.data.diff(resource.data).affectedKeys()
-           .hasAny(['hasCustomAiProvider', 'aiSettings', 'role', 'isAdmin',
-                    'aiUsage', 'lastAiUsageDate',
-                    'indexUsage', 'lastIndexUsageDate', 'storyCount',
-                    'faucetUsage', 'lastFaucetDate'])) ||
-        // Follow/unfollow: only the followers field may change
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers']) && (
-          // Follow: add yourself
-          (request.resource.data.followers.size() == resource.data.followers.size() + 1 &&
-           request.resource.data.followers.hasAll(resource.data.followers) &&
-           !resource.data.followers.hasAny([request.auth.uid])) ||
-          // Unfollow: remove yourself
-          (request.resource.data.followers.size() == resource.data.followers.size() - 1 &&
-           resource.data.followers.hasAll(request.resource.data.followers) &&
-           resource.data.followers.hasAny([request.auth.uid]))
-        ))
-      );
+      // Blocks the sensitive BYOK/admin fields (to prevent self-elevating
+      // hasCustomAiProvider to bypass AI quotas) and every quota counter. The
+      // counters are maintained solely by the Admin SDK — consumeDailyBudget
+      // (usageBudget.ts) for the aiUsage/indexUsage pairs — and no client code
+      // writes them. Leaving one writable lets a user reset their own ceiling:
+      // zeroing indexUsage/lastIndexUsageDate buys unlimited embedding passes.
+      //
+      // The follow graph is no longer here; it is `user_follows` in
+      // story-data, reached through /v1/profiles/{id}/follow.
+      allow update: if request.auth != null &&
+        userId == request.auth.uid &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['hasCustomAiProvider', 'aiSettings', 'role', 'isAdmin',
+                   'aiUsage', 'lastAiUsageDate',
+                   'indexUsage', 'lastIndexUsageDate', 'storyCount',
+                   'faucetUsage', 'lastFaucetDate']);
 
       // Daily storage upload counters — written only by Cloud Functions (Admin SDK).
       match /_storageQuota/{dayKey} {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }
-
-      match /competitionJoins/{competitionId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow create, update, delete: if false;
-      }
-
     }
 
     // MCP OAuth state (taleTribe-agents MCP server). Written and read ONLY by
@@ -425,7 +173,7 @@ service cloud.firestore {
     match /mcpOauthTokens/{tokenHash} {
       allow read, write: if false;
     }
-    
+
     match /mcpWrites/{writeKey} {
       allow read, write: if false;
     }
@@ -448,30 +196,6 @@ service cloud.firestore {
                     && resource.data.status == 'revoked'
                     && isValidMcpRequest();
       allow delete: if false;
-    }
-
-    // ---- Platform token (TALE) ----------------------------------------------
-    // TALE backs competition prize pools. Balances are maintained exclusively by
-    // the Admin SDK (functions/src/ledger.ts) inside transactions that write the
-    // transfer and both balances together.
-
-    // Materialized balances — a projection of ledgerTransfers, rebuildable by
-    // replaying it. Self-read is allowed so the UI can show a live balance via
-    // onSnapshot. `list` stays false so balances are not enumerable across users,
-    // and no client may write: a writable balance is a mint.
-    match /tokenAccounts/{accountId} {
-      allow get: if request.auth != null
-                 && resource.data.ownerId == request.auth.uid;
-      allow list: if false;
-      allow write: if false;
-    }
-
-    // The double-entry transfer log — the source of truth every balance derives
-    // from. Denied to clients entirely: postings name both counterparties, so an
-    // `accountIds array-contains` read would expose who paid whom. Transaction
-    // history ships later as an endpoint that filters server-side.
-    match /ledgerTransfers/{transferId} {
-      allow read, write: if false;
     }
   }
 }

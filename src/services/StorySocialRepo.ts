@@ -21,6 +21,7 @@ interface ApiComment {
   message: string;
   userId: string;
   parentId?: string;
+  authorUsername?: string;
   likeCount: number;
   likedByMe: boolean;
   createdAt: string;
@@ -74,6 +75,7 @@ class StorySocialRepo {
       message: comment.message,
       userId: comment.userId,
       parentId: comment.parentId || null,
+      authorUsername: comment.authorUsername ?? "",
       likeCount: comment.likeCount ?? 0,
       likedByMe: comment.likedByMe ?? false,
       createdAt: new Date(comment.createdAt),

@@ -9,6 +9,6 @@ export interface Comment {
   likedByMe: boolean;
   createdAt: Date;
   updatedAt: Date;
-  username?: string;
+  authorUsername: string;
   children?: Comment[];
 }
