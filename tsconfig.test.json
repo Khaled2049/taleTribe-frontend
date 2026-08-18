@@ -18,13 +18,6 @@
     "src/lib/competitionDraft.ts",
     "src/lib/pagination.ts",
     "src/lib/guestbookPolicy.ts",
-    "src/types/ICompetition.ts",
-    // Settlement arithmetic is NOT duplicated into src/lib the way money.ts and
-    // competitionPhase.ts are — a divergence would change who gets paid — so the
-    // test reaches into functions/. Safe because the module has zero imports.
-    "functions/src/competitionSettlementCore.ts",
-    // Same rule: refund batching decides whether money is stranded or paid
-    // twice, and the module is import-free so it can be tested directly.
-    "functions/src/escrow/refundPlan.ts"
+    "src/types/ICompetition.ts"
   ]
 }

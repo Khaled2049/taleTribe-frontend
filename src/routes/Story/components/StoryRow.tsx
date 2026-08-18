@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { StoryMetadata } from "@/types/IStory";
 import { generateCover } from "@/services/imageGenerationService";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
-import { storiesRepo } from "@/services/StoriesRepo";
+import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
 import {
   fetchCoverAsset,
   buildEpub,
@@ -136,7 +136,10 @@ export const StoryRow = ({
   const handleExportEpub = async () => {
     setIsExporting(true);
     try {
-      const chapters = await storiesRepo.getChapters(story.id);
+      const chapters = await storyWorkspaceRepo.getChaptersByStoryId(
+        story.id,
+        story.userId,
+      );
       if (chapters.length === 0) {
         toast.error("This story has no chapters to export yet.");
         return;

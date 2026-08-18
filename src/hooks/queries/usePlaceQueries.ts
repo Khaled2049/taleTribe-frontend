@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
-import { placeService } from "@/services/PlaceService";
+import { storyWorldbuildingRepo } from "@/services/StoryWorldbuildingRepo";
 import { Place } from "@/types/IPlace";
 
 export function usePlaces(storyId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.places.byStory(storyId!),
-    queryFn: () => placeService.getPlaces(storyId!),
+    queryFn: () => storyWorldbuildingRepo.getPlaces(storyId!),
     enabled: !!storyId,
   });
 }
@@ -15,7 +15,7 @@ export function useDeletePlace(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (placeId: string) =>
-      placeService.deletePlace(storyId!, placeId),
+      storyWorldbuildingRepo.deletePlace(storyId!, placeId, queryClient.getQueryData<Place[]>(queryKeys.places.byStory(storyId!))?.find((x) => x.id === placeId)?.revision),
     onMutate: async (placeId) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.places.byStory(storyId!),
@@ -46,7 +46,7 @@ export function useAddPlace(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (place: Omit<Place, "id">) =>
-      placeService.addPlace(storyId!, place),
+      storyWorldbuildingRepo.addPlace(storyId!, place),
     onSuccess: (newPlace) => {
       queryClient.setQueryData<Place[]>(
         queryKeys.places.byStory(storyId!),
@@ -63,7 +63,7 @@ export function useAddPlace(storyId: string | undefined) {
 export function useUpdatePlace(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (place: Place) => placeService.updatePlace(storyId!, place),
+    mutationFn: (place: Place) => storyWorldbuildingRepo.updatePlace(storyId!, place),
     onMutate: async (updated) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.places.byStory(storyId!),

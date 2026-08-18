@@ -16,7 +16,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { RATE_LIMITS } from "@/config/rateLimits";
-import { rateLimitService } from "@/services/RateLimitService";
 
 interface DiscussionSectionProps {
   club: IClub;
@@ -93,16 +92,6 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
       return;
     }
 
-    if (user) {
-      const rateLimitCheck = await rateLimitService.canCreateDiscussionPrompt(
-        user.uid,
-      );
-      if (!rateLimitCheck.allowed) {
-        setCreateError(rateLimitCheck.message || "Rate limit exceeded");
-        return;
-      }
-    }
-
     setIsSaving(true);
     try {
       await bookClubRepo.createDiscussionPrompt(club.id, {
@@ -113,10 +102,6 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
         creatorId: user!.uid,
         responses: [],
       });
-
-      if (user) {
-        await rateLimitService.incrementPromptCount(user.uid);
-      }
 
       setIsCreatingPrompt(false);
       setNewPrompt({ chapterNumber: 1, question: "", description: "" });
@@ -142,14 +127,6 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
       return;
     }
 
-    const rateLimitCheck = await rateLimitService.canAddPromptResponse(
-      user.uid,
-    );
-    if (!rateLimitCheck.allowed) {
-      setError(rateLimitCheck.message || "Rate limit exceeded");
-      return;
-    }
-
     const tempResponse: IPromptResponse = {
       id: `temp-${Date.now()}`,
       userId: user.uid,
@@ -171,8 +148,6 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
         content: newResponse.trim(),
         createdAt: new Date().toISOString(),
       });
-
-      await rateLimitService.incrementPromptResponseCount(user.uid);
 
       setNewResponse("");
       setComposerFor(null);

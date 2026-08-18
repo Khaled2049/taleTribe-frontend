@@ -16,6 +16,7 @@ const AUTH_REST = "http://localhost:9099/identitytoolkit.googleapis.com/v1";
 const AUTH_EMU = `http://localhost:9099/emulator/v1/projects/${PROJECT_ID}`;
 const FS_REST = `http://localhost:8080/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 const FS_EMU = `http://localhost:8080/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+const STORY_DATA_URL = "http://127.0.0.1:8084";
 
 const OWNER = { "Content-Type": "application/json", Authorization: "Bearer owner" };
 
@@ -137,6 +138,44 @@ async function listDocs(path) {
   }));
 }
 
+/**
+ * Call story-data as a given user. AUTH_MODE=dev in its docker-compose accepts
+ * X-User-ID in place of a Firebase token, which is what lets a Node task read
+ * back what the browser just wrote.
+ *
+ * Note there is no story-data reset: resetEmulators clears Auth, so every run
+ * gets fresh uids and rows from earlier runs are orphaned rather than
+ * colliding. Assertions must therefore be scoped to the spec's own uid, never
+ * to a global count.
+ */
+async function storyData({ method = "GET", path, uid, body }) {
+  const res = await fetch(`${STORY_DATA_URL}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", "X-User-ID": uid },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    return { __error: true, status: res.status, body: await res.text() };
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+/** Create `count` stories straight through the API, concurrently. */
+async function seedStoryDataStories({ uid, count, titlePrefix = "Filler" }) {
+  await Promise.all(
+    Array.from({ length: count }, (_, i) =>
+      storyData({
+        method: "POST",
+        path: "/v1/stories",
+        uid,
+        body: { title: `${titlePrefix} ${i + 1}`, description: "", authorName: "e2e", tags: [], published: false },
+      }),
+    ),
+  );
+  return null;
+}
+
 /** Wipe all Firestore docs + Auth accounts so each spec starts clean. */
 async function resetEmulators() {
   await fetch(FS_EMU, { method: "DELETE", headers: OWNER });
@@ -152,5 +191,7 @@ export function registerTasks(on) {
     getDoc: (arg) => getDoc(arg),
     listDocs: (arg) => listDocs(arg),
     resetEmulators: () => resetEmulators(),
+    storyData: (arg) => storyData(arg),
+    seedStoryDataStories: (arg) => seedStoryDataStories(arg),
   });
 }

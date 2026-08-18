@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Import story JSON payloads through the createStoryByAdmin HTTP function.
+ * Import story JSON payloads into story-data.
  *
  * Usage:
  *   npm run seed-story -- story-ideas/fantasy/mist-and-ash.json
@@ -16,7 +16,6 @@
  * and --owner-uid is required.
  *
  * Options:
- *   --admin-email=<email>  Identity to authenticate as (default admin@taletribe.local)
  *   --owner-email=<email>  Owner account to seed/resolve (default seed-owner@taletribe.local)
  *   --owner-uid=<uid>      Use this uid as ownerUid instead of resolving by email
  *   --key-suffix=<text>    Appended to each payload's idempotencyKey
@@ -39,12 +38,9 @@ const path = require('path')
 const admin = require('firebase-admin')
 
 const DEFAULT_PROJECT = 'story-6f89f'
-const DEFAULT_ADMIN_EMAIL = 'admin@taletribe.local'
 const DEFAULT_OWNER_EMAIL = 'seed-owner@taletribe.local'
 const AUTH_EMULATOR_HOST = '127.0.0.1:9099'
 const FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080'
-const FUNCTIONS_EMULATOR_ORIGIN = 'http://127.0.0.1:5001'
-const REGION = 'us-central1'
 
 function parseArgs(argv) {
   const args = argv.slice(2)
@@ -62,7 +58,6 @@ function parseArgs(argv) {
 
   return {
     targets: positionals,
-    adminEmail: flags.get('admin-email') || process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL,
     ownerEmail: flags.get('owner-email') || process.env.SEED_OWNER_EMAIL || DEFAULT_OWNER_EMAIL,
     ownerUid: flags.get('owner-uid') || '',
     keySuffix: flags.get('key-suffix') || '',
@@ -140,28 +135,6 @@ function loadUserProfileDefaults() {
   }
 }
 
-async function ensureAdminIdentity({ email, prod }) {
-  let user
-  try {
-    user = await admin.auth().getUserByEmail(email)
-  } catch (error) {
-    if (error.code !== 'auth/user-not-found') throw error
-    if (prod) {
-      throw new Error(`Admin user ${email} does not exist in production`)
-    }
-    user = await admin.auth().createUser({ email, emailVerified: true, displayName: 'seed-admin' })
-    console.log(`  created admin user ${email} (${user.uid})`)
-  }
-
-  if (!user.customClaims?.admin) {
-    if (prod) {
-      throw new Error(`User ${email} is missing the admin claim (run: npm run set-admin -- ${email} --prod)`)
-    }
-    await admin.auth().setCustomUserClaims(user.uid, { ...(user.customClaims || {}), admin: true })
-    console.log(`  granted admin claim to ${email}`)
-  }
-  return user
-}
 
 /** Resolve (and in the emulator create) the account stories will be attributed to. */
 async function ensureOwner({ email, prod }) {
@@ -253,31 +226,215 @@ async function mintIdToken({ uid, prod, projectId }) {
   return body.idToken
 }
 
-function resolveUrl({ url, prod, projectId }) {
-  if (url) return url
-  return prod
-    ? `https://${REGION}-${projectId}.cloudfunctions.net/createStoryByAdmin`
-    : `${FUNCTIONS_EMULATOR_ORIGIN}/${projectId}/${REGION}/createStoryByAdmin`
+function resolveUrl({ url }) {
+  return (url || process.env.STORY_DATA_URL || 'http://127.0.0.1:8084').replace(/\/$/, '')
 }
 
-async function postPayload({ url, idToken, payload }) {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${idToken}`,
-    },
-    body: JSON.stringify(payload),
-  })
-
-  const text = await response.text()
-  let body
-  try {
-    body = JSON.parse(text)
-  } catch {
-    body = { raw: text.slice(0, 500) }
+/**
+ * story-data creates entities for the *caller*, so every request here is made
+ * as the story's owner rather than as an admin. The bearer token is what
+ * production verifies; X-User-ID is what a local AUTH_MODE=dev instance reads.
+ */
+async function storyData(baseUrl, ctx, method, path, body, revision) {
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${ctx.idToken}`,
+    'X-User-ID': ctx.ownerUid,
   }
-  return { status: response.status, body }
+  if (revision !== undefined) headers['If-Match'] = String(revision)
+
+  const response = await fetch(`${baseUrl}${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const text = await response.text()
+  let parsed
+  try {
+    parsed = text ? JSON.parse(text) : {}
+  } catch {
+    parsed = { raw: text.slice(0, 300) }
+  }
+  if (!response.ok) {
+    const error = new Error(`${method} ${path} -> ${response.status}: ${parsed.error || text.slice(0, 200)}`)
+    error.status = response.status
+    throw error
+  }
+  return parsed
+}
+
+/**
+ * Walk a validated payload into story-data.
+ *
+ * The payload addresses everything by key (`characterKeys`, `locationKey`,
+ * dependency `plotKey`/`eventKey`) because it was written for a Firestore
+ * aggregate that could allocate every id up front. story-data assigns ids on
+ * insert instead, so entities are created first and the references patched in
+ * a second pass — which is also why events are created before their
+ * dependencies are attached.
+ */
+async function importPayload({ baseUrl, ctx, payload }) {
+  const call = (method, path, body, revision) => storyData(baseUrl, ctx, method, path, body, revision)
+
+  // Idempotency: the Firestore importer kept an adminStoryImports ledger. Here
+  // the owner's own library is the ledger — a re-run finds the title and stops.
+  const owned = await call('GET', '/v1/stories')
+  const existing = owned.find((story) => story.title === payload.story.title)
+  if (existing) {
+    return { storyId: existing.id, title: existing.title, chapterCount: null, replay: true }
+  }
+
+  const story = await call('POST', '/v1/stories', {
+    title: payload.story.title,
+    description: payload.story.description,
+    authorName: payload.story.authorName || '',
+    category: payload.story.category,
+    targetAudience: payload.story.targetAudience,
+    language: payload.story.language,
+    copyright: payload.story.copyright,
+    coverImageUrl: payload.story.coverImageUrl,
+    thumbnailUrl: payload.story.thumbnailUrl,
+    tags: payload.story.tags,
+    published: payload.story.isPublished,
+  })
+  const storyId = story.id
+
+  // Creating a story opens it with an empty first chapter; fill that one in
+  // rather than leaving it stranded ahead of the imported prose.
+  const [opening] = await call('GET', `/v1/stories/${storyId}/chapters`)
+  for (const [index, chapter] of payload.chapters.entries()) {
+    if (index === 0 && opening) {
+      await call('PATCH', `/v1/stories/${storyId}/chapters/${opening.id}`, {
+        title: chapter.title,
+        content: chapter.content,
+        position: opening.position,
+      }, opening.revision)
+    } else {
+      await call('POST', `/v1/stories/${storyId}/chapters`, {
+        title: chapter.title,
+        content: chapter.content,
+        position: index,
+      })
+    }
+  }
+
+  const characterIds = {}
+  for (const character of payload.characters) {
+    const created = await call('POST', `/v1/stories/${storyId}/characters`, {
+      name: character.name,
+      age: character.age ?? null,
+      artUrl: character.artUrl || '',
+      soul: character.soul || '',
+      personality: character.personality || '',
+      voice: character.voice || '',
+      backstory: character.backstory || '',
+      affiliations: character.affiliations || '',
+      notes: character.notes || '',
+    })
+    characterIds[character.key] = created.id
+  }
+
+  // Relationships point at other characters, so they can only be attached once
+  // every character exists.
+  for (const character of payload.characters) {
+    const relationships = (character.relationships || []).map((relationship) => ({
+      characterId: characterIds[relationship.characterKey],
+      type: relationship.type,
+      description: relationship.description || '',
+    }))
+    if (relationships.length === 0) continue
+    const current = (await call('GET', `/v1/stories/${storyId}/characters`))
+      .find((entry) => entry.id === characterIds[character.key])
+    await call('PATCH', `/v1/stories/${storyId}/characters/${characterIds[character.key]}`, {
+      name: character.name,
+      age: character.age ?? null,
+      artUrl: character.artUrl || '',
+      soul: character.soul || '',
+      personality: character.personality || '',
+      voice: character.voice || '',
+      backstory: character.backstory || '',
+      affiliations: character.affiliations || '',
+      notes: character.notes || '',
+      relationships,
+    }, current.revision)
+  }
+
+  const placeIds = {}
+  for (const place of payload.places) {
+    const created = await call('POST', `/v1/stories/${storyId}/places`, {
+      name: place.name,
+      imageUrl: place.imageUrl || '',
+      description: place.description || '',
+      atmosphere: place.atmosphere || '',
+      geography: place.geography || '',
+      history: place.history || '',
+      significance: place.significance || '',
+      notes: place.notes || '',
+    })
+    placeIds[place.key] = created.id
+  }
+
+  const plotIds = {}
+  const eventIds = {}
+  for (const plot of payload.plots) {
+    const created = await call('POST', `/v1/stories/${storyId}/plots`, {
+      name: plot.name,
+      description: plot.description,
+    })
+    plotIds[plot.key] = created.id
+
+    for (const event of plot.events) {
+      const madeEvent = await call('POST', `/v1/stories/${storyId}/plots/${created.id}/events`, {
+        name: event.name,
+        content: event.content,
+        characterIds: (event.characterKeys || []).map((key) => characterIds[key]).filter(Boolean),
+        locationId: event.locationKey ? placeIds[event.locationKey] || null : null,
+        tensionLevel: event.tensionLevel,
+        pacing: event.pacing,
+        storyBeat: event.storyBeat,
+        emotionalTone: event.emotionalTone || '',
+        chapterNumber: event.chapterNumber ?? null,
+        notes: event.notes || '',
+      })
+      eventIds[`${plot.key}::${event.key}`] = madeEvent.id
+    }
+  }
+
+  // Dependencies may point forward to an event in a later plot line, so they
+  // are attached only once every event has an id.
+  for (const plot of payload.plots) {
+    for (const event of plot.events) {
+      const dependencies = (event.dependencies || [])
+        .map((dependency) => ({
+          eventId: eventIds[`${dependency.plotKey}::${dependency.eventKey}`],
+          plotLineId: plotIds[dependency.plotKey],
+          relationshipType: dependency.relationshipType,
+          description: dependency.description || '',
+        }))
+        .filter((dependency) => dependency.eventId && dependency.plotLineId)
+      if (dependencies.length === 0) continue
+
+      const eventId = eventIds[`${plot.key}::${event.key}`]
+      const live = (await call('GET', `/v1/stories/${storyId}/plots`))
+        .find((line) => line.id === plotIds[plot.key])
+        .events.find((entry) => entry.id === eventId)
+      await call('PATCH', `/v1/stories/${storyId}/plots/${plotIds[plot.key]}/events/${eventId}`, {
+        name: event.name,
+        content: event.content,
+        characterIds: (event.characterKeys || []).map((key) => characterIds[key]).filter(Boolean),
+        locationId: event.locationKey ? placeIds[event.locationKey] || null : null,
+        dependencies,
+        tensionLevel: event.tensionLevel,
+        pacing: event.pacing,
+        storyBeat: event.storyBeat,
+        emotionalTone: event.emotionalTone || '',
+        chapterNumber: event.chapterNumber ?? null,
+        notes: event.notes || '',
+      }, live.revision)
+    }
+  }
+
+  return { storyId, title: story.title, chapterCount: payload.chapters.length, replay: false }
 }
 
 async function main() {
@@ -327,29 +484,26 @@ async function main() {
     ...(options.serviceAccount ? { serviceAccountId: options.serviceAccount } : {}),
   })
 
-  const adminUser = await ensureAdminIdentity({ email: options.adminEmail, prod: options.prod })
   const ownerUid = options.ownerUid || (await ensureOwner({ email: options.ownerEmail, prod: options.prod }))
-  const idToken = await mintIdToken({ uid: adminUser.uid, prod: options.prod, projectId: options.projectId })
-  const url = resolveUrl(options)
-  console.log(`  admin ${options.adminEmail} (${adminUser.uid})`)
+  // The token is minted for the owner, not an admin: story-data creates
+  // entities for whoever is calling, so there is nothing to impersonate.
+  const idToken = await mintIdToken({ uid: ownerUid, prod: options.prod, projectId: options.projectId })
+  const baseUrl = resolveUrl(options)
+  const ctx = { idToken, ownerUid }
   console.log(`  owner ${ownerUid}`)
-  console.log(`  POST  ${url}\n`)
+  console.log(`  into  ${baseUrl}\n`)
 
   let failed = 0
   for (const file of files) {
     const label = path.relative(process.cwd(), file)
     const payload = loadPayload(file, { ...options, ownerUid })
-    const { status, body } = await postPayload({ url, idToken, payload })
-
-    if (status === 200 || status === 201) {
-      const replay = body.idempotentReplay ? ' (idempotent replay)' : ''
-      console.log(`  ${status} ${label} -> ${body.storyId} "${body.title}" ${body.chapterCount}ch${replay}`)
-    } else {
+    try {
+      const result = await importPayload({ baseUrl, ctx, payload })
+      const suffix = result.replay ? ' (already imported)' : ` ${result.chapterCount}ch`
+      console.log(`  ok  ${label} -> ${result.storyId} "${result.title}"${suffix}`)
+    } catch (error) {
       failed += 1
-      console.log(`  ${status} ${label} -> ${body.code || 'error'}: ${body.error || JSON.stringify(body)}`)
-      for (const issue of body.issues || []) {
-        console.log(`        ${issue.path || '(root)'}: ${issue.message}`)
-      }
+      console.log(`  fail ${label} -> ${error.message}`)
     }
   }
 

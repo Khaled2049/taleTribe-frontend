@@ -17,8 +17,7 @@ import {
 } from "firebase/firestore";
 import { auth, firestore } from "../config/firebase";
 import { storageService } from "@/services/StorageService";
-import { publicProfileService } from "@/services/PublicProfileService";
-import { usernameService } from "@/services/UsernameService";
+import { profileRepo } from "@/services/ProfileRepo";
 
 /** Optional profile details collected during the signup wizard. */
 export interface SignupProfile {
@@ -46,10 +45,6 @@ export const useFirebaseAuth = () => {
       photoURL?: string;
     },
   ) => {
-    const claim = await usernameService.claim(userData.username, userId);
-    if (claim === "taken") {
-      throw new Error("That username is already taken.");
-    }
     const dbUser = {
       username: userData.username,
       email: userData.email,
@@ -62,32 +57,19 @@ export const useFirebaseAuth = () => {
       savedPosts: [],
       lastLogin: new Date().toISOString(),
       isAnonymous: userData.isAnonymous || false,
-      bio: userData.bio?.trim() || "",
-      occupation: userData.occupation?.trim() || "",
-      location: userData.location?.trim() || "",
       ...(userData.writingInterests?.trim()
         ? { writingInterests: userData.writingInterests.trim() }
         : {}),
-      ...(userData.walletAddress
-        ? { walletAddress: userData.walletAddress }
-        : {}),
     };
-
-    let userDocWritten = false;
-    try {
-      await setDoc(doc(firestore, "users", userId), dbUser);
-      userDocWritten = true;
-      await publicProfileService.upsertPublicProfile(userId, {
-        username: userData.username,
-        createdAt: dbUser.createdAt,
-        ...(userData.photoURL ? { photoURL: userData.photoURL } : {}),
-      });
-    } catch (error) {
-      if (claim === "claimed" && !userDocWritten) {
-        await usernameService.release(userData.username);
-      }
-      throw error;
-    }
+    await setDoc(doc(firestore, "users", userId), dbUser);
+    await profileRepo.createMe({
+      username: userData.username,
+      photoURL: userData.photoURL || "",
+      bio: userData.bio?.trim() || "",
+      occupation: userData.occupation?.trim() || "",
+      location: userData.location?.trim() || "",
+      walletAddress: userData.walletAddress || "",
+    });
   };
 
   /**

@@ -9,11 +9,10 @@ import DiscussionSection from "./components/DiscussionSection";
 import NextBookSection from "./components/NextBookSection";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { getAbsoluteUrl, APP_NAME } from "@/config/seo";
-import { useBookClub } from "@/hooks/queries/useBookClubQueries";
-import { publicProfileService } from "@/services/PublicProfileService";
+import { useBookClub, useClubProgress } from "@/hooks/queries/useBookClubQueries";
+import { profileRepo } from "@/services/ProfileRepo";
 import { BookPickerDialog } from "@/components/common/BookPicker";
 import { hasBook } from "@/utils/bookMapping";
-import { IReadingProgress } from "@/types/IClub";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,7 +61,6 @@ const BookClubDetails: React.FC = () => {
   const [members, setMembers] = useState<MemberInfo[]>([]);
   const [isMembersOpen, setIsMembersOpen] = useState(false);
   const previousMemberIdsRef = useRef<string>("");
-  const [progressList, setProgressList] = useState<IReadingProgress[]>([]);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isEditingMeetup, setIsEditingMeetup] = useState(false);
   const [meetupDraft, setMeetupDraft] = useState("");
@@ -88,7 +86,7 @@ const BookClubDetails: React.FC = () => {
       previousMemberIdsRef.current = memberIdsString;
 
       try {
-        const profileMap = await publicProfileService.getPublicProfiles(
+        const profileMap = await profileRepo.getMany(
           club.members,
         );
         const memberInfos = club.members.map((memberId) => {
@@ -110,16 +108,9 @@ const BookClubDetails: React.FC = () => {
     };
   }, [club?.members?.length, club?.members]);
 
-  // One realtime source for every member's reading progress.
-  // Firestore rules require auth to read memberProgress, so skip when signed out.
-  useEffect(() => {
-    if (!id || !user) {
-      setProgressList([]);
-      return;
-    }
-    const unsubscribe = bookClubRepo.getAllMemberProgress(id, setProgressList);
-    return unsubscribe;
-  }, [id, user]);
+  // The progress endpoint is members-only, so it is not queried while signed out.
+  const { data: progress } = useClubProgress(id, !!user);
+  const progressList = progress ?? [];
 
   const userCurrentChapter = user
     ? (progressList.find((p) => p.userId === user.uid)?.currentChapter ?? 0)

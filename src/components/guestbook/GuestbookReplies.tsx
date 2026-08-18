@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Send, ChevronUp } from "lucide-react";
 import { IGuestbookReply } from "@/types/IGuestbookReply";
 import { IUser } from "@/types/IUser";
-import { guestbookReplyService } from "@/services/GuestbookReplyService";
+import { guestbookRepo } from "@/services/GuestbookRepo";
 import { rateLimitMessage } from "@/services/rateLimitError";
 import { GuestbookReply } from "./GuestbookReply";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
@@ -11,6 +11,7 @@ import { useGuestbookPolicy } from "./guestbookPolicyContext";
 interface GuestbookRepliesProps {
   ownerId: string;
   entryId: string;
+  entryAuthorId: string;
   currentUser: IUser | null;
   onReplyCountChange?: (count: number) => void;
   onHide?: () => void;
@@ -19,6 +20,7 @@ interface GuestbookRepliesProps {
 const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
   ownerId,
   entryId,
+  entryAuthorId,
   currentUser,
   onReplyCountChange,
   onHide,
@@ -35,18 +37,9 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
   const loadReplies = useCallback(async () => {
     try {
       setIsLoadingReplies(true);
-      const fetched = await guestbookReplyService.getReplies(ownerId, entryId);
-      const hydrated = currentUser
-        ? await guestbookReplyService.hydrateUserVotes(
-            ownerId,
-            entryId,
-            fetched,
-            currentUser.uid,
-          )
-        : fetched;
-
-      setReplies(hydrated);
-      onReplyCountChange?.(hydrated.length);
+      const fetched = await guestbookRepo.listReplies(ownerId, entryId);
+      setReplies(fetched);
+      onReplyCountChange?.(fetched.length);
     } catch (error) {
       console.error("Error loading replies:", error);
     } finally {
@@ -60,12 +53,7 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
 
   const addReply = async (content: string, parentId: string | null) => {
     if (!currentUser) return;
-    await guestbookReplyService.addReply(ownerId, entryId, {
-      content,
-      authorId: currentUser.uid,
-      authorUsername: currentUser.username || "unknown",
-      parentId,
-    });
+    await guestbookRepo.createReply(ownerId, entryId, content, parentId);
     await loadReplies();
   };
 
@@ -103,7 +91,7 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
     if (!pendingDeleteId) return;
     setIsDeletingReply(true);
     try {
-      await guestbookReplyService.deleteReply(
+      await guestbookRepo.deleteReply(
         ownerId,
         entryId,
         pendingDeleteId,
@@ -118,7 +106,7 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
   };
 
   const handleEdit = async (replyId: string, content: string) => {
-    await guestbookReplyService.updateReply(ownerId, entryId, replyId, content);
+    await guestbookRepo.updateReply(ownerId, entryId, replyId, content);
     await loadReplies();
   };
 
@@ -179,6 +167,7 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
             <GuestbookReply
               key={reply.id}
               ownerId={ownerId}
+              entryAuthorId={entryAuthorId}
               reply={reply}
               allReplies={replies}
               currentUser={currentUser}

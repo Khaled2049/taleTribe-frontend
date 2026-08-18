@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-const PERSIST_THROTTLE_MS = 1500;
+const PERSIST_THROTTLE_MS = 10000;
 const RESTORE_SUPPRESS_MS = 500;
 const RESTORE_REAPPLY_MS = 300;
 

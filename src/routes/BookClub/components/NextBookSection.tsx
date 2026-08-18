@@ -17,7 +17,6 @@ import {
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { BookPicker } from "@/components/common/BookPicker";
 import { RATE_LIMITS } from "@/config/rateLimits";
-import { rateLimitService } from "@/services/RateLimitService";
 
 interface NextBookSectionProps {
   club: IClub;
@@ -40,7 +39,6 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
   const [isCreatingPoll, setIsCreatingPoll] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [voteError, setVoteError] = useState<string | null>(null);
   const [optimisticVotes, setOptimisticVotes] = useState<
     Record<string, number>
   >({});
@@ -108,14 +106,6 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
       return;
     }
 
-    if (user) {
-      const rateLimitCheck = await rateLimitService.canCreatePoll(user.uid);
-      if (!rateLimitCheck.allowed) {
-        setError(rateLimitCheck.message || "Rate limit exceeded");
-        return;
-      }
-    }
-
     setIsSaving(true);
     try {
       await bookClubRepo.createPoll(club.id, {
@@ -128,10 +118,6 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
         isActive: true,
         ...(newPoll.endDate ? { endDate: newPoll.endDate } : {}),
       });
-
-      if (user) {
-        await rateLimitService.incrementPollCount(user.uid);
-      }
 
       setIsCreatingPoll(false);
       setNewPoll({
@@ -152,26 +138,10 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
 
     const poll = polls.find((p) => p.id === pollId);
     const currentVote = poll?.votes[user.uid];
-    const isVoteChange =
-      currentVote !== undefined && currentVote !== optionIndex;
-
-    if (isVoteChange) {
-      const rateLimitCheck = await rateLimitService.canChangePollVote(user.uid);
-      if (!rateLimitCheck.allowed) {
-        setVoteError(
-          rateLimitCheck.message || "Rate limit exceeded for vote changes",
-        );
-        return;
-      }
-    }
-
     setOptimisticVotes((prev) => ({ ...prev, [pollId]: optionIndex }));
 
     try {
       await bookClubRepo.voteOnPoll(club.id, pollId, user.uid, optionIndex);
-      if (isVoteChange) {
-        await rateLimitService.incrementVoteChangeCount(user.uid);
-      }
     } catch (err) {
       console.error("Error voting:", err);
       setOptimisticVotes((prev) => {
@@ -254,12 +224,6 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
           </button>
         )}
       </div>
-
-      {voteError && (
-        <p className="font-ui text-sm text-ns-accent mb-4" role="alert">
-          {voteError}
-        </p>
-      )}
 
       {/* active polls */}
       <div className="space-y-8">

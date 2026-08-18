@@ -1,16 +1,14 @@
 import { useCallback } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
 import { queryKeys } from "./queryKeys";
-import { guestbookService } from "@/services/GuestbookService";
-import { guestbookVoteService } from "@/services/GuestbookVoteService";
+import { guestbookRepo } from "@/services/GuestbookRepo";
 import { IGuestbookEntry } from "@/types/IGuestbookEntry";
 
-type PageParam = QueryDocumentSnapshot<DocumentData> | undefined;
+type PageParam = string | undefined;
 
 type EntryPage = {
   entries: IGuestbookEntry[];
-  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  nextCursor?: string;
 };
 
 type CachedPages = { pages: EntryPage[]; pageParams: PageParam[] };
@@ -31,31 +29,13 @@ export function useGuestbookEntries(
     queryKey: [...queryKeys.guestbook.byOwner(ownerId ?? ""), viewerId] as const,
     enabled: !!ownerId,
     queryFn: async ({ pageParam }) => {
-      const result = await guestbookService.listEntries(
-        ownerId!,
-        ENTRIES_PER_PAGE,
-        pageParam,
-      );
-
-      if (viewerId && result.entries.length > 0) {
-        const userVotes = await guestbookVoteService.getUserVotesForEntries(
-          ownerId!,
-          result.entries.map((e) => e.id),
-          viewerId,
-        );
-        result.entries = result.entries.map((entry) => ({
-          ...entry,
-          userVote: userVotes.get(entry.id) ?? null,
-        }));
-      }
-
-      return result;
+      return guestbookRepo.listEntries(ownerId!, pageParam);
     },
     initialPageParam: undefined as PageParam,
     getNextPageParam: (lastPage) =>
       lastPage.entries.length < ENTRIES_PER_PAGE
         ? undefined
-        : (lastPage.lastDoc ?? undefined),
+        : lastPage.nextCursor,
   });
 }
 
@@ -103,7 +83,7 @@ export function useAddEntryToCache(
       queryClient.setQueryData<CachedPages>(queryKey, (old) => {
         if (!old || old.pages.length === 0) {
           return {
-            pages: [{ entries: [entry], lastDoc: null }],
+            pages: [{ entries: [entry] }],
             pageParams: [undefined],
           };
         }

@@ -2,15 +2,14 @@ import React, {
   useState,
   useEffect,
   useCallback,
-  useMemo,
   useRef,
 } from "react";
 import { Link, useParams } from "react-router-dom";
-import { storiesRepo } from "../../services/StoriesRepo";
+import { publicStoryRepo } from "@/services/PublicStoryRepo";
 import { Chapter, Story } from "@/types/IStory";
-import { CommentService } from "@/services/CommentService";
+import { storySocialRepo } from "@/services/StorySocialRepo";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useComments } from "@/hooks/queries/useCommentQueries";
+import { useComments, useCommentCache } from "@/hooks/queries/useCommentQueries";
 import { StoryLoadingState } from "./components/StoryLoadingState";
 import { StoryErrorState } from "./components/StoryErrorState";
 import { StorySynopsis } from "./components/StorySynopsis";
@@ -22,7 +21,7 @@ import { useUserWalletAddress } from "@/hooks/useUserWalletAddress";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { AuthorName } from "@/components/common";
 import { getAbsoluteUrl } from "@/config/seo";
-import { readingProgressService } from "@/services/ReadingProgressService";
+import { readingHistoryRepo } from "@/services/ReadingHistoryRepo";
 
 interface StoryDetailState {
   story: Story | null;
@@ -69,7 +68,6 @@ function withTimeout<T>(
 const StoryDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuthContext();
-  const commentService = useMemo(() => new CommentService(), []);
 
   const [viewMode, setViewMode] = useState<ViewMode>("details");
   const [hoveredHeroStar, setHoveredHeroStar] = useState<number | null>(null);
@@ -89,8 +87,11 @@ const StoryDetail: React.FC = () => {
     ratingsCount: 0,
   });
 
-  // Real-time comments via React Query (onSnapshot under the hood)
   const { data: comments = [], isPending: commentsLoading } = useComments(
+    id,
+    state.currentChapter?.id,
+  );
+  const { upsert: upsertComment, remove: removeComment } = useCommentCache(
     id,
     state.currentChapter?.id,
   );
@@ -105,7 +106,7 @@ const StoryDetail: React.FC = () => {
   const activeChapterId = useRef<string | null>(null);
   // Saved resume position (chapter + scroll), captured on load.
   const resumeRef = useRef<{
-    chapterIndex: number;
+    chapterId: string | null;
     scrollPercent: number;
   } | null>(null);
   const [readNowPending, setReadNowPending] = useState(false);
@@ -114,12 +115,16 @@ const StoryDetail: React.FC = () => {
 
   // Best-effort background fetch of a neighbouring chapter into the cache.
   const prefetchChapter = useCallback(
-    (chapters: Omit<Chapter, "content">[], index: number) => {
+    (
+      chapters: Omit<Chapter, "content">[],
+      index: number,
+      authorId: string,
+    ) => {
       if (!id) return;
       const meta = chapters[index];
       if (!meta || chapterContentCache.current[meta.id]) return;
-      storiesRepo
-        .getChapter(id, meta.id)
+      publicStoryRepo
+        .getChapter(id, meta.id, authorId)
         .then((c) => {
           if (c) chapterContentCache.current[c.id] = c.content;
         })
@@ -131,7 +136,11 @@ const StoryDetail: React.FC = () => {
   );
 
   const loadChapterContent = useCallback(
-    async (index: number, chapters: Omit<Chapter, "content">[]) => {
+    async (
+      index: number,
+      chapters: Omit<Chapter, "content">[],
+      authorId: string,
+    ) => {
       if (!id) return;
       const chapterMeta = chapters[index];
       if (!chapterMeta) return;
@@ -148,8 +157,8 @@ const StoryDetail: React.FC = () => {
           chapterError: null,
         }));
         // Warm neighbours even on a cache hit.
-        prefetchChapter(chapters, index + 1);
-        prefetchChapter(chapters, index - 1);
+        prefetchChapter(chapters, index + 1, authorId);
+        prefetchChapter(chapters, index - 1, authorId);
         return;
       }
 
@@ -161,7 +170,7 @@ const StoryDetail: React.FC = () => {
 
       try {
         const fullChapter = await withTimeout(
-          storiesRepo.getChapter(id, chapterMeta.id),
+          publicStoryRepo.getChapter(id, chapterMeta.id, authorId),
           CHAPTER_FETCH_TIMEOUT_MS,
           "Chapter fetch",
         );
@@ -187,8 +196,8 @@ const StoryDetail: React.FC = () => {
         }));
 
         // Prefetch both neighbours so back/forward feel instant.
-        prefetchChapter(chapters, index + 1);
-        prefetchChapter(chapters, index - 1);
+        prefetchChapter(chapters, index + 1, authorId);
+        prefetchChapter(chapters, index - 1, authorId);
       } catch (error) {
         console.error("Error loading chapter content:", error);
         if (activeChapterId.current !== chapterMeta.id) return;
@@ -203,16 +212,20 @@ const StoryDetail: React.FC = () => {
   );
 
   const loadStory = useCallback(
-    async (storyId: string, chapterIndex: number = 0) => {
+    async (
+      storyId: string,
+      chapterIndex: number = 0,
+      resumeChapterId: string | null = null,
+    ) => {
       try {
         setState((prev) => ({ ...prev, loading: true, error: null }));
 
-        const [storyData, chaptersMetaList] = await Promise.all([
-          storiesRepo.getStory(storyId),
-          storiesRepo.getChapterMetaList(storyId),
+        const [detail, me] = await Promise.all([
+          publicStoryRepo.getStoryDetail(storyId),
+          user ? storySocialRepo.getMe(storyId).catch(() => null) : Promise.resolve(null),
         ]);
 
-        if (!storyData) {
+        if (!detail) {
           setState((prev) => ({
             ...prev,
             loading: false,
@@ -221,17 +234,17 @@ const StoryDetail: React.FC = () => {
           return;
         }
 
+        const { story: storyData, chapters: chaptersMetaList } = detail;
+        const savedChapterIndex = resumeChapterId
+          ? chaptersMetaList.findIndex((chapter) => chapter.id === resumeChapterId)
+          : -1;
         const validChapterIndex = Math.max(
           0,
-          Math.min(chapterIndex, chaptersMetaList.length - 1),
+          Math.min(
+            savedChapterIndex >= 0 ? savedChapterIndex : chapterIndex,
+            chaptersMetaList.length - 1,
+          ),
         );
-
-        let isLiked = false;
-        let userRating: number | null = null;
-        if (user) {
-          isLiked = await storiesRepo.hasUserLikedStory(storyId, user.uid);
-          userRating = await storiesRepo.getUserRating(storyId, user.uid);
-        }
 
         setState((prev) => ({
           ...prev,
@@ -239,15 +252,20 @@ const StoryDetail: React.FC = () => {
           chapters: chaptersMetaList,
           currentChapter: null,
           currentChapterIndex: validChapterIndex,
-          likes: storyData.likes || 0,
-          isLiked,
-          userRating,
+          likes: storyData.likes,
+          isLiked: me?.liked || false,
+          userRating: me?.rating ?? null,
           ratingsCount: storyData.ratingsCount || 0,
           loading: false,
         }));
 
+        void publicStoryRepo.recordView(storyId).catch(() => {});
         // Load the starting chapter content (prefetches next inside)
-        await loadChapterContent(validChapterIndex, chaptersMetaList);
+        await loadChapterContent(
+          validChapterIndex,
+          chaptersMetaList,
+          storyData.userId,
+        );
       } catch (error) {
         console.error("Error fetching story:", error);
         setState((prev) => ({
@@ -274,11 +292,11 @@ const StoryDetail: React.FC = () => {
     }));
 
     try {
-      const isLiked = await storiesRepo.toggleStoryLike(id, user.uid);
+      const social = await storySocialRepo.setLike(id, !previousIsLiked);
       setState((prev) => ({
         ...prev,
-        isLiked,
-        likes: isLiked ? previousLikes + 1 : Math.max(0, previousLikes - 1),
+        isLiked: !previousIsLiked,
+        likes: social.likeCount,
       }));
     } catch (error) {
       console.error("Error toggling like:", error);
@@ -306,15 +324,14 @@ const StoryDetail: React.FC = () => {
       }));
 
       try {
-        await storiesRepo.submitStoryRating(id, user.uid, rating);
-        const updatedStory = await storiesRepo.getStory(id);
-        if (updatedStory) {
-          setState((prev) => ({
-            ...prev,
-            story: updatedStory,
-            ratingsCount: updatedStory.ratingsCount || 0,
-          }));
-        }
+        const social = await storySocialRepo.createRating(id, rating);
+        setState((prev) => ({
+          ...prev,
+          story: prev.story
+            ? { ...prev.story, averageRating: social.averageRating }
+            : null,
+          ratingsCount: social.ratingsCount,
+        }));
       } catch (error) {
         console.error("Error submitting rating:", error);
         setState((prev) => ({
@@ -341,15 +358,7 @@ const StoryDetail: React.FC = () => {
     if (chapterMeta) activeChapterId.current = chapterMeta.id;
 
     if (id && user && state.story) {
-      readingProgressService.saveProgress(user.uid, {
-        storyId: id,
-        chapterIndex: prevIndex,
-        storyTitle: state.story.title,
-        storyAuthor: state.story.author,
-        coverImageUrl: state.story.coverImageUrl ?? "",
-        thumbnailUrl: state.story.thumbnailUrl ?? "",
-        totalChapters: state.chapters.length,
-      });
+      if (chapterMeta) readingHistoryRepo.saveProgress(id, chapterMeta.id);
     }
 
     setState((prev) => ({
@@ -364,7 +373,7 @@ const StoryDetail: React.FC = () => {
         : { chapterLoading: true }),
     }));
 
-    if (!cached) loadChapterContent(prevIndex, state.chapters);
+    if (!cached) loadChapterContent(prevIndex, state.chapters, state.story?.userId || "");
     window.scrollTo(0, 0);
   }, [
     id,
@@ -389,15 +398,7 @@ const StoryDetail: React.FC = () => {
     if (chapterMeta) activeChapterId.current = chapterMeta.id;
 
     if (id && user && state.story) {
-      readingProgressService.saveProgress(user.uid, {
-        storyId: id,
-        chapterIndex: nextIndex,
-        storyTitle: state.story.title,
-        storyAuthor: state.story.author,
-        coverImageUrl: state.story.coverImageUrl ?? "",
-        thumbnailUrl: state.story.thumbnailUrl ?? "",
-        totalChapters: state.chapters.length,
-      });
+      if (chapterMeta) readingHistoryRepo.saveProgress(id, chapterMeta.id);
     }
 
     setState((prev) => ({
@@ -412,7 +413,7 @@ const StoryDetail: React.FC = () => {
         : { chapterLoading: true }),
     }));
 
-    if (!cached) loadChapterContent(nextIndex, state.chapters);
+    if (!cached) loadChapterContent(nextIndex, state.chapters, state.story?.userId || "");
     window.scrollTo(0, 0);
   }, [
     id,
@@ -424,90 +425,87 @@ const StoryDetail: React.FC = () => {
   ]);
 
   const handleRetryChapter = useCallback(() => {
-    loadChapterContent(state.currentChapterIndex, state.chapters);
-  }, [loadChapterContent, state.currentChapterIndex, state.chapters]);
+    loadChapterContent(
+      state.currentChapterIndex,
+      state.chapters,
+      state.story?.userId || "",
+    );
+  }, [loadChapterContent, state.currentChapterIndex, state.chapters, state.story?.userId]);
 
   const handleScrollPersist = useCallback(
     (percent: number) => {
       if (!id || !user) return;
-      readingProgressService.saveScrollPercent(
-        user.uid,
-        id,
-        state.currentChapterIndex,
-        percent,
-      );
+      if (state.currentChapter) readingHistoryRepo.saveProgress(id, state.currentChapter.id, percent);
     },
     [id, user, state.currentChapterIndex],
   );
 
   // --- Comment Logic ---
-  const handleCommentLike = useCallback(
-    async (commentId: string) => {
-      if (!user || !id || !state.currentChapter) return;
-      try {
-        await commentService.addLike(
-          id,
-          state.currentChapter.id,
-          commentId,
-          user.uid,
-        );
-      } catch (error) {
-        console.error("Error toggling like:", error);
-      }
+  // Each write returns the affected comment, so the thread is patched in place
+  // rather than re-fetched whole.
+  const handleCreateComment = useCallback(
+    async (message: string) => {
+      if (!id || !state.currentChapter) return;
+      upsertComment(
+        await storySocialRepo.createComment(id, state.currentChapter.id, message),
+      );
     },
-    [user, id, state.currentChapter, commentService],
+    [id, state.currentChapter, upsertComment],
   );
 
   const handleReply = useCallback(
     async (parentId: string, message: string) => {
-      if (!user || !id || !state.currentChapter) return;
+      if (!id || !state.currentChapter) return;
       try {
-        await commentService.addComment(
-          id,
-          state.currentChapter.id,
-          user.uid,
-          user.username,
-          message,
-          parentId,
+        upsertComment(
+          await storySocialRepo.createComment(id, state.currentChapter.id, message, parentId),
         );
       } catch (error) {
         console.error("Error adding reply:", error);
       }
     },
-    [user, id, state.currentChapter, commentService],
+    [id, state.currentChapter, upsertComment],
   );
 
   const handleDelete = useCallback(
     async (commentId: string) => {
       if (!id || !state.currentChapter) return;
       try {
-        await commentService.deleteComment(
-          id,
-          state.currentChapter.id,
-          commentId,
-        );
+        await storySocialRepo.deleteComment(id, state.currentChapter.id, commentId);
+        removeComment(commentId);
       } catch (error) {
         console.error("Error deleting comment:", error);
       }
     },
-    [id, state.currentChapter, commentService],
+    [id, state.currentChapter, removeComment],
   );
 
   const handleEdit = useCallback(
     async (commentId: string, newMessage: string) => {
       if (!id || !state.currentChapter) return;
       try {
-        await commentService.updateComment(
-          id,
-          state.currentChapter.id,
-          commentId,
-          newMessage,
+        upsertComment(
+          await storySocialRepo.updateComment(id, state.currentChapter.id, commentId, newMessage),
         );
       } catch (error) {
         console.error("Error updating comment:", error);
       }
     },
-    [id, state.currentChapter, commentService],
+    [id, state.currentChapter, upsertComment],
+  );
+
+  const handleCommentLike = useCallback(
+    async (commentId: string, liked: boolean) => {
+      if (!id || !state.currentChapter) return;
+      try {
+        upsertComment(
+          await storySocialRepo.setCommentLike(id, state.currentChapter.id, commentId, liked),
+        );
+      } catch (error) {
+        console.error("Error updating comment like:", error);
+      }
+    },
+    [id, state.currentChapter, upsertComment],
   );
 
   // --- Effects ---
@@ -516,9 +514,10 @@ const StoryDetail: React.FC = () => {
     const init = async () => {
       let startIndex = 0;
       if (user) {
-        const progress = await readingProgressService.getProgress(user.uid, id);
-        startIndex = progress.chapterIndex;
+        const progress = await readingHistoryRepo.getProgress(id);
         resumeRef.current = progress;
+        loadStory(id, startIndex, progress.chapterId);
+        return;
       }
       loadStory(id, startIndex);
     };
@@ -683,15 +682,7 @@ const StoryDetail: React.FC = () => {
                       if (readNowPending) return;
                       setReadNowPending(true);
                       if (id && user && state.story) {
-                        readingProgressService.saveProgress(user.uid, {
-                          storyId: id,
-                          chapterIndex: state.currentChapterIndex,
-                          storyTitle: state.story.title,
-                          storyAuthor: state.story.author,
-                          coverImageUrl: state.story.coverImageUrl ?? "",
-                          thumbnailUrl: state.story.thumbnailUrl ?? "",
-                          totalChapters: state.chapters.length,
-                        });
+                        if (state.currentChapter) readingHistoryRepo.saveProgress(id, state.currentChapter.id);
                       }
                       setTimeout(() => {
                         setReadNowPending(false);
@@ -776,15 +767,14 @@ const StoryDetail: React.FC = () => {
 
               {state.currentChapter && (
                 <StoryCommentsSection
-                  storyId={id!}
-                  chapterId={state.currentChapter.id}
                   comments={comments}
                   commentsLoading={commentsLoading}
                   currentUser={user}
-                  onLike={handleCommentLike}
+                  onCreate={handleCreateComment}
                   onReply={handleReply}
                   onDelete={handleDelete}
                   onEdit={handleEdit}
+                  onLike={handleCommentLike}
                 />
               )}
             </main>
@@ -803,7 +793,7 @@ const StoryDetail: React.FC = () => {
   // useScrollProgress guards against restoring more than once per chapter entry.
   const resumeScrollPercent =
     resumeRef.current &&
-    state.currentChapterIndex === resumeRef.current.chapterIndex &&
+    state.currentChapter.id === resumeRef.current.chapterId &&
     resumeRef.current.scrollPercent > 0
       ? resumeRef.current.scrollPercent
       : null;

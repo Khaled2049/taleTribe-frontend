@@ -1,7 +1,7 @@
 import { Navigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuthContext } from "../contexts/AuthContext";
-import { storiesRepo } from "@/services/StoriesRepo";
+import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
 import Story from "./Story/Story";
 
 const PrivateRoute = () => {
@@ -41,7 +41,7 @@ const PrivateRoute = () => {
 
   const getStoryById = async (storyId: string) => {
     try {
-      const storyData = await storiesRepo.getStory(storyId);
+      const storyData = await storyWorkspaceRepo.getStory(storyId);
       return storyData;
     } catch (error) {
       console.error("Error fetching story:", error);

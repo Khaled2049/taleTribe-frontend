@@ -1,15 +1,13 @@
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
-import { userService } from "@/services/UserService";
-import { readingProgressService } from "@/services/ReadingProgressService";
-import { publicProfileService } from "@/services/PublicProfileService";
-import { useAuthStore } from "@/stores";
+import { readingHistoryRepo } from "@/services/ReadingHistoryRepo";
+import { profileRepo } from "@/services/ProfileRepo";
 
 export function useWalletAddressQuery(userId: string | null | undefined) {
   return useQuery({
     queryKey: queryKeys.user.walletAddress(userId!),
-    queryFn: () => userService.getUserWalletAddress(userId!),
+    queryFn: async () => (await profileRepo.get(userId!))?.walletAddress || null,
     enabled: !!userId,
     staleTime: Infinity, // wallet address rarely changes
   });
@@ -27,11 +25,19 @@ export function useSetWalletAddress(userId: string | null | undefined) {
 }
 
 export function usePublicProfile(userId: string | undefined) {
-  const isSignedIn = useAuthStore((state) => !!state.user);
   return useQuery({
     queryKey: queryKeys.user.publicProfile(userId!),
-    queryFn: () => publicProfileService.getPublicProfile(userId!),
-    enabled: !!userId && isSignedIn,
+    queryFn: () => profileRepo.get(userId!),
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useGuestbookPolicy(userId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.user.guestbookPolicy(userId!),
+    queryFn: async () => (await profileRepo.get(userId!))?.guestbookPolicy || "everyone",
+    enabled: !!userId,
     staleTime: 1000 * 60 * 5,
   });
 }
@@ -51,10 +57,33 @@ export function useAuthorUsername(
   return data?.username?.trim() || fallback?.trim() || "unknown";
 }
 
+/**
+ * The batched form of {@link useAuthorUsername}, for lists. One request for
+ * every author on screen rather than one per row — the same trade the hook
+ * above makes, at the granularity a thread actually renders at.
+ */
+export function useProfileNames(
+  userIds: readonly (string | undefined)[],
+): Map<string, string> {
+  const ids = [...new Set(userIds.filter(Boolean) as string[])].sort();
+  const { data } = useQuery({
+    queryKey: queryKeys.user.profileNames(ids),
+    queryFn: async () => {
+      const profiles = await profileRepo.getMany(ids);
+      return new Map(
+        [...profiles].map(([uid, profile]) => [uid, profile.username]),
+      );
+    },
+    enabled: ids.length > 0,
+    staleTime: 1000 * 60 * 5,
+  });
+  return data ?? new Map();
+}
+
 export function useRecentlyRead(userId: string | undefined, limit = 5) {
   return useQuery({
     queryKey: queryKeys.user.recentlyRead(userId!),
-    queryFn: () => readingProgressService.getRecentlyRead(userId!, limit),
+    queryFn: () => readingHistoryRepo.getRecentlyRead(limit),
     enabled: !!userId,
     staleTime: 1000 * 60 * 2,
   });
@@ -63,7 +92,7 @@ export function useRecentlyRead(userId: string | undefined, limit = 5) {
 export function useClearReadingHistory(userId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => readingProgressService.clearAllProgress(userId!),
+    mutationFn: () => readingHistoryRepo.clearAllProgress(),
     onSuccess: () => {
       queryClient.setQueryData(queryKeys.user.recentlyRead(userId!), []);
     },

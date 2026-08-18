@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
-import { characterService } from "@/services/CharacterService";
+import { storyWorldbuildingRepo } from "@/services/StoryWorldbuildingRepo";
 import { Character } from "@/types/ICharacter";
 
 export function useCharacters(storyId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.characters.byStory(storyId!),
-    queryFn: () => characterService.getCharacters(storyId!),
+    queryFn: () => storyWorldbuildingRepo.getCharacters(storyId!),
     enabled: !!storyId,
   });
 }
@@ -15,7 +15,7 @@ export function useDeleteCharacter(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (characterId: string) =>
-      characterService.deleteCharacter(storyId!, characterId),
+      storyWorldbuildingRepo.deleteCharacter(storyId!, characterId, queryClient.getQueryData<Character[]>(queryKeys.characters.byStory(storyId!))?.find((x) => x.id === characterId)?.revision),
     onMutate: async (characterId) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.characters.byStory(storyId!),
@@ -46,7 +46,7 @@ export function useAddCharacter(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (character: Omit<Character, "id">) =>
-      characterService.addCharacter(storyId!, character),
+      storyWorldbuildingRepo.addCharacter(storyId!, character),
     onSuccess: (newCharacter) => {
       queryClient.setQueryData<Character[]>(
         queryKeys.characters.byStory(storyId!),
@@ -64,7 +64,7 @@ export function useUpdateCharacter(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (character: Character) =>
-      characterService.updateCharacter(storyId!, character),
+      storyWorldbuildingRepo.updateCharacter(storyId!, character),
     onMutate: async (updated) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.characters.byStory(storyId!),

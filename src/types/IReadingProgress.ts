@@ -1,5 +1,6 @@
 export interface IReadingProgress {
   storyId: string;
+  chapterId?: string;
   chapterIndex: number; // 0-based
   lastReadAt: Date;
   storyTitle: string;

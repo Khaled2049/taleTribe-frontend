@@ -2,43 +2,34 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
 import { bookClubRepo } from "@/routes/BookClub/bookClubRepo";
-import { IClub } from "@/types/IClub";
+import { IClub, IReadingProgress } from "@/types/IClub";
 
-/**
- * Real-time book club hook backed by React Query cache.
- *
- * Same strategy as useComments:
- * 1. `useQuery` with `staleTime: Infinity` — React Query never background-refetches.
- * 2. `useEffect` runs `subscribeToBookClub` (onSnapshot internally), pushes updates
- *    into the cache via `queryClient.setQueryData`.
- * 3. Cleanup unsubscribes on unmount.
- */
 export function useBookClub(clubId: string | undefined) {
   const queryClient = useQueryClient();
   const queryKey = queryKeys.bookClubs.detail(clubId!);
-  const enabled = !!clubId;
-
   useEffect(() => {
-    if (!enabled) return;
-
-    const unsubscribe = bookClubRepo.subscribeToBookClub(clubId!, (data) => {
-      queryClient.setQueryData(queryKey, data ?? null);
-    });
-
-    return () => {
-      unsubscribe();
-      queryClient.removeQueries({ queryKey });
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clubId, queryClient]);
-
+    const refresh = () => { void queryClient.invalidateQueries({ queryKey }); };
+    window.addEventListener("book-club-changed", refresh);
+    return () => window.removeEventListener("book-club-changed", refresh);
+  }, [queryClient, queryKey]);
   return useQuery<IClub | null>({
     queryKey,
-    queryFn: async () => null,
-    enabled: false,
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    queryFn: async () => (await bookClubRepo.getBookClub(clubId!)) ?? null,
+    enabled: !!clubId,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+// Member progress is polled rather than pushed — story-data has no realtime
+// channel, so another member's chapter change lands on the next interval.
+export function useClubProgress(clubId: string | undefined, enabled = true) {
+  return useQuery<IReadingProgress[]>({
+    queryKey: queryKeys.bookClubs.progress(clubId!),
+    queryFn: () => bookClubRepo.getMemberProgress(clubId!),
+    enabled: !!clubId && enabled,
+    refetchInterval: 15_000,
+    staleTime: 15_000,
   });
 }
 

@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:analyze": "tsc -b && vite build --mode analyze",
-    "kill-ports": "./kill-ports-for-emulator",
+    "kill-ports": "test -x ../../kill-ports && ../../kill-ports || echo 'kill-ports moved to the NovelSync workspace root (it now stops story-data and creditProxy too). Run ./kill-ports from there.'",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",

@@ -7,7 +7,6 @@ import {
   type LucideIcon,
   MessageSquare,
   PenLine,
-  BookOpen,
   Image,
   Heading1,
   Heading2,
@@ -61,7 +60,6 @@ export const SlashCommandExtension = Extension.create({
 // Suggestion configuration
 export const slashCommandSuggestion = (
   onGenerateNextLine: () => Promise<void>,
-  onGenerateChapter: () => Promise<void>,
   onGenerateImage: () => void,
   onCoWrite: () => void,
 ): Partial<SuggestionOptions> => ({
@@ -86,15 +84,6 @@ export const slashCommandSuggestion = (
         command: async ({ editor, range }: any) => {
           editor.chain().focus().deleteRange(range).run();
           await onGenerateNextLine();
-        },
-      },
-      {
-        title: "Generate Chapter",
-        description: "AI generates current chapter",
-        icon: BookOpen,
-        command: async ({ editor, range }: any) => {
-          editor.chain().focus().deleteRange(range).run();
-          await onGenerateChapter();
         },
       },
       {

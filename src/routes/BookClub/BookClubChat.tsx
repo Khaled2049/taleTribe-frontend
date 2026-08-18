@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RATE_LIMITS } from "@/config/rateLimits";
 import { rateLimitService } from "@/services/RateLimitService";
-import { publicProfileService } from "@/services/PublicProfileService";
+import { profileRepo } from "@/services/ProfileRepo";
 
 interface BookClubChatProps {
   clubId: string;
@@ -67,7 +67,7 @@ const BookClubChat: React.FC<BookClubChatProps> = ({
 
     const hydrateCurrentUsername = async () => {
       try {
-        const profile = await publicProfileService.getPublicProfile(user.uid);
+        const profile = await profileRepo.get(user.uid);
         if (!isMounted) return;
 
         const resolvedUsername =
@@ -94,7 +94,7 @@ const BookClubChat: React.FC<BookClubChatProps> = ({
       if (senderIds.length === 0) return;
 
       try {
-        const profileMap = await publicProfileService.getPublicProfiles(senderIds);
+        const profileMap = await profileRepo.getMany(senderIds);
         if (!isMounted) return;
 
         setSenderNames((prev) => {

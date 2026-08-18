@@ -84,11 +84,10 @@ const DEFAULT_PASSWORD = 'test1234'
 const DEFAULT_PRIZE_TALE = 250
 const AUTH_EMULATOR_HOST = '127.0.0.1:9099'
 const FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080'
-const FUNCTIONS_EMULATOR_ORIGIN = 'http://127.0.0.1:5001'
 const REGION = 'us-central1'
+const STORY_DATA_URL = process.env.STORY_DATA_URL || 'http://127.0.0.1:8084'
 
 /** Marks a document as ours so --reset can find it without guessing by title. */
-const SEED_TAG = 'seed-competitions'
 
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
@@ -203,17 +202,6 @@ const SCENARIOS = [
     voters: 'all',
   },
   {
-    key: 'settling',
-    title: 'Ashfall (Payout Interrupted)',
-    summary: 'Stuck mid-settlement. Retry with settleCompetition.',
-    expectPhase: 'settling',
-    dates: { start: -10 * DAY, deadline: 1 * DAY, voting: 8 * DAY },
-    retime: { deadline: -1 * HOUR, voting: BEYOND_TASK_HORIZON },
-    entrants: 3,
-    voters: 'all',
-    forcePhase: 'settling',
-  },
-  {
     key: 'settled',
     title: 'The Cartographer’s Apprentice',
     summary: 'Settled with a real winner — escrow released, digest written.',
@@ -243,20 +231,6 @@ const SCENARIOS = [
     dates: { start: -1 * DAY, deadline: 6 * DAY, voting: 9 * DAY },
     entrants: 1,
     cancel: true,
-  },
-  {
-    key: 'funding-stuck',
-    title: 'Hollow Pledge (Escrow Never Confirmed)',
-    summary: 'Direct write. escrowState "funding" — reconciliation target.',
-    expectPhase: 'scheduled',
-    direct: 'funding-stuck',
-  },
-  {
-    key: 'legacy',
-    title: 'The Old Prize (Pre-TALE)',
-    summary: 'Direct write. legacyPrizeLabel, no prizePool, unfunded escrow.',
-    expectPhase: 'open',
-    direct: 'legacy',
   },
 ]
 
@@ -337,30 +311,24 @@ async function ensureAuthUser({ email, displayName, password }) {
   }
 }
 
-/** Auth user + the three Firestore writes createUserByAdmin makes. */
+/** Public profile, which lives in story-data. Username uniqueness is enforced there. */
 async function ensureProfile({ uid, email, username }) {
-  const db = admin.firestore()
-  const userRef = db.collection('users').doc(uid)
-  const snapshot = await userRef.get()
-
-  if (typeof snapshot.data()?.username === 'string' && snapshot.data().username.trim()) {
-    return snapshot.data().username
-  }
-
   const profile = loadUserProfileDefaults()({ username, email })
-  await db.collection('usernames').doc(username.toLowerCase()).set({ uid })
-  await userRef.set(profile, { merge: true })
-  await db.collection('publicProfiles').doc(uid).set(
-    {
+  const response = await fetch(`${STORY_DATA_URL}/v1/profiles/me`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-User-ID': uid },
+    body: JSON.stringify({
       username,
       bio: profile.bio,
       occupation: profile.occupation,
       location: profile.location,
-      createdAt: profile.createdAt,
-      updatedAt: profile.createdAt,
-    },
-    { merge: true },
-  )
+    }),
+  })
+  // A re-run finds the username already taken by this same uid, which the
+  // upsert accepts; a genuine clash with another uid is a 409 worth surfacing.
+  if (!response.ok && response.status !== 409) {
+    throw new Error(`ensureProfile(${username}) -> ${response.status}: ${await response.text()}`)
+  }
   return username
 }
 
@@ -380,57 +348,102 @@ async function ensureAdmin({ email, password }) {
   return user
 }
 
-/** Custom token -> ID token, so functions see a real verifiable bearer token. */
-async function mintIdToken(uid) {
-  const customToken = await admin.auth().createCustomToken(uid)
-  const response = await fetch(
-    `http://${AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=emulator-key`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: customToken, returnSecureToken: true }),
-    },
-  )
-  const body = await response.json()
-  if (!response.ok || !body.idToken) {
-    throw new Error(`Failed to mint ID token: ${JSON.stringify(body)}`)
-  }
-  return body.idToken
-}
-
 // ---------------------------------------------------------------------------
 // Function calls
 // ---------------------------------------------------------------------------
 
-function makeCaller(projectId) {
-  return async function call(name, idToken, payload) {
-    const response = await fetch(
-      `${FUNCTIONS_EMULATOR_ORIGIN}/${projectId}/${REGION}/${name}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify(payload ?? {}),
-      },
-    )
+// Competitions live in story-data, not Firestore. The scenario steps below
+// still read as verbs ("publishCompetition"), so the mapping from verb to
+// method + path lives here rather than being smeared across thirty call sites.
+const STORY_DATA_ROUTES = {
+  saveCompetitionDraft: (body) => ({
+    method: 'POST',
+    path: `/v1/competition-drafts${body.competitionId ? `?competitionId=${body.competitionId}` : ''}`,
+    body: strip(body, ['competitionId']),
+  }),
+  publishCompetition: (body) => ({ method: 'POST', path: '/v1/competition-publish', body }),
+  joinCompetition: (body) => ({ method: 'PUT', path: `/v1/competitions/${body.competitionId}/join` }),
+  submitToCompetition: (body) => ({
+    method: 'POST',
+    path: `/v1/competitions/${body.competitionId}/submissions/me`,
+    body: { storyId: body.storyId },
+  }),
+  updateCompetition: (body) => ({
+    method: 'PATCH',
+    path: `/v1/competitions/${body.competitionId}`,
+    body: strip(body, ['competitionId']),
+  }),
+  advanceCompetitionPhase: (body) => ({
+    method: 'POST',
+    path: `/v1/competitions/${body.competitionId}/advance`,
+    body: { targetPhase: body.targetPhase || '' },
+  }),
+  castCompetitionVote: (body) => ({
+    method: 'PUT',
+    path: `/v1/competitions/${body.competitionId}/ballots/me`,
+    body: { submissionIds: body.submissionIds },
+  }),
+  cancelCompetition: (body) => ({
+    method: 'POST',
+    path: `/v1/competitions/${body.competitionId}/cancel`,
+    body: { reason: body.reason || 'seeded cancellation' },
+  }),
+  settleCompetition: (body) => ({ method: 'POST', path: `/v1/competitions/${body.competitionId}/settle` }),
+  adminGrantTokens: (body) => ({
+    method: 'POST',
+    path: '/v1/admin/token-grants',
+    body: { userId: body.userId, amount: body.amount, idempotencyKey: body.nonce },
+  }),
+  createStory: (body) => ({ method: 'POST', path: '/v1/stories', body }),
+  listChapters: (body) => ({ method: 'GET', path: `/v1/stories/${body.storyId}/chapters` }),
+  updateChapter: (body) => ({
+    method: 'PATCH',
+    path: `/v1/stories/${body.storyId}/chapters/${body.chapterId}`,
+    body: strip(body, ['storyId', 'chapterId', 'revision']),
+    revision: body.revision,
+  }),
+}
+
+function strip(body, keys) {
+  const out = { ...body }
+  for (const key of keys) delete out[key]
+  return out
+}
+
+function makeCaller() {
+  return async function call(name, identity, payload) {
+    const route = STORY_DATA_ROUTES[name]
+    if (!route) throw new Error(`No story-data route for "${name}"`)
+    const { method, path, body, revision } = route(payload ?? {})
+
+    // story-data's AUTH_MODE=dev reads these headers and ignores bearer tokens
+    // entirely, so the seed passes identities rather than minted ID tokens.
+    const { uid, admin: isAdmin } = typeof identity === 'string' ? { uid: identity } : identity
+    const headers = { 'Content-Type': 'application/json', 'X-User-ID': uid }
+    if (isAdmin) headers['X-Admin'] = 'true'
+    if (revision !== undefined) headers['If-Match'] = String(revision)
+
+    const response = await fetch(`${STORY_DATA_URL}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
 
     const text = await response.text()
-    let body
+    let parsed
     try {
-      body = JSON.parse(text)
+      parsed = text ? JSON.parse(text) : {}
     } catch {
-      body = { raw: text.slice(0, 300) }
+      parsed = { raw: text.slice(0, 300) }
     }
 
     if (!response.ok) {
-      const error = new Error(`${name} -> ${response.status}: ${body.error || text.slice(0, 200)}`)
+      const error = new Error(`${name} -> ${response.status}: ${parsed.error || text.slice(0, 200)}`)
       error.status = response.status
-      error.body = body
+      error.body = parsed
       throw error
     }
-    return body
+    return parsed
   }
 }
 
@@ -498,42 +511,38 @@ async function seedWriters({ count, password, call }) {
       email,
       username: `writer${number}`,
     })
-    const idToken = await mintIdToken(user.uid)
-    writers.push({ uid: user.uid, email, username, idToken, index })
+    writers.push({ uid: user.uid, email, username, index })
     console.log(`  writer${number}  ${email}  ${user.uid}`)
   }
 
   return writers
 }
 
-async function seedStories({ writers, adminToken, call }) {
+async function seedStories({ writers, call }) {
   for (const writer of writers) {
-    const result = await call('createStoryByAdmin', adminToken, storyPayload(writer.uid, writer.index))
-    writer.storyId = result.storyId
-  }
-}
-
-/** Wait for onStoryWrite to land storyCount, which voting eligibility reads. */
-async function waitForStoryCounts(writers, timeoutMs = 20000) {
-  const db = admin.firestore()
-  const deadline = Date.now() + timeoutMs
-  const pending = new Set(writers.map((writer) => writer.uid))
-
-  while (pending.size > 0 && Date.now() < deadline) {
-    for (const uid of [...pending]) {
-      const snapshot = await db.collection('users').doc(uid).get()
-      if ((snapshot.data()?.storyCount ?? 0) >= 1) pending.delete(uid)
+    const payload = storyPayload(writer.uid, writer.index)
+    const story = await call('createStory', writer.uid, {
+      title: payload.story.title,
+      description: payload.story.description,
+      authorName: writer.username,
+      category: payload.story.category,
+      tags: payload.story.tags,
+      published: payload.story.isPublished,
+    })
+    writer.storyId = story.id
+    // Creating a story opens it with a first chapter; fill that one in rather
+    // than adding a second, so the reader lands on prose.
+    const [chapter] = await call('listChapters', writer.uid, { storyId: story.id })
+    if (chapter) {
+      await call('updateChapter', writer.uid, {
+        storyId: story.id,
+        chapterId: chapter.id,
+        revision: chapter.revision,
+        title: payload.chapters[0].title,
+        content: payload.chapters[0].content,
+        position: chapter.position,
+      })
     }
-    if (pending.size === 0) break
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  }
-
-  if (pending.size > 0) {
-    // Don't fail the run — the counter is a soft gate and only voting needs it.
-    console.warn(
-      `  ! storyCount never arrived for ${pending.size} writer(s). Is the functions ` +
-        'emulator running with triggers? Voting will be rejected for them.',
-    )
   }
 }
 
@@ -543,20 +552,13 @@ async function waitForStoryCounts(writers, timeoutMs = 20000) {
 
 const iso = (offsetMs) => new Date(Date.now() + offsetMs).toISOString()
 
-async function stampSeedTag(competitionId, key) {
-  await admin.firestore().collection('competitions').doc(competitionId).update({
-    seedTag: SEED_TAG,
-    seedScenario: key,
-  })
-}
-
 /**
  * Build a competition through the real endpoints and walk it to its phase.
  */
-async function runApiScenario({ scenario, adminUser, adminToken, writers, prizeTale, call }) {
+async function runApiScenario({ scenario, adminUser, adminIdentity, writers, prizeTale, call }) {
   // Everything starts as a draft now; publishing is the separate step that
   // funds escrow. A `draft: true` scenario simply stops here.
-  const created = await call('saveCompetitionDraft', adminToken, {
+  const created = await call('saveCompetitionDraft', adminIdentity, {
     title: scenario.title,
     description:
       `${scenario.summary} Seeded by scripts/seed-competitions.js for local testing.`,
@@ -571,22 +573,20 @@ async function runApiScenario({ scenario, adminUser, adminToken, writers, prizeT
     creatorName: 'TaleTribe',
   })
 
-  const competitionId = created.competitionId
+  const competitionId = created.id
 
   if (scenario.draft) {
-    await stampSeedTag(competitionId, scenario.key)
     return competitionId
   }
 
-  await call('publishCompetition', adminToken, { competitionId })
-  await stampSeedTag(competitionId, scenario.key)
+  await call('publishCompetition', adminIdentity, { competitionId })
 
   // Entrants: join, then submit. The creator is barred from entering their own
   // competition, which is why the admin is never in this list.
   const entrants = writers.slice(0, scenario.entrants ?? 0)
   for (const writer of entrants) {
-    await call('joinCompetition', writer.idToken, { competitionId })
-    await call('submitToCompetition', writer.idToken, {
+    await call('joinCompetition', writer.uid, { competitionId })
+    await call('submitToCompetition', writer.uid, {
       competitionId,
       storyId: writer.storyId,
     })
@@ -598,8 +598,8 @@ async function runApiScenario({ scenario, adminUser, adminToken, writers, prizeT
     const body = { competitionId }
     if (scenario.retime.deadline !== undefined) body.deadline = iso(scenario.retime.deadline)
     if (scenario.retime.voting !== undefined) body.votingDeadline = iso(scenario.retime.voting)
-    await call('updateCompetition', adminToken, body)
-    await call('advanceCompetitionPhase', adminToken, { competitionId })
+    await call('updateCompetition', adminIdentity, body)
+    await call('advanceCompetitionPhase', adminIdentity, { competitionId })
   }
 
   if (scenario.voters === 'all') {
@@ -608,7 +608,7 @@ async function runApiScenario({ scenario, adminUser, adminToken, writers, prizeT
       const choices = submissionIds.filter((id) => id !== writer.uid).slice(0, 2)
       if (choices.length === 0) continue
       try {
-        await call('castCompetitionVote', writer.idToken, {
+        await call('castCompetitionVote', writer.uid, {
           competitionId,
           submissionIds: choices,
         })
@@ -619,137 +619,63 @@ async function runApiScenario({ scenario, adminUser, adminToken, writers, prizeT
   }
 
   if (scenario.cancel) {
-    await call('cancelCompetition', adminToken, { competitionId })
+    await call('cancelCompetition', adminIdentity, { competitionId })
   }
 
   if (scenario.settle) {
-    const outcome = await call('settleCompetition', adminToken, { competitionId })
+    const outcome = await call('settleCompetition', adminIdentity, { competitionId })
     const winner = (outcome.results || []).find((result) => BigInt(result.amount) > 0n)
-    const detail = outcome.refunded
-      ? 'refunded to creator'
-      : `winner ${winner ? winner.userId : '?'} took ${formatTale(winner ? winner.amount : '0')} TALE`
+    const detail = winner
+      ? `winner ${winner.userId} took ${formatTale(winner.amount)} TALE`
+      : 'no votes cast — prize returned to the host'
     console.log(`    settled: ${detail}`)
   }
 
-  // `settling` has no legitimate entry point — see the header. Written directly
-  // so the stuck-payout UI and the settleCompetition retry can be exercised.
-  if (scenario.forcePhase) {
-    await admin.firestore().collection('competitions').doc(competitionId).update({
-      phase: scenario.forcePhase,
-      phaseUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-  }
-
   return competitionId
-}
-
-/** Competitions that cannot exist via the API. Admin SDK writes, by necessity. */
-async function runDirectScenario({ scenario, adminUser, prizeTale }) {
-  const db = admin.firestore()
-  const ref = db.collection('competitions').doc()
-  const now = Date.now()
-  const timestamp = admin.firestore.FieldValue.serverTimestamp()
-  const ts = (offset) => admin.firestore.Timestamp.fromDate(new Date(now + offset))
-
-  const shared = {
-    title: scenario.title,
-    description: `${scenario.summary} Seeded by scripts/seed-competitions.js for local testing.`,
-    category: 'Short Fiction',
-    tags: ['seed', scenario.key],
-    maxParticipants: null,
-    participantsCount: 0,
-    submissionCount: 0,
-    ballotCount: 0,
-    creatorId: adminUser.uid,
-    creatorName: 'TaleTribe',
-    organizer: 'TaleTribe',
-    seedTag: SEED_TAG,
-    seedScenario: scenario.key,
-    phaseUpdatedAt: timestamp,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  }
-
-  if (scenario.direct === 'funding-stuck') {
-    await ref.set({
-      ...shared,
-      startDate: ts(1 * DAY),
-      deadline: ts(8 * DAY),
-      votingDeadline: ts(11 * DAY),
-      phase: 'scheduled',
-      published: true,
-      // No ledger movement: this is precisely a publish that died before escrow
-      // confirmed, so there is nothing held for it.
-      escrowState: 'funding',
-      prizePool: {
-        assetId: 'TALE',
-        symbol: 'TALE',
-        decimals: TALE_DECIMALS,
-        amount: tale(prizeTale),
-      },
-      escrowAccountId: `escrow:competition:${ref.id}`,
-      nextTransitionAt: ts(1 * DAY),
-    })
-    return ref.id
-  }
-
-  // legacy: a pre-TALE document — a decorative prize label, no funded pool.
-  await ref.set({
-    ...shared,
-    startDate: ts(-3 * DAY),
-    deadline: ts(10 * DAY),
-    votingDeadline: ts(13 * DAY),
-    phase: 'open',
-    published: true,
-    escrowState: 'unfunded',
-    legacyPrizeLabel: '1,000 USDC',
-    prizeAmount: 1000,
-    prizeCurrency: 'USDC',
-    nextTransitionAt: ts(10 * DAY),
-  })
-  return ref.id
 }
 
 // ---------------------------------------------------------------------------
 // Reset
 // ---------------------------------------------------------------------------
 
-async function deleteSubcollections(ref) {
-  for (const collection of await ref.listCollections()) {
-    const documents = await collection.listDocuments()
-    for (const document of documents) {
-      await deleteSubcollections(document)
-      await document.delete()
+/**
+ * Remove previously seeded competitions, identified by the `seed` tag the
+ * drafts carry.
+ *
+ * story-data only deletes drafts; a published competition can be cancelled but
+ * not removed, which is deliberate — its escrow and ledger postings are
+ * double-entry records, and deleting one side of a movement leaves balances
+ * that no longer reconcile with their history. Drop the postgres volume if you
+ * want a genuinely clean ledger.
+ */
+async function reset({ adminIdentity }) {
+  const response = await fetch(`${STORY_DATA_URL}/v1/competitions`, {
+    headers: { 'X-User-ID': adminIdentity.uid, 'X-Admin': 'true' },
+  })
+  const all = response.ok ? await response.json() : []
+  const seeded = all.filter((competition) => (competition.tags || []).includes('seed'))
+
+  console.log(`\nResetting ${seeded.length} previously seeded competition(s)`)
+  for (const competition of seeded) {
+    const isDraft = competition.phase === 'draft'
+    const path = isDraft
+      ? `/v1/competitions/${competition.id}`
+      : `/v1/competitions/${competition.id}/cancel`
+    const result = await fetch(`${STORY_DATA_URL}${path}`, {
+      method: isDraft ? 'DELETE' : 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-ID': adminIdentity.uid,
+        'X-Admin': 'true',
+      },
+      body: isDraft ? undefined : JSON.stringify({ reason: 'seed reset' }),
+    })
+    if (!result.ok && result.status !== 422) {
+      console.warn(`  ! ${competition.title} -> ${result.status}`)
     }
   }
-}
 
-/**
- * Remove previously seeded competitions.
- *
- * Ledger transfers are deliberately left alone. They are double-entry records:
- * deleting one side of a movement would leave balances that no longer reconcile
- * with their history, which is a worse state than a few orphaned escrow
- * accounts holding tokens nothing references. Wipe .emulator-data if you want a
- * genuinely clean ledger.
- */
-async function reset({ writers }) {
-  const db = admin.firestore()
-  const snapshot = await db.collection('competitions').where('seedTag', '==', SEED_TAG).get()
-
-  console.log(`\nResetting ${snapshot.size} previously seeded competition(s)`)
-  for (const doc of snapshot.docs) {
-    await deleteSubcollections(doc.ref)
-    await doc.ref.delete()
-  }
-
-  for (const writer of writers) {
-    const joins = await db.collection('users').doc(writer.uid).collection('competitionJoins').get()
-    for (const join of joins.docs) await join.ref.delete()
-  }
-
-  console.log('  ledgerTransfers and tokenAccounts left intact (see the note in reset()).')
+  console.log('  ledger transfers and token accounts left intact (see the note above).')
 }
 
 // ---------------------------------------------------------------------------
@@ -806,12 +732,11 @@ async function main() {
   console.log('Users')
   const adminUser = await ensureAdmin({ email: options.adminEmail, password: options.password })
   console.log(`  admin     ${options.adminEmail}  ${adminUser.uid}`)
-  const adminToken = await mintIdToken(adminUser.uid)
+  const adminIdentity = { uid: adminUser.uid, admin: true }
   const writers = await seedWriters({ count: options.users, password: options.password, call })
 
   console.log('\nStories')
-  await seedStories({ writers, adminToken, call })
-  await waitForStoryCounts(writers)
+  await seedStories({ writers, adminIdentity, call })
   console.log(`  ${writers.length} published story/stories created`)
 
   // Fund the admin well past what the run needs. The 1000 TALE initial grant
@@ -819,7 +744,7 @@ async function main() {
   // insufficient balance.
   const needed = selected.filter((scenario) => !scenario.direct).length * options.prizeTale
   console.log('\nFunding')
-  const grant = await call('adminGrantTokens', adminToken, {
+  const grant = await call('adminGrantTokens', adminIdentity, {
     userId: adminUser.uid,
     amount: tale(Math.max(needed * 2, 10000)),
     nonce: `seed-${Date.now()}`,
@@ -829,33 +754,31 @@ async function main() {
   // Reset LAST, once the HTTP path has demonstrably worked.
   //
   // It used to run before any of the above, which made it destructive on
-  // failure: deleting competitions only needs Firestore, which answers
-  // immediately, while everything that recreates them needs Cloud Functions.
-  // Seeding before the functions emulator had finished registering therefore
-  // wiped the previous run's competitions and created nothing — leaving zero,
-  // with only a warning to show for it. Both calls above are already through,
-  // so by here the API is known good.
+  // failure: a reset only needs story-data to answer, while recreating the
+  // competitions needs every write path to work. Resetting before the API was
+  // known good therefore wiped the previous run and created nothing. The calls
+  // above have already exercised story-data, so by here it is known good.
   if (options.reset) {
-    await reset({ writers })
+    await reset({ adminIdentity })
   }
 
   console.log('\nCompetitions')
   const results = []
   for (const scenario of selected) {
     try {
-      const competitionId = scenario.direct
-        ? await runDirectScenario({ scenario, adminUser, prizeTale: options.prizeTale })
-        : await runApiScenario({
-            scenario,
-            adminUser,
-            adminToken,
-            writers,
-            prizeTale: options.prizeTale,
-            call,
-          })
+      const competitionId = await runApiScenario({
+        scenario,
+        adminUser,
+        adminIdentity,
+        writers,
+        prizeTale: options.prizeTale,
+        call,
+      })
 
-      const snapshot = await admin.firestore().collection('competitions').doc(competitionId).get()
-      const phase = snapshot.data()?.phase
+      const verify = await fetch(`${STORY_DATA_URL}/v1/competitions/${competitionId}`, {
+        headers: { 'X-User-ID': adminIdentity.uid, 'X-Admin': 'true' },
+      })
+      const phase = verify.ok ? (await verify.json()).phase : 'unreadable'
       const ok = phase === scenario.expectPhase
       results.push({ scenario, competitionId, phase, ok })
 

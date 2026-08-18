@@ -4,7 +4,6 @@ import { FaBook } from "react-icons/fa";
 import { AuthorName } from "@/components/common";
 import { STORY_CATEGORIES } from "@/constants/storyOptions";
 import { usePublishedStories } from "@/hooks/queries/useStoryQueries";
-import { storiesRepo } from "@/services/StoriesRepo";
 
 const categoryLabel = (value?: string) =>
   STORY_CATEGORIES.find((option) => option.value === value)?.label ?? value;
@@ -49,7 +48,6 @@ const FeaturedStoryBanner: React.FC = () => {
     <>
       <Link
         to={`/story/${featured.id}`}
-        onClick={() => storiesRepo.incrementViewCount(featured.id)}
         aria-label={`Start reading ${featured.title}`}
         className="group relative block h-[260px] sm:h-[320px] lg:h-[360px] overflow-hidden rounded-ns-lg border border-ns-border bg-ns-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ns-bg"
       >

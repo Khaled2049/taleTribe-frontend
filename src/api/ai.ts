@@ -1,6 +1,4 @@
-import { doc, onSnapshot } from "firebase/firestore";
 import api, { getApiErrorMessage } from "./index";
-import { firestore } from "@/config/firebase";
 
 // ---------------------------------------------------------------------------
 // Brainstorm
@@ -76,56 +74,6 @@ export const generateNextLines = async (
 };
 
 // ---------------------------------------------------------------------------
-// Generate chapter (async job)
-// ---------------------------------------------------------------------------
-
-export interface GenerateChapterRequest {
-  storyId: string;
-  chapterNumber: number;
-  /** Float ordering key of the chapter position (source of truth). */
-  order?: number;
-  /** When set, generate into this existing chapter instead of creating a new one. */
-  chapterId?: string;
-}
-
-export interface GenerateChapterStartResponse {
-  jobId: string;
-  status: "queued";
-  message: string;
-}
-
-export interface GenerationJob {
-  id: string;
-  storyId: string;
-  type: string;
-  status: string;
-  progress?: number;
-  result?: {
-    chapterId?: string;
-    chapterNumber?: number;
-    title?: string;
-    [key: string]: unknown;
-  };
-  error?: string;
-}
-
-export const generateChapter = async (
-  request: GenerateChapterRequest,
-): Promise<GenerateChapterStartResponse> => {
-  try {
-    const response = await api.post<GenerateChapterStartResponse>(
-      "/generateChapter",
-      request,
-    );
-    return response.data;
-  } catch (error: unknown) {
-    throw new Error(
-      getApiErrorMessage(error, "Failed to start chapter generation"),
-    );
-  }
-};
-
-// ---------------------------------------------------------------------------
 // Summarize chapter (synchronous)
 // ---------------------------------------------------------------------------
 
@@ -150,114 +98,6 @@ export const summarizeChapter = async (
   } catch (error: unknown) {
     throw new Error(getApiErrorMessage(error, "Failed to summarize chapter"));
   }
-};
-
-export const getJobStatus = async (jobId: string): Promise<GenerationJob> => {
-  if (!jobId?.trim()) {
-    throw new Error("Missing jobId for job status request");
-  }
-
-  const encodedJobId = encodeURIComponent(jobId);
-
-  try {
-    console.debug("[generateChapter] checking job status", {
-      jobId,
-      endpoint: `/getJobStatus/${encodedJobId}`,
-    });
-
-    const response = await api.get<GenerationJob>(
-      `/getJobStatus/${encodedJobId}`,
-    );
-    console.debug("[generateChapter] job status response", response.data);
-    return response.data;
-  } catch (error: unknown) {
-    // Backward-compat fallback in case route param parsing fails in deployed function.
-    try {
-      console.debug("[generateChapter] retrying job status with query param", {
-        jobId,
-      });
-      const fallbackResponse = await api.get<GenerationJob>(`/getJobStatus`, {
-        params: { jobId },
-      });
-      console.debug(
-        "[generateChapter] job status response (query fallback)",
-        fallbackResponse.data,
-      );
-      return fallbackResponse.data;
-    } catch (fallbackError: unknown) {
-      throw new Error(
-        getApiErrorMessage(fallbackError, "Failed to fetch job status"),
-      );
-    }
-  }
-};
-
-/**
- * Resolve when a generation job reaches a terminal state, driven by a realtime
- * Firestore listener on the job doc (`jobs/{jobId}`) — no polling. The worker
- * writes progress (10/30/70/100) and the terminal `status`, and each write
- * pushes a snapshot here. `onProgress` lets the UI render a live progress bar.
- */
-export const waitForJobCompletion = (
-  jobId: string,
-  options?: { timeoutMs?: number; onProgress?: (progress: number) => void },
-): Promise<GenerationJob> => {
-  const timeoutMs = options?.timeoutMs ?? 120000;
-
-  if (!jobId?.trim()) {
-    return Promise.reject(new Error("Missing jobId for job status request"));
-  }
-
-  return new Promise<GenerationJob>((resolve, reject) => {
-    const ref = doc(firestore, "jobs", jobId);
-
-    let settled = false;
-    const finish = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      unsubscribe();
-      fn();
-    };
-
-    const timer = setTimeout(() => {
-      finish(() =>
-        reject(new Error("Chapter generation timed out. Please try again.")),
-      );
-    }, timeoutMs);
-
-    const unsubscribe = onSnapshot(
-      ref,
-      (snapshot) => {
-        // The doc may not be visible on the first snapshot (created moments
-        // after the HTTP response); wait for the next event.
-        if (!snapshot.exists()) return;
-
-        const job = { id: snapshot.id, ...snapshot.data() } as GenerationJob;
-
-        console.debug("[generateChapter] job snapshot", {
-          jobId,
-          status: job.status,
-          progress: job.progress,
-        });
-
-        if (typeof job.progress === "number") {
-          options?.onProgress?.(job.progress);
-        }
-
-        if (job.status === "completed") {
-          finish(() => resolve(job));
-        } else if (job.status === "failed") {
-          finish(() =>
-            reject(new Error(job.error || "Chapter generation failed")),
-          );
-        }
-      },
-      (error) => {
-        finish(() => reject(error));
-      },
-    );
-  });
 };
 
 // ---------------------------------------------------------------------------

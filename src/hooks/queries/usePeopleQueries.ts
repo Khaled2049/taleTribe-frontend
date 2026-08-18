@@ -1,8 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  PublicProfileWithId,
-  publicProfileService,
-} from "@/services/PublicProfileService";
+import { PublicProfile, profileRepo } from "@/services/ProfileRepo";
 import { queryKeys } from "./queryKeys";
 
 const FIVE_MINUTES = 1000 * 60 * 5;
@@ -14,9 +11,9 @@ const FIVE_MINUTES = 1000 * 60 * 5;
  * distinct keystroke would otherwise become its own query and its own read.
  */
 export const useUserSearch = (term: string) =>
-  useQuery<PublicProfileWithId[]>({
+  useQuery<PublicProfile[]>({
     queryKey: queryKeys.people.search(term.trim().toLowerCase()),
-    queryFn: () => publicProfileService.searchByUsernamePrefix(term),
+    queryFn: () => profileRepo.searchByUsernamePrefix(term),
     enabled: term.trim().length > 0,
     staleTime: FIVE_MINUTES,
   });
@@ -34,13 +31,13 @@ export const FOLLOWING_SIDEBAR_LIMIT = 50;
 export const useFollowingProfiles = (uids: readonly string[]) => {
   const capped = uids.slice(0, FOLLOWING_SIDEBAR_LIMIT);
 
-  return useQuery<PublicProfileWithId[]>({
+  return useQuery<PublicProfile[]>({
     queryKey: queryKeys.people.following(capped),
     queryFn: async () => {
-      const map = await publicProfileService.getPublicProfiles([...capped]);
+      const map = await profileRepo.getMany([...capped]);
       return capped
         .filter((uid) => map.has(uid))
-        .map((uid) => ({ ...map.get(uid)!, uid }))
+        .map((uid) => map.get(uid)!)
         .sort((a, b) => a.username.localeCompare(b.username));
     },
     enabled: capped.length > 0,
@@ -50,8 +47,8 @@ export const useFollowingProfiles = (uids: readonly string[]) => {
 
 /** The directory's resting state, shown before anything is typed. */
 export const useRecentMembers = () =>
-  useQuery<PublicProfileWithId[]>({
+  useQuery<PublicProfile[]>({
     queryKey: queryKeys.people.recent(),
-    queryFn: () => publicProfileService.listRecent(),
+    queryFn: () => profileRepo.listRecent(),
     staleTime: FIVE_MINUTES,
   });

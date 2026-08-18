@@ -1,4 +1,3 @@
-import { CommentService } from "@/services/CommentService";
 import { IUser } from "@/types/IUser";
 import { useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,31 +5,22 @@ import { Button } from "@/components/ui/button";
 import { Send } from "lucide-react";
 
 interface CommentInputProps {
-  storyId: string;
-  chapterId: string;
   currentUser: IUser;
+  onSubmit: (message: string) => Promise<void>;
 }
 
 export const CommentInput: React.FC<CommentInputProps> = ({
-  storyId,
-  chapterId,
   currentUser,
+  onSubmit,
 }) => {
   const [message, setMessage] = useState("");
-  const commentService = new CommentService();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || !message.trim()) return;
 
     try {
-      await commentService.addComment(
-        storyId,
-        chapterId,
-        currentUser.uid,
-        currentUser.username,
-        message.trim(),
-      );
+      await onSubmit(message.trim());
       setMessage("");
     } catch (error) {
       console.error("Error adding comment:", error);
@@ -40,6 +30,7 @@ export const CommentInput: React.FC<CommentInputProps> = ({
   return (
     <form onSubmit={handleSubmit} className="mb-6 p-4 bg-opacity-50 w-full">
       <Textarea
+        data-cy="comment-input"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         placeholder={
@@ -60,6 +51,7 @@ export const CommentInput: React.FC<CommentInputProps> = ({
       />
       {currentUser && (
         <Button
+          data-cy="comment-submit"
           type="submit"
           disabled={!message.trim()}
           className={`mt-3 w-full py-2 text-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 

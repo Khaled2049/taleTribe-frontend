@@ -1,9 +1,9 @@
 # NovelSync E2E (Cypress)
 
-End-to-end tests for the core journey from `../flow.md`: **start a story → define
-world-building → chat with the AI → iteratively generate chapters**. They drive
-the real app against the full local stack (Firebase emulators + Python agent +
-creditProxy with a mock LLM), so they exercise every repo, not just the UI.
+End-to-end tests for the core journey: **start a story → define world-building →
+chat with the AI**. They drive the real app against the full local stack
+(story-data + PostgreSQL, Firebase emulators, the Python agent, and creditProxy
+with a mock LLM), so they exercise every repo, not just the UI.
 
 ## Run it
 
@@ -29,7 +29,8 @@ CYPRESS_SPEC=cypress/e2e/ai_chat.cy.ts yarn e2e
 
 ```bash
 # Terminal 1 — full stack incl. Vite (reuses the repo's dev orchestration)
-../story/dev.sh           # creditProxy:8090, emulators, agent:8000, Vite:5173
+../../dev-new.sh          # story-data:8084, creditProxy:8090, emulators,
+                          # agent:8000, Vite:5173
 
 # Terminal 2
 yarn cy:open
@@ -45,22 +46,29 @@ yarn cy:open
 
 ## How it works
 
-- **Seeding & state assertions** go through the emulator REST APIs with
-  `Authorization: Bearer owner` (bypasses `firestore.rules`), implemented as
-  Cypress Node tasks in `support/tasks.ts` — the same technique as
-  `../story/scripts/seed-dev-user.mjs`. This is required for rules-protected
-  fields (`users.aiUsage`/`aiSettings`/`storyCount`, `jobs/*`).
+- **Seeding & state assertions** are Cypress Node tasks in `support/tasks.mjs`.
+  Firebase state goes through the emulator REST APIs with
+  `Authorization: Bearer owner` (bypasses `firestore.rules`), which is required
+  for rules-protected fields (`users.aiUsage`/`aiSettings`). Everything
+  story-data owns — stories, chapters, world-building, social — goes through its
+  HTTP API with `X-User-ID`, which `AUTH_MODE=dev` accepts in place of a token.
+- **story-data is never reset between runs.** `resetEmulators` clears Auth, so
+  every run gets fresh uids and older rows are orphaned rather than colliding.
+  Assertions must be scoped to the spec's own uid, never to a global count.
 - **Auth**: specs seed an invited user (invite marked `completed`) and sign in
   through the real `/sign-in` form (`cy.login`).
-- **No fixed sleeps**: job/doc assertions poll (`cy.waitForJob`, `cy.pollDoc`,
-  `cy.pollDocs`).
+- **No fixed sleeps**: assertions poll (`cy.pollDoc`, `cy.pollDocs` for
+  Firestore; `cy.pollStoryData` for PostgreSQL).
 
 ## Emulator caveats (see flow.md §7)
 
-- **Vector indexing is OFF** under the emulator (`VECTOR_INDEX_DISABLED`) and
-  `find_nearest` doesn't exist → `chapter_chunks` is never populated and chat RAG
-  context is empty. Specs assert on entity/chapter docs, `chapterIndex`, and the
-  job lifecycle — **not** on vector recall.
+- **Vector indexing** is real for migrated data: story-data enqueues an
+  `indexing_outbox` row per content write and the agent drains it into pgvector
+  (`INDEXING_WORKER_ENABLED=true`, mock embeddings). What the specs still do not
+  assert is chunk *recall* — the chunks table has no HTTP endpoint, so reaching
+  it would need a direct PostgreSQL connection from the task layer. The legacy
+  Firestore vector path remains off under the emulator (`find_nearest` does not
+  exist there).
 - **Mock LLM returns non-JSON** (`"Mock response to: <prompt>"`). Chat asserts on
   the `"Mock response to:"` prefix; chapter generation asserts on doc **shape**,
   not prose.
@@ -70,8 +78,6 @@ yarn cy:open
 - **BYOK chat bypass** (`ai_chat.cy.ts`): needs a real provider key — BYOK
   instantiates the user's actual provider, which a seeded fake key can't satisfy
   against the mock stack.
-- **Failed chapter job** (`chapter_generation.cy.ts`): needs a per-request
-  failure hook in the stack (stopping the agent fails all requests).
 
 For real vector recall / BYOK, point the stack at a real GCP project with built
 vector indexes instead of the emulator.

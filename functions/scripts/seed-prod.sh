@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# One-command production seeding through createStoryByAdmin.
+# One-command production seeding into story-data.
 #
 #   ./scripts/seed-prod.sh                          # every payload under story-ideas/
 #   ./scripts/seed-prod.sh story-ideas/fantasy      # a subset
@@ -9,18 +9,20 @@
 #   SEED_YES=1 ./scripts/seed-prod.sh               # skip the confirmation prompt
 #
 # Prerequisites:
-#   1. createStoryByAdmin is deployed        (npm run deploy)
-#   2. the admin account holds the claim     (npm run set-admin -- <email> --prod)
-#   3. credentials that can sign a custom token as SERVICE_ACCOUNT — either
+#   1. STORY_DATA_URL points at the deployed story-data service
+#   2. credentials that can sign a custom token as SERVICE_ACCOUNT — either
 #      roles/iam.serviceAccountTokenCreator on it for your gcloud login, or
 #      GOOGLE_APPLICATION_CREDENTIALS pointing at a service account key
+#
+# No admin claim is needed. Stories are created through story-data as their
+# owner, so the script mints an ID token for SEED_OWNER_UID rather than for an
+# administrator.
 #
 # Every value below can be overridden with the matching SEED_* env var.
 
 set -euo pipefail
 
 PROJECT="${SEED_PROJECT:-story-6f89f}"
-ADMIN_EMAIL="${SEED_ADMIN_EMAIL:-shoibal.not@gmail.com}"
 OWNER_UID="${SEED_OWNER_UID:-ae72nmdikNgIyEk87UZLlhAjoKF3}"
 SERVICE_ACCOUNT="${SEED_SERVICE_ACCOUNT:-firebase-adminsdk-fbsvc@${PROJECT}.iam.gserviceaccount.com}"
 
@@ -52,7 +54,7 @@ if [[ ! -d "$FUNCTIONS_DIR/lib" ]]; then
 fi
 
 echo "project      $PROJECT"
-echo "admin        $ADMIN_EMAIL"
+echo "story-data   ${STORY_DATA_URL:-<unset — set STORY_DATA_URL>}"
 echo "owner uid    $OWNER_UID"
 echo "signing as   $SERVICE_ACCOUNT"
 echo "payloads     ${targets[*]}"
@@ -71,6 +73,5 @@ exec node scripts/create-story-by-admin.js \
   "${targets[@]}" \
   --prod \
   --project="$PROJECT" \
-  --admin-email="$ADMIN_EMAIL" \
   --owner-uid="$OWNER_UID" \
   --service-account="$SERVICE_ACCOUNT"

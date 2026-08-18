@@ -22,7 +22,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Upload, Loader2, AlertCircle, FileText, PenLine } from "lucide-react";
 import { toast } from "sonner";
-import { storiesRepo } from "@/services/StoriesRepo";
+import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
 import { storageService } from "@/services/StorageService";
 import CoverImagePicker from "./components/CoverImagePicker";
 import {
@@ -165,22 +165,26 @@ const StoryMetadataModal: React.FC<StoryMetadataModalProps> = ({
       }
 
       // Create the story (auto-creates the first chapter with empty content)
-      const newStoryId = await storiesRepo.createStory(
+      const createdStory = await storyWorkspaceRepo.createStory({
         title,
         description,
-        userId,
-        { ...buildMetadata(), coverImageUrl, thumbnailUrl },
-      );
+        authorName: "",
+        ...buildMetadata(),
+        coverImageUrl,
+        thumbnailUrl,
+        published: false,
+      });
+      const newStoryId = createdStory.id;
 
       // Fetch the auto-created first chapter so we can overwrite it
-      const existingChapters = await storiesRepo.getChapters(newStoryId);
+      const existingChapters = await storyWorkspaceRepo.getChapters(createdStory);
       const autoChapter = existingChapters[0];
 
       // Update the first chapter with imported content
       if (autoChapter) {
-        await storiesRepo.updateChapter(
-          newStoryId,
-          autoChapter.id,
+        await storyWorkspaceRepo.updateChapter(
+          createdStory,
+          autoChapter,
           parsedChapters[0].title,
           parsedChapters[0].content,
         );
@@ -188,13 +192,14 @@ const StoryMetadataModal: React.FC<StoryMetadataModalProps> = ({
 
       // Create and populate remaining chapters sequentially
       for (let i = 1; i < parsedChapters.length; i++) {
-        const chapterId = await storiesRepo.addChapter(
-          newStoryId,
+        const chapter = await storyWorkspaceRepo.createChapter(
+          createdStory,
           parsedChapters[i].title,
+          i,
         );
-        await storiesRepo.updateChapter(
-          newStoryId,
-          chapterId,
+        await storyWorkspaceRepo.updateChapter(
+          createdStory,
+          chapter,
           parsedChapters[i].title,
           parsedChapters[i].content,
         );

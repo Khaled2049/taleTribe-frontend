@@ -10,12 +10,30 @@ import {
 import { firestore } from "@/config/firebase";
 import { RATE_LIMITS } from "@/config/rateLimits";
 
+/**
+ * Client-side daily/hourly counters in Firestore `userActivity`.
+ *
+ * Only two features still need this: book club chat, which is the last
+ * Firestore-resident feature, and book search, which hits an external API and
+ * so has no server of ours to meter it. Everything story-data owns — comments,
+ * guestbook entries, polls, discussion prompts — is metered server-side
+ * instead, atomically and in the same transaction as the write.
+ *
+ * The counters fail open: a read error allows the action rather than blocking
+ * a user because Firestore hiccuped.
+ */
+type RateLimitResult = {
+  allowed: boolean;
+  dailyCount: number;
+  hourlyCount: number;
+  dailyLimit: number;
+  hourlyLimit: number;
+  message?: string;
+};
+
 class RateLimitService {
   private userActivityCollection = collection(firestore, "userActivity");
 
-  /**
-   * Get today's date string in YYYY-MM-DD format (UTC)
-   */
   private getTodayDateString(): string {
     const now = new Date();
     const year = now.getUTCFullYear();
@@ -24,580 +42,123 @@ class RateLimitService {
     return `${year}-${month}-${day}`;
   }
 
-  /**
-   * Get user activity document reference
-   */
-  private getUserActivityDocRef(userId: string, dateString: string) {
-    return doc(this.userActivityCollection, `${userId}_${dateString}`);
-  }
-
-  /**
-   * Get current hour string in YYYY-MM-DD-HH format (UTC)
-   */
   private getCurrentHourString(): string {
-    const now = new Date();
-    const year = now.getUTCFullYear();
-    const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-    const day = String(now.getUTCDate()).padStart(2, "0");
-    const hour = String(now.getUTCHours()).padStart(2, "0");
-    return `${year}-${month}-${day}-${hour}`;
+    return `${this.getTodayDateString()}-${String(new Date().getUTCHours()).padStart(2, "0")}`;
   }
 
-  /**
-   * Get today's post count for a user (using activity tracking)
-   */
-  async getTodayPostCount(userId: string): Promise<number> {
-    try {
-      const dateString = this.getTodayDateString();
-      const activityDocRef = this.getUserActivityDocRef(userId, dateString);
-      const activityDoc = await getDoc(activityDocRef);
-
-      // No activity doc means no activity today. incrementPostCount() creates
-      // it on the user's first action, so the counter is accurate from then on.
-      return activityDoc.exists() ? activityDoc.data().postCount || 0 : 0;
-    } catch (error) {
-      console.error("Error getting today's post count:", error);
-      // If there's an error, allow the action (fail open)
-      return 0;
-    }
+  private getUserActivityDocRef(userId: string, bucket: string) {
+    return doc(this.userActivityCollection, `${userId}_${bucket}`);
   }
 
-  /**
-   * Get today's comment count for a user (using activity tracking)
-   */
-  async getTodayCommentCount(userId: string): Promise<number> {
-    try {
-      const dateString = this.getTodayDateString();
-      const activityDocRef = this.getUserActivityDocRef(userId, dateString);
-      const activityDoc = await getDoc(activityDocRef);
-
-      return activityDoc.exists() ? activityDoc.data().commentCount || 0 : 0;
-    } catch (error) {
-      console.error("Error getting today's comment count:", error);
-      // If there's an error, allow the action (fail open)
-      return 0;
-    }
-  }
-
-  /**
-   * Increment post count for today
-   */
-  async incrementPostCount(userId: string): Promise<void> {
-    try {
-      const dateString = this.getTodayDateString();
-      const activityDocRef = this.getUserActivityDocRef(userId, dateString);
-      const activityDoc = await getDoc(activityDocRef);
-
-      if (activityDoc.exists()) {
-        await updateDoc(activityDocRef, {
-          postCount: increment(1),
-          lastUpdated: Timestamp.now(),
-        });
-      } else {
-        await setDoc(activityDocRef, {
-          userId,
-          date: dateString,
-          postCount: 1,
-          commentCount: 0,
-          lastUpdated: Timestamp.now(),
-        });
-      }
-    } catch (error) {
-      console.error("Error incrementing post count:", error);
-      // Don't throw - this is just for tracking
-    }
-  }
-
-  /**
-   * Increment comment count for today
-   */
-  async incrementCommentCount(userId: string): Promise<void> {
-    try {
-      const dateString = this.getTodayDateString();
-      const activityDocRef = this.getUserActivityDocRef(userId, dateString);
-      const activityDoc = await getDoc(activityDocRef);
-
-      if (activityDoc.exists()) {
-        await updateDoc(activityDocRef, {
-          commentCount: increment(1),
-          lastUpdated: Timestamp.now(),
-        });
-      } else {
-        await setDoc(activityDocRef, {
-          userId,
-          date: dateString,
-          postCount: 0,
-          commentCount: 1,
-          lastUpdated: Timestamp.now(),
-        });
-      }
-    } catch (error) {
-      console.error("Error incrementing comment count:", error);
-      // Don't throw - this is just for tracking
-    }
-  }
-
-  /**
-   * Check if user can create a post (hasn't exceeded daily limit)
-   */
-  async canCreatePost(userId: string): Promise<{
-    allowed: boolean;
-    count: number;
-    limit: number;
-    message?: string;
-  }> {
-    const count = await this.getTodayPostCount(userId);
-    const limit = RATE_LIMITS.MAX_POSTS_PER_DAY;
-
-    if (count >= limit) {
-      return {
-        allowed: false,
-        count,
-        limit,
-        message: `You have reached the daily limit of ${limit} posts. Please try again tomorrow.`,
-      };
-    }
-
-    return {
-      allowed: true,
-      count,
-      limit,
-    };
-  }
-
-  /**
-   * Check if user can create a comment (hasn't exceeded daily limit)
-   */
-  async canCreateComment(userId: string): Promise<{
-    allowed: boolean;
-    count: number;
-    limit: number;
-    message?: string;
-  }> {
-    const count = await this.getTodayCommentCount(userId);
-    const limit = RATE_LIMITS.MAX_COMMENTS_PER_DAY;
-
-    if (count >= limit) {
-      return {
-        allowed: false,
-        count,
-        limit,
-        message: `You have reached the daily limit of ${limit} comments. Please try again tomorrow.`,
-      };
-    }
-
-    return {
-      allowed: true,
-      count,
-      limit,
-    };
-  }
-
-  /**
-   * Generic method to get count for a specific field (daily)
-   */
-  private async getTodayCount(
+  private async getCount(
     userId: string,
+    bucket: string,
     fieldName: string,
   ): Promise<number> {
     try {
-      const dateString = this.getTodayDateString();
-      const activityDocRef = this.getUserActivityDocRef(userId, dateString);
-      const activityDoc = await getDoc(activityDocRef);
-
-      if (activityDoc.exists()) {
-        return activityDoc.data()[fieldName] || 0;
-      }
-
-      return 0;
+      const snapshot = await getDoc(this.getUserActivityDocRef(userId, bucket));
+      return snapshot.exists() ? snapshot.data()[fieldName] || 0 : 0;
     } catch (error) {
-      console.error(`Error getting today's ${fieldName}:`, error);
+      console.error(`Error reading ${fieldName} for ${bucket}:`, error);
       return 0;
     }
   }
 
-  /**
-   * Generic method to get count for a specific field (hourly)
-   */
-  private async getHourlyCount(
+  private async incrementCount(
     userId: string,
-    fieldName: string,
-  ): Promise<number> {
-    try {
-      const hourString = this.getCurrentHourString();
-      const activityDocRef = doc(
-        this.userActivityCollection,
-        `${userId}_${hourString}`,
-      );
-      const activityDoc = await getDoc(activityDocRef);
-
-      if (activityDoc.exists()) {
-        return activityDoc.data()[fieldName] || 0;
-      }
-
-      return 0;
-    } catch (error) {
-      console.error(`Error getting hourly ${fieldName}:`, error);
-      return 0;
-    }
-  }
-
-  /**
-   * Generic method to increment count for a specific field (daily)
-   */
-  private async incrementDailyCount(
-    userId: string,
+    bucket: string,
+    bucketField: "date" | "hour",
     fieldName: string,
   ): Promise<void> {
     try {
-      const dateString = this.getTodayDateString();
-      const activityDocRef = this.getUserActivityDocRef(userId, dateString);
-      const activityDoc = await getDoc(activityDocRef);
-
-      if (activityDoc.exists()) {
-        await updateDoc(activityDocRef, {
+      const ref = this.getUserActivityDocRef(userId, bucket);
+      const snapshot = await getDoc(ref);
+      if (snapshot.exists()) {
+        await updateDoc(ref, {
           [fieldName]: increment(1),
           lastUpdated: Timestamp.now(),
         });
       } else {
-        const initialData: Record<string, any> = {
+        await setDoc(ref, {
           userId,
-          date: dateString,
+          [bucketField]: bucket,
           [fieldName]: 1,
           lastUpdated: Timestamp.now(),
-        };
-        await setDoc(activityDocRef, initialData);
+        });
       }
     } catch (error) {
       console.error(`Error incrementing ${fieldName}:`, error);
     }
   }
 
-  /**
-   * Generic method to increment count for a specific field (hourly)
-   */
-  private async incrementHourlyCount(
+  private async check(
     userId: string,
     fieldName: string,
-  ): Promise<void> {
-    try {
-      const hourString = this.getCurrentHourString();
-      const activityDocRef = doc(
-        this.userActivityCollection,
-        `${userId}_${hourString}`,
-      );
-      const activityDoc = await getDoc(activityDocRef);
-
-      if (activityDoc.exists()) {
-        await updateDoc(activityDocRef, {
-          [fieldName]: increment(1),
-          lastUpdated: Timestamp.now(),
-        });
-      } else {
-        await setDoc(activityDocRef, {
-          userId,
-          hour: hourString,
-          [fieldName]: 1,
-          lastUpdated: Timestamp.now(),
-        });
-      }
-    } catch (error) {
-      console.error(`Error incrementing hourly ${fieldName}:`, error);
-    }
-  }
-
-  // Message Rate Limiting
-  /**
-   * Check if user can send a message (hasn't exceeded daily/hourly limits)
-   */
-  async canSendMessage(userId: string): Promise<{
-    allowed: boolean;
-    dailyCount: number;
-    hourlyCount: number;
-    dailyLimit: number;
-    hourlyLimit: number;
-    message?: string;
-  }> {
-    const dailyCount = await this.getTodayCount(userId, "messageCount");
-    const hourlyCount = await this.getHourlyCount(userId, "messageCount");
-    const dailyLimit = RATE_LIMITS.MAX_MESSAGES_PER_DAY;
-    const hourlyLimit = RATE_LIMITS.MAX_MESSAGES_PER_HOUR;
+    dailyLimit: number,
+    hourlyLimit: number,
+    noun: string,
+  ): Promise<RateLimitResult> {
+    const [dailyCount, hourlyCount] = await Promise.all([
+      this.getCount(userId, this.getTodayDateString(), fieldName),
+      this.getCount(userId, this.getCurrentHourString(), fieldName),
+    ]);
+    const counts = { dailyCount, hourlyCount, dailyLimit, hourlyLimit };
 
     if (dailyCount >= dailyLimit) {
       return {
         allowed: false,
-        dailyCount,
-        hourlyCount,
-        dailyLimit,
-        hourlyLimit,
-        message: `You have reached the daily limit of ${dailyLimit} messages. Please try again tomorrow.`,
+        ...counts,
+        message: `You have reached the daily limit of ${dailyLimit} ${noun}. Please try again tomorrow.`,
       };
     }
-
     if (hourlyCount >= hourlyLimit) {
       return {
         allowed: false,
-        dailyCount,
-        hourlyCount,
-        dailyLimit,
-        hourlyLimit,
-        message: `You have reached the hourly limit of ${hourlyLimit} messages. Please try again later.`,
+        ...counts,
+        message: `You have reached the hourly limit of ${hourlyLimit} ${noun}. Please try again later.`,
       };
     }
-
-    return {
-      allowed: true,
-      dailyCount,
-      hourlyCount,
-      dailyLimit,
-      hourlyLimit,
-    };
+    return { allowed: true, ...counts };
   }
 
-  /**
-   * Increment message count
-   */
+  private increment(userId: string, fieldName: string): Promise<void[]> {
+    return Promise.all([
+      this.incrementCount(userId, this.getTodayDateString(), "date", fieldName),
+      this.incrementCount(
+        userId,
+        this.getCurrentHourString(),
+        "hour",
+        fieldName,
+      ),
+    ]);
+  }
+
+  canSendMessage(userId: string): Promise<RateLimitResult> {
+    return this.check(
+      userId,
+      "messageCount",
+      RATE_LIMITS.MAX_MESSAGES_PER_DAY,
+      RATE_LIMITS.MAX_MESSAGES_PER_HOUR,
+      "messages",
+    );
+  }
+
   async incrementMessageCount(userId: string): Promise<void> {
-    await Promise.all([
-      this.incrementDailyCount(userId, "messageCount"),
-      this.incrementHourlyCount(userId, "messageCount"),
-    ]);
+    await this.increment(userId, "messageCount");
   }
 
-  // Book Search Rate Limiting
-  /**
-   * Check if user can search books (hasn't exceeded daily/hourly limits)
-   */
-  async canSearchBooks(userId: string): Promise<{
-    allowed: boolean;
-    dailyCount: number;
-    hourlyCount: number;
-    dailyLimit: number;
-    hourlyLimit: number;
-    message?: string;
-  }> {
-    const dailyCount = await this.getTodayCount(userId, "bookSearchCount");
-    const hourlyCount = await this.getHourlyCount(userId, "bookSearchCount");
-    const dailyLimit = RATE_LIMITS.MAX_BOOK_SEARCHES_PER_DAY;
-    const hourlyLimit = RATE_LIMITS.MAX_BOOK_SEARCHES_PER_HOUR;
-
-    if (dailyCount >= dailyLimit) {
-      return {
-        allowed: false,
-        dailyCount,
-        hourlyCount,
-        dailyLimit,
-        hourlyLimit,
-        message: `You have reached the daily limit of ${dailyLimit} book searches. Please try again tomorrow.`,
-      };
-    }
-
-    if (hourlyCount >= hourlyLimit) {
-      return {
-        allowed: false,
-        dailyCount,
-        hourlyCount,
-        dailyLimit,
-        hourlyLimit,
-        message: `You have reached the hourly limit of ${hourlyLimit} book searches. Please try again later.`,
-      };
-    }
-
-    return {
-      allowed: true,
-      dailyCount,
-      hourlyCount,
-      dailyLimit,
-      hourlyLimit,
-    };
+  canSearchBooks(userId: string): Promise<RateLimitResult> {
+    return this.check(
+      userId,
+      "bookSearchCount",
+      RATE_LIMITS.MAX_BOOK_SEARCHES_PER_DAY,
+      RATE_LIMITS.MAX_BOOK_SEARCHES_PER_HOUR,
+      "book searches",
+    );
   }
 
-  /**
-   * Increment book search count
-   */
   async incrementBookSearchCount(userId: string): Promise<void> {
-    await Promise.all([
-      this.incrementDailyCount(userId, "bookSearchCount"),
-      this.incrementHourlyCount(userId, "bookSearchCount"),
-    ]);
-  }
-
-  // Poll Rate Limiting
-  /**
-   * Check if user can create a poll (hasn't exceeded daily limit)
-   */
-  async canCreatePoll(userId: string): Promise<{
-    allowed: boolean;
-    count: number;
-    limit: number;
-    message?: string;
-  }> {
-    const count = await this.getTodayCount(userId, "pollCount");
-    const limit = RATE_LIMITS.MAX_POLLS_PER_DAY;
-
-    if (count >= limit) {
-      return {
-        allowed: false,
-        count,
-        limit,
-        message: `You have reached the daily limit of ${limit} polls. Please try again tomorrow.`,
-      };
-    }
-
-    return {
-      allowed: true,
-      count,
-      limit,
-    };
-  }
-
-  /**
-   * Increment poll count
-   */
-  async incrementPollCount(userId: string): Promise<void> {
-    await this.incrementDailyCount(userId, "pollCount");
-  }
-
-  /**
-   * Check if user can change poll vote (hasn't exceeded hourly limit)
-   */
-  async canChangePollVote(userId: string): Promise<{
-    allowed: boolean;
-    count: number;
-    limit: number;
-    message?: string;
-  }> {
-    const count = await this.getHourlyCount(userId, "voteChangeCount");
-    const limit = RATE_LIMITS.MAX_POLL_VOTE_CHANGES_PER_HOUR;
-
-    if (count >= limit) {
-      return {
-        allowed: false,
-        count,
-        limit,
-        message: `You have reached the hourly limit of ${limit} vote changes. Please try again later.`,
-      };
-    }
-
-    return {
-      allowed: true,
-      count,
-      limit,
-    };
-  }
-
-  /**
-   * Increment vote change count
-   */
-  async incrementVoteChangeCount(userId: string): Promise<void> {
-    await this.incrementHourlyCount(userId, "voteChangeCount");
-  }
-
-  // Discussion Prompt Rate Limiting
-  /**
-   * Check if user can create a discussion prompt (hasn't exceeded daily limit)
-   */
-  async canCreateDiscussionPrompt(userId: string): Promise<{
-    allowed: boolean;
-    count: number;
-    limit: number;
-    message?: string;
-  }> {
-    const count = await this.getTodayCount(userId, "promptCount");
-    const limit = RATE_LIMITS.MAX_DISCUSSION_PROMPTS_PER_DAY;
-
-    if (count >= limit) {
-      return {
-        allowed: false,
-        count,
-        limit,
-        message: `You have reached the daily limit of ${limit} discussion prompts. Please try again tomorrow.`,
-      };
-    }
-
-    return {
-      allowed: true,
-      count,
-      limit,
-    };
-  }
-
-  /**
-   * Increment prompt count
-   */
-  async incrementPromptCount(userId: string): Promise<void> {
-    await this.incrementDailyCount(userId, "promptCount");
-  }
-
-  /**
-   * Check if user can add a prompt response (hasn't exceeded daily limit)
-   */
-  async canAddPromptResponse(userId: string): Promise<{
-    allowed: boolean;
-    count: number;
-    limit: number;
-    message?: string;
-  }> {
-    const count = await this.getTodayCount(userId, "promptResponseCount");
-    const limit = RATE_LIMITS.MAX_PROMPT_RESPONSES_PER_DAY;
-
-    if (count >= limit) {
-      return {
-        allowed: false,
-        count,
-        limit,
-        message: `You have reached the daily limit of ${limit} prompt responses. Please try again tomorrow.`,
-      };
-    }
-
-    return {
-      allowed: true,
-      count,
-      limit,
-    };
-  }
-
-  /**
-   * Increment prompt response count
-   */
-  async incrementPromptResponseCount(userId: string): Promise<void> {
-    await this.incrementDailyCount(userId, "promptResponseCount");
-  }
-
-  // Reading Progress Rate Limiting
-  /**
-   * Check if user can update reading progress (hasn't exceeded hourly limit)
-   */
-  async canUpdateReadingProgress(userId: string): Promise<{
-    allowed: boolean;
-    count: number;
-    limit: number;
-    message?: string;
-  }> {
-    const count = await this.getHourlyCount(userId, "progressUpdateCount");
-    const limit = RATE_LIMITS.MAX_READING_PROGRESS_UPDATES_PER_HOUR;
-
-    if (count >= limit) {
-      return {
-        allowed: false,
-        count,
-        limit,
-        message: `You have reached the hourly limit of ${limit} progress updates. Please try again later.`,
-      };
-    }
-
-    return {
-      allowed: true,
-      count,
-      limit,
-    };
-  }
-
-  /**
-   * Increment progress update count
-   */
-  async incrementProgressUpdateCount(userId: string): Promise<void> {
-    await this.incrementHourlyCount(userId, "progressUpdateCount");
+    await this.increment(userId, "bookSearchCount");
   }
 }
 

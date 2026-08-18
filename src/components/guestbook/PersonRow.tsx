@@ -1,11 +1,11 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { BookMarked } from "lucide-react";
-import { PublicProfileWithId } from "@/services/PublicProfileService";
+import { PublicProfile } from "@/services/ProfileRepo";
 import FollowButton from "@/components/common/FollowButton";
 
 interface PersonRowProps {
-  person: PublicProfileWithId;
+  person: PublicProfile;
 }
 
 /**

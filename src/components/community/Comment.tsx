@@ -1,33 +1,38 @@
 // Comment.tsx
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { MessageCircle, Edit2, Trash2 } from "lucide-react";
+import { MessageCircle, Edit2, Trash2, Heart } from "lucide-react";
 import { Comment as CommentType } from "@/types/IComment";
 import { IUser } from "@/types/IUser";
-import { useAuthorUsername } from "@/hooks/queries/useUserQueries";
 
 interface CommentProps {
   comment: CommentType;
   allComments: CommentType[];
   currentUser: IUser | null;
-  onLike: (commentId: string) => Promise<void>;
+  namesById: Map<string, string>;
   onReply: (parentId: string, message: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onEdit: (commentId: string, newMessage: string) => Promise<void>;
+  onLike: (commentId: string, liked: boolean) => Promise<void>;
   depth: number;
 }
 
 const MAX_DEPTH = 3;
+
+// Indentation has to be a literal class: Tailwind's compiler scans source text,
+// so an interpolated `ml-${n}` is never emitted.
+const INDENT = ["ml-0", "ml-2", "ml-4", "ml-6"] as const;
 
 export const Comment: React.FC<CommentProps> = React.memo(
   ({
     comment,
     allComments,
     currentUser,
-    onLike,
+    namesById,
     onReply,
     onDelete,
     onEdit,
+    onLike,
     depth,
   }) => {
     const [isEditing, setIsEditing] = useState(false);
@@ -41,17 +46,8 @@ export const Comment: React.FC<CommentProps> = React.memo(
       () => allComments.filter((c) => c.parentId === comment.id),
       [allComments, comment.id],
     );
-    const authorUsername = useAuthorUsername(comment.userId, comment.username);
-
-    // const isLiked = useMemo(
-    //   () =>
-    //     currentUser?.uid
-    //       ? comment.likes
-    //           .map((like) => like.commentId)
-    //           .includes(currentUser.uid)
-    //       : false,
-    //   [comment.likes, currentUser]
-    // );
+    const authorUsername =
+      namesById.get(comment.userId) || comment.authorUsername || "unknown";
 
     const handleEdit = async () => {
       if (editedMessage.trim() === "") return;
@@ -84,9 +80,8 @@ export const Comment: React.FC<CommentProps> = React.memo(
 
     return (
       <div
-        className={`ml-${
-          depth > 0 ? depth * 2 : 0
-        } mt-2 pl-4 border-l-2 border-gray-200 dark:border-gray-700 transition-all`}
+        data-cy="comment"
+        className={`${INDENT[Math.min(depth, INDENT.length - 1)]} mt-2 pl-4 border-l-2 border-gray-200 dark:border-gray-700 transition-all`}
       >
         <div className="p-4 rounded-lg border border-gray-300 dark:border-gray-700 shadow-md bg-white dark:bg-gray-900 transition-colors">
           {/* Error Message */}
@@ -152,6 +147,24 @@ export const Comment: React.FC<CommentProps> = React.memo(
 
           {/* Comment Actions */}
           <div className="flex items-center gap-4 mt-3 text-sm">
+            <button
+              data-cy="comment-like"
+              onClick={() => onLike(comment.id, !comment.likedByMe)}
+              className={`flex items-center gap-1 transition-colors disabled:opacity-50 ${
+                comment.likedByMe
+                  ? "text-ns-accent"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              }`}
+              disabled={!currentUser}
+              aria-pressed={comment.likedByMe}
+              aria-label={comment.likedByMe ? "Remove like" : "Like comment"}
+            >
+              <Heart
+                size={16}
+                className={comment.likedByMe ? "fill-current" : undefined}
+              />
+              {comment.likeCount > 0 && comment.likeCount}
+            </button>
             {depth < MAX_DEPTH && (
               <button
                 onClick={() => setIsReplying(!isReplying)}
@@ -224,10 +237,11 @@ export const Comment: React.FC<CommentProps> = React.memo(
                 comment={reply}
                 allComments={allComments}
                 currentUser={currentUser}
-                onLike={onLike}
+                namesById={namesById}
                 onReply={onReply}
                 onDelete={onDelete}
                 onEdit={onEdit}
+                onLike={onLike}
                 depth={depth + 1}
               />
             ))}

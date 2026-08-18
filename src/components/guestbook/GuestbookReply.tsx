@@ -10,14 +10,14 @@ import {
 import { IGuestbookReply } from "@/types/IGuestbookReply";
 import { IUser } from "@/types/IUser";
 import VoteButtons from "./VoteButtons";
-import { guestbookVoteService } from "@/services/GuestbookVoteService";
+import { guestbookRepo } from "@/services/GuestbookRepo";
 import { rateLimitMessage } from "@/services/rateLimitError";
-import { useAuthorUsername } from "@/hooks/queries/useUserQueries";
 import { useGuestbookPolicy } from "./guestbookPolicyContext";
 import { formatRelativeTime } from "@/lib/relativeTime";
 
 interface GuestbookReplyProps {
   ownerId: string;
+  entryAuthorId: string;
   reply: IGuestbookReply;
   allReplies: IGuestbookReply[];
   currentUser: IUser | null;
@@ -32,6 +32,7 @@ const MAX_DEPTH = 3;
 export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
   ({
     ownerId,
+    entryAuthorId,
     reply,
     allReplies,
     currentUser,
@@ -62,10 +63,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
 
     // Live-resolve the author's current username (falls back to the stored copy
     // while the profile loads) so username changes show up here too.
-    const authorUsername = useAuthorUsername(
-      reply.authorId,
-      reply.authorUsername,
-    );
+    const authorUsername = reply.authorUsername || "unknown";
 
     const handleEdit = async () => {
       if (editedContent.trim() === "") return;
@@ -117,13 +115,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
       setIsVoting(true);
 
       try {
-        await guestbookVoteService.voteReply(
-          ownerId,
-          reply.entryId,
-          reply.id,
-          currentUser.uid,
-          voteType,
-        );
+        await guestbookRepo.voteReply(ownerId, reply.entryId, reply.id, voteType);
       } catch (error) {
         console.error("Error voting on reply:", error);
         setUpvoteCount(previousUpvotes);
@@ -236,16 +228,16 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                         Reply
                       </button>
                     )}
-                    {currentUser?.uid === reply.authorId && (
+                    {(currentUser?.uid === reply.authorId || currentUser?.uid === ownerId || currentUser?.uid === entryAuthorId) && (
                       <>
-                        <button
+                        {currentUser?.uid === reply.authorId && <button
                           onClick={() => setIsEditing(true)}
                           disabled={isLoading}
                           className="flex items-center gap-1 font-ui text-[10px] text-ns-ink-muted hover:text-ns-ink transition-colors"
                         >
                           <Edit2 size={10} />
                           Edit
-                        </button>
+                        </button>}
                         <button
                           onClick={() => onDelete(reply.id)}
                           disabled={isLoading}
@@ -330,6 +322,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                   <GuestbookReply
                     key={child.id}
                     ownerId={ownerId}
+                    entryAuthorId={entryAuthorId}
                     reply={child}
                     allReplies={allReplies}
                     currentUser={currentUser}

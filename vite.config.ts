@@ -23,4 +23,13 @@ export default defineConfig(({ mode }) => ({
   optimizeDeps: {
     include: ["buffer"],
   },
+  server: {
+    proxy: {
+      "/story-data": {
+        target: "http://localhost:8084",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/story-data/, ""),
+      },
+    },
+  },
 }));

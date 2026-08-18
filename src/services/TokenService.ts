@@ -1,6 +1,4 @@
-import { doc } from "firebase/firestore";
-import api, { getApiErrorMessage } from "@/api";
-import { firestore } from "@/config/firebase";
+import { auth } from "@/config/firebase";
 import {
   TALE_ASSET_ID,
   TALE_DECIMALS,
@@ -17,18 +15,12 @@ import {
  * server to grant.
  */
 export class TokenService {
-  /** Account id for a user. Mirrors `userAccount` in functions/src/ledger.ts. */
+  /** Account id for a user. */
   accountIdFor(userId: string): string {
     return `user:${userId}`;
   }
 
-  /**
-   * Document ref for the materialized balance, for realtime subscriptions.
-   * Readable only by its owner (see the tokenAccounts rule in firestore.rules).
-   */
-  getAccountRef(userId: string) {
-    return doc(firestore, "tokenAccounts", this.accountIdFor(userId));
-  }
+  private async request<T>(path:string,method="GET"):Promise<T>{const user=auth.currentUser;if(!user)throw new Error("You must be signed in.");const headers:Record<string,string>={};const token=await user.getIdToken();if(token)headers.Authorization=`Bearer ${token}`;if(import.meta.env.DEV)headers["X-User-ID"]=user.uid;const r=await fetch(`${import.meta.env.VITE_STORY_DATA_URL||"/story-data"}${path}`,{method,headers});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||"Token request failed")};return r.json() as Promise<T>}
 
   /**
    * Fetch the balance via the API rather than Firestore.
@@ -39,23 +31,18 @@ export class TokenService {
    */
   async getBalance(): Promise<ITokenBalance> {
     try {
-      const { data } = await api.get<ITokenBalance>("/getTokenBalance");
-      return data;
+      return this.request<ITokenBalance>("/v1/me/token-balance");
     } catch (error) {
-      throw new Error(getApiErrorMessage(error, "Failed to load your balance"));
+      throw error;
     }
   }
 
   /** Claim the once-daily faucet. Throws with the server's message on 429. */
   async claimFaucet(): Promise<ITokenBalance & { granted: MinorUnits }> {
     try {
-      const { data } = await api.post<ITokenBalance & { granted: MinorUnits }>(
-        "/claimTokenFaucet",
-        {},
-      );
-      return data;
+      return this.request<ITokenBalance & { granted: MinorUnits }>("/v1/me/token-faucet","POST");
     } catch (error) {
-      throw new Error(getApiErrorMessage(error, "Failed to claim tokens"));
+      throw error;
     }
   }
 

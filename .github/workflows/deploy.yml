@@ -19,6 +19,8 @@ jobs:
   terraform-apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
     permissions:
       contents: read
       id-token: write
@@ -41,7 +43,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.5.0
+          terraform_version: 1.14.4
           terraform_wrapper: false
 
       - name: Terraform Init
@@ -113,6 +115,7 @@ jobs:
   build:
     name: Build Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -131,6 +134,15 @@ jobs:
       - name: Test
         run: yarn test
 
+      - name: Require story-data URL
+        env:
+          VITE_STORY_DATA_URL: ${{ secrets.VITE_STORY_DATA_URL }}
+        run: |
+          if [ -z "$VITE_STORY_DATA_URL" ]; then
+            echo "::error::VITE_STORY_DATA_URL is not set. The bundle would fall back to the relative path /story-data, which Hosting rewrites to index.html, so every API call would return HTML with a 200."
+            exit 1
+          fi
+
       - name: Build
         run: yarn build
         env:
@@ -148,6 +160,7 @@ jobs:
           VITE_MAX_AI_USAGE: ${{ secrets.VITE_MAX_AI_USAGE }}
           VITE_APP_NAME: ${{ secrets.VITE_APP_NAME }}
           VITE_AGENT_MCP_URL: ${{ secrets.VITE_AGENT_MCP_URL || 'https://novelsync-agents-ukvrbnaddq-uc.a.run.app' }}
+          VITE_STORY_DATA_URL: ${{ secrets.VITE_STORY_DATA_URL }}
 
       - name: Upload dist
         uses: actions/upload-artifact@v4
@@ -162,6 +175,7 @@ jobs:
     name: Deploy Firebase
     needs: [terraform-apply, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
@@ -194,8 +208,14 @@ jobs:
         run: npm install -g firebase-tools
 
       - name: Create functions .env
+        env:
+          AGENT_SERVICE_URL: ${{ needs.terraform-apply.outputs.backend_url }}
+          STORY_DATA_URL: ${{ secrets.VITE_STORY_DATA_URL }}
         run: |
-          echo "AGENT_SERVICE_URL=${{ needs.terraform-apply.outputs.backend_url }}" > functions/.env
+          {
+            echo "AGENT_SERVICE_URL=$AGENT_SERVICE_URL"
+            echo "STORY_DATA_URL=$STORY_DATA_URL"
+          } > functions/.env
 
       - name: Update firebase-functions
         working-directory: ./functions

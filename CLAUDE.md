@@ -11,7 +11,9 @@ yarn build:analyze    # Build with bundle analysis (opens stats.html)
 yarn lint             # ESLint — fails on any warnings
 yarn preview          # Preview production build locally
 yarn start:emulator   # Start Firebase emulators (runs from functions/)
-yarn kill-ports       # Kill ports used by Firebase emulators
+yarn kill-ports       # Delegates to ../../kill-ports at the workspace root,
+                      # which frees the emulator/agent/Vite ports and stops the
+                      # story-data + creditProxy containers
 yarn test             # Vitest unit suite (tests/, excludes tests/rules/)
 yarn test:watch       # Vitest in watch mode
 yarn test:rules       # Firestore rules tests — needs a running emulator
@@ -38,7 +40,7 @@ load them directly, and both are money arithmetic that must not be duplicated
 into the frontend: divergent formatting is survivable, a divergent payout is not.
 
 There is no component-level coverage. E2E lives in `cypress/e2e/`
-(`story_lifecycle`, `chapter_generation`, `ai_chat`, `worldbuilding_indexing`)
+(`story_lifecycle`, `ai_chat`, `worldbuilding_indexing`)
 and is not part of `yarn test` — run it with `yarn e2e`, which brings up the
 whole stack via `scripts/e2e-stack.sh`, or `yarn cy:open` / `yarn cy:run`
 against an already-running stack. Nothing covers competitions yet; that path is
@@ -106,10 +108,19 @@ All routes are defined in `src/main.tsx` using React Router v7. Every route is l
 
 **Cloud Functions API** (`src/api/index.ts`): Custom HTTP client that auto-attaches the Firebase Auth bearer token. Dev base URL points to local emulator (`localhost:5001`). Throws `ApiError` on failure.
 
-**Firestore Services** (`src/services/`): All Firestore reads/writes go through service modules. Key ones:
-- `StoriesRepo.ts` — story/chapter CRUD; enforces `WORD_LIMIT = 5000` and `CHAPTER_LIMIT = 50`
+**story-data repos** (`src/services/*Repo.ts`): stories, chapters, worldbuilding,
+social, guestbooks, profiles, public reads and reading history are served by the
+`story-data` PostgreSQL API, reached over the `/story-data` Vite proxy with the
+caller's Firebase ID token. Each repo currently hand-rolls its own `request()`;
+only `StoryWorkspaceRepo` and `StoryWorldbuildingRepo` send `If-Match`.
+
+**Remaining Firestore services** (`src/services/`):
+- `ChatService.ts` — AI chat messages; realtime, stays on Firestore
+- `RateLimitService.tsx` — `userActivity` counters
 - `StorageService.ts` — Firebase Storage uploads (covers, images)
 - `ImageGenerationService.ts` — triggers AI image gen via Cloud Function
+
+Do not add new Firestore access for a domain story-data owns.
 
 **Custom Hooks** (`src/hooks/`): `useAutosave()` handles periodic draft saves to Firestore. `useEditorState()` manages TipTap state. Web3 hooks (`useEarnings`, `useTippingContract`, `useWalletState`, `useTokenBalance`) wrap Wagmi.
 
@@ -123,8 +134,8 @@ Firestore subcollection pattern: `stories/{id}/chapters`, `stories/{id}/chats/{i
 - **Chat**: Real-time Firestore subcollection + Cloud Function (`/sendChatMessage`) with story-context RAG
 - **Brainstorm / Text Enhancement**: API calls to Cloud Functions
 - **Daily quota**: UI display uses `VITE_MAX_AI_USAGE` (default 100) and user profile fields (`aiUsage`, `lastAiUsageDate`). Server-side enforcement is in `functions/src/aiSettings.ts` (`checkAiAccess` → `consumePlatformDailyQuota`), controlled by `MAX_AI_USAGE` env var. Keep `VITE_MAX_AI_USAGE` aligned with `MAX_AI_USAGE`. BYOK users bypass quota.
-- **Indexing budget**: write-triggered (re)embedding is metered separately from the chat quota via `consumeIndexingBudget` (`functions/src/usageBudget.ts`), controlled by `MAX_INDEX_USAGE` (default 300/day), stored on the user doc as `indexUsage`/`lastIndexUsageDate`. Counts one unit per debounced embedding pass (not per autosave). Applies to BYOK users too — indexing uses the platform embedder regardless. Deletes are never gated.
-- **Per-user story cap**: `users.storyCount` is maintained by the `onStoryWrite` trigger (`functions/src/storyCountTrigger.ts`); `firestore.rules` blocks story creation past `MAX_STORIES_PER_USER` (literal `100` in rules — keep both in sync). Soft cap; the indexing budget is the hard cost ceiling.
+- **Indexing budget**: (re)embedding is metered separately from the chat quota, at `MAX_INDEX_USAGE` (default 300/day) per user. It lives entirely in `taleTribe-agents` now — the outbox consumer (`postgres_context.py`, `indexing_usage` table in story-data) charges it; no Function is involved. A unit is one embedding pass, not one autosave: nothing collapses the outbox on the write side, so the consumer drops events superseded by a higher revision of the same source in the batch. Applies to BYOK users too: indexing uses the platform embedder regardless. Deletes are never gated. Over budget, an event is deferred to the next UTC day rather than dropped, so the index goes stale but never loses the write.
+- **Per-user story cap**: enforced by story-data. `users.storyCount` and the `onStoryWrite` trigger are the pre-cutover mechanism and no longer fire. Soft cap; the indexing budget is the hard cost ceiling.
 
 ### Web3
 Wagmi config in `src/blockchain/config.ts`. Target chain from `VITE_CHAIN_ID` (default 31337 for local Anvil). Tipping contract ABI in `src/blockchain/abi/TippingPlatform.abi.json`. Wallet state machine: `DISCONNECTED → CONNECTING → CONNECTED → READY` (or `WRONG_NETWORK / ERROR`).
@@ -296,7 +307,6 @@ Cloud Functions read a separate set (`functions/src/`):
 
 ```
 MAX_AI_USAGE                # daily chat/AI quota — keep aligned with VITE_MAX_AI_USAGE
-MAX_INDEX_USAGE             # daily embedding budget (default 300)
 MAX_STORAGE_UPLOADS_PER_DAY
 AI_MAX_INSTANCES            # max concurrent instances for AI functions
 ESCROW_PROVIDER             # "ledger" (default). Anything else throws — it will
