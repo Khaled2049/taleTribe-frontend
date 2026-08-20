@@ -166,9 +166,10 @@ async function ensureOwner({ email, prod }) {
   const generated = `seed_owner_${user.uid.slice(0, 6).toLowerCase()}`
   const userDoc = loadUserProfileDefaults()({ username: generated, email })
 
-  // Same two writes createUserByAdmin makes: username index and user doc.
-  // The public profile is story-data's now, created on the user's first sign-in.
-  await db.collection('usernames').doc(generated.trim().toLowerCase()).set({ uid: user.uid })
+  // Only the user document. story-data owns the public profile (created on the
+  // user's first sign-in) and enforces username uniqueness itself via
+  // public_profiles.username_lower, so the old Firestore `usernames` index is
+  // gone — it had no reader left once createUserByAdmin was removed.
   await userRef.set(userDoc, { merge: true })
   console.log(`  seeded owner profile users/${user.uid} (${generated})`)
   return user.uid

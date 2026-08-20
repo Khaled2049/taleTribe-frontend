@@ -61,8 +61,14 @@ export const onInviteApproved = onDocumentUpdated(
 
     try {
       // Generate the magic link
+      // Never fall back to the production secret under the emulator: that sends
+      // a locally-issued magic link to thetaletribe.com, so the code is consumed
+      // off-machine and every local attempt then fails with
+      // auth/invalid-action-code ("link expired or already used").
+      // Set LOCAL_REDIRECT_URL if Vite is not on the default port.
       const redirectUrl = isEmulator
-        ? (process.env.LOCAL_REDIRECT_URL ?? magicLinkRedirectUrl.value())
+        ? (process.env.LOCAL_REDIRECT_URL ??
+          "http://localhost:5173/auth/complete-signup")
         : magicLinkRedirectUrl.value();
 
       const actionCodeSettings: admin.auth.ActionCodeSettings = {
