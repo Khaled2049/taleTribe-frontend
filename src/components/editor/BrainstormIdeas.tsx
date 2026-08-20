@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Loader, Lightbulb } from "lucide-react";
-import { brainstormIdeas, BrainstormIdeasRequest } from "@/api/ai";
+import { brainstormIdeas, BrainstormIdeasRequest } from "@/cloudFunctions/ai";
 
 interface BrainstormIdeasProps {
   storyId: string | null;

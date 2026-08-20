@@ -7,14 +7,14 @@ import {
 import { usePublicClient } from "wagmi";
 import { formatEther, formatUnits } from "viem";
 import { queryKeys } from "./queryKeys";
-import { publicStoryRepo } from "@/services/PublicStoryRepo";
-import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
+import { publicStoryRepo } from "@novelsync/story-data-client";
+import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import {
   tippingPlatformConfig,
   ZERO_ADDRESS,
 } from "@/blockchain/tippingPlatform";
 import { USDC_ADDRESS } from "@/blockchain/tokens";
-import { auth } from "@/config/firebase";
+import { auth } from "@novelsync/platform-auth";
 import { storageService } from "@/services/StorageService";
 
 async function updateStoryCover(

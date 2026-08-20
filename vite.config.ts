@@ -17,6 +17,14 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@novelsync/story-data-client": path.resolve(
+        __dirname,
+        "./packages/story-data-client/src/index.ts",
+      ),
+      "@novelsync/platform-auth": path.resolve(
+        __dirname,
+        "./packages/platform-auth/src/index.ts",
+      ),
       buffer: "buffer/",
     },
   },

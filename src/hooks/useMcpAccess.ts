@@ -6,7 +6,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 
-import { firestore } from "@/config/firebase";
+import { firestore } from "@novelsync/platform-auth";
 
 export type McpAccessStatus = "none" | "requested" | "granted" | "revoked";
 

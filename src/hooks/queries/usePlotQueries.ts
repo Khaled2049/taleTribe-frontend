@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
-import { storyWorldbuildingRepo } from "@/services/StoryWorldbuildingRepo";
+import { storyWorldbuildingRepo } from "@novelsync/story-data-client";
 import { PlotEvent, PlotLine } from "@/types/IPlot";
 
 /**

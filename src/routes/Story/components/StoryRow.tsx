@@ -14,10 +14,10 @@ import {
   Download,
 } from "lucide-react";
 import { toast } from "sonner";
-import { StoryMetadata } from "@/types/IStory";
-import { generateCover } from "@/services/imageGenerationService";
+import { StoryMetadata } from "@novelsync/story-data-client";
+import { generateCover } from "@/cloudFunctions/images";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
-import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
+import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import {
   fetchCoverAsset,
   buildEpub,

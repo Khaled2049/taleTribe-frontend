@@ -14,7 +14,12 @@ import { doc, getDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { auth, firestore } from "@/config/firebase";
+import { firestore } from "@novelsync/platform-auth";
+import {
+  deleteAiSettings,
+  saveAiSettings,
+  validateAiKey,
+} from "@/cloudFunctions/aiSettings";
 import {
   AI_SETTINGS_COPY,
   PLATFORM_AI_DAILY_LIMIT,
@@ -22,31 +27,6 @@ import {
   getTodayPlatformAiUsage,
 } from "@/config/aiQuota";
 import { PROVIDERS, MODELS, type ProviderKey } from "@/config/aiProviders";
-
-// ── Firebase Functions base URL ────────────────────────────────────────────
-const isDevelopment = import.meta.env.MODE === "development";
-const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-const region = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || "us-central1";
-const functionsBase = isDevelopment
-  ? `http://localhost:5001/${projectId}/${region}`
-  : `https://${region}-${projectId}.cloudfunctions.net`;
-
-async function callFunction(
-  name: string,
-  body: unknown,
-): Promise<{ ok: boolean; data: unknown }> {
-  const token = await auth.currentUser?.getIdToken();
-  const resp = await fetch(`${functionsBase}/${name}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  const data = await resp.json().catch(() => ({}));
-  return { ok: resp.ok, data };
-}
 
 interface QuotaSnapshot {
   aiUsage: number;
@@ -144,21 +124,12 @@ const AiSettings = () => {
     if (!apiKey.trim()) return;
     setTestState("testing");
     setTestError("");
-    try {
-      const { ok, data } = await callFunction("validateAiKey", {
-        provider,
-        apiKey: apiKey.trim(),
-      });
-      const result = data as { valid?: boolean; error?: string };
-      if (ok && result.valid) {
-        setTestState("ok");
-      } else {
-        setTestState("fail");
-        setTestError(result.error || "Key validation failed");
-      }
-    } catch (e) {
+    const { valid, error } = await validateAiKey(provider, apiKey.trim());
+    if (valid) {
+      setTestState("ok");
+    } else {
       setTestState("fail");
-      setTestError(String(e));
+      setTestError(error || "Key validation failed");
     }
   };
 
@@ -166,20 +137,16 @@ const AiSettings = () => {
     if (testState !== "ok") return;
     setSaveState("saving");
     try {
-      const { ok } = await callFunction("saveAiSettings", {
+      await saveAiSettings({
         provider,
         apiKey: apiKey.trim(),
         model: model || undefined,
       });
-      if (ok) {
-        setSaveState("saved");
-        setIsActive(true);
-        setApiKey(""); // never keep in state after save
-        setTestState("idle");
-        setTimeout(() => setSaveState("idle"), 3000);
-      } else {
-        setSaveState("error");
-      }
+      setSaveState("saved");
+      setIsActive(true);
+      setApiKey(""); // never keep in state after save
+      setTestState("idle");
+      setTimeout(() => setSaveState("idle"), 3000);
     } catch {
       setSaveState("error");
     }
@@ -188,10 +155,12 @@ const AiSettings = () => {
   const handleRemove = async () => {
     setRemoveState("removing");
     try {
-      await callFunction("deleteAiSettings", {});
+      await deleteAiSettings();
       setIsActive(false);
       setTestState("idle");
       setApiKey("");
+    } catch (error) {
+      console.error("Failed to remove AI settings:", error);
     } finally {
       setRemoveState("idle");
     }

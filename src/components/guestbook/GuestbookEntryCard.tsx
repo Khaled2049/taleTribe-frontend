@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { MessageCircle, Trash2, MoreHorizontal } from "lucide-react";
 import { Link } from "react-router-dom";
-import { IGuestbookEntry } from "@/types/IGuestbookEntry";
+import { IGuestbookEntry } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
 import GuestbookReplies from "./GuestbookReplies";
 import VoteButtons from "./VoteButtons";
@@ -11,7 +11,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { guestbookRepo } from "@/services/GuestbookRepo";
+import { guestbookRepo } from "@novelsync/story-data-client";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { formatRelativeTime } from "@/lib/relativeTime";
 import { toast } from "sonner";

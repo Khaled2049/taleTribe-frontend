@@ -1,27 +1,21 @@
-import { auth, firestore } from "@/config/firebase";
+import { isNotFound, request } from "@novelsync/story-data-client";
+import { firestore } from "@novelsync/platform-auth";
 import { IBookOfTheMonth, IClub, IDiscussionPrompt, IPoll, IReadingProgress, IReadingSchedule, IPromptResponse } from "@/types/IClub";
 import { IMessage } from "@/types/IMessage";
 import { collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { RATE_LIMITS } from "@/config/rateLimits";
-
-const baseURL = import.meta.env.VITE_STORY_DATA_URL || "/story-data";
+import { spoilerRangeField } from "@/lib/spoilerRange";
 
 class BookClubRepo {
   private async request<T>(method: string, path: string, body?: unknown, required = false): Promise<T> {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    const user = auth.currentUser;
-    if (required && !user) throw new Error("You must be signed in.");
-    if (user) { const token = await user.getIdToken(); if (token) headers.Authorization = `Bearer ${token}`; if (import.meta.env.DEV) headers["X-User-ID"] = user.uid; }
-    const response = await fetch(`${baseURL}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-    if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || `Book club request failed (${response.status})`); }
-    const result = response.status === 204 ? undefined as T : await response.json() as T;
+    const result = await request<T>(path, { method, body, auth: required ? "required" : "optional", label: "Book club request" });
     if (method !== "GET") window.dispatchEvent(new Event("book-club-changed"));
     return result;
   }
 
   createBookClub(club: IClub): Promise<string> { return this.request<IClub>("POST", "/v1/book-clubs", club, true).then((x) => x.id); }
   getBookClubs(): Promise<IClub[]> { return this.request<IClub[]>("GET", "/v1/book-clubs"); }
-  getBookClub(id: string): Promise<IClub | undefined> { return this.request<IClub>("GET", `/v1/book-clubs/${id}`).catch((e) => { if (e.message === "not found") return undefined; throw e; }); }
+  getBookClub(id: string): Promise<IClub | undefined> { return this.request<IClub>("GET", `/v1/book-clubs/${id}`).catch((e) => { if (isNotFound(e)) return undefined; throw e; }); }
   updateBookClub(id: string, club: IClub) { return this.request<IClub>("PATCH", `/v1/book-clubs/${id}`, club, true); }
   updateMeetUp(id: string, meetUp: string) { return this.settings(id, { meetUp }); }
   updateBookOfTheMonth(id: string, book: IBookOfTheMonth) { return this.settings(id, { bookOfTheMonth: book }); }
@@ -34,11 +28,11 @@ class BookClubRepo {
   async sendMessage(clubId: string, message: IMessage): Promise<string> {
     if (message.content.length > RATE_LIMITS.MAX_MESSAGE_SIZE_CHARS) throw new Error(`Message is too long. Maximum ${RATE_LIMITS.MAX_MESSAGE_SIZE_CHARS} characters allowed.`);
     const ref = doc(collection(firestore, `bookClubs/${clubId}/messages`));
-    const clean = { ...message, spoilerChapterRange: message.spoilerChapterRange?.end === undefined ? (message.spoilerChapterRange ? { start: message.spoilerChapterRange.start } : undefined) : message.spoilerChapterRange };
-    await setDoc(ref, { ...clean, id: ref.id, timestamp: serverTimestamp() }); return ref.id;
+    const { spoilerChapterRange, ...rest } = message;
+    await setDoc(ref, { ...rest, ...spoilerRangeField(spoilerChapterRange), id: ref.id, timestamp: serverTimestamp() }); return ref.id;
   }
   getMessages(clubId: string, callback: (messages: IMessage[]) => void) { return onSnapshot(query(collection(firestore, `bookClubs/${clubId}/messages`), orderBy("timestamp", "desc"), limit(50)), (snapshot) => callback(snapshot.docs.map((x) => x.data() as IMessage).reverse())); }
-  addSpoilerToMessage(clubId: string, messageId: string, spoilerData: { chapterRange: { start: number; end?: number } }) { return updateDoc(doc(firestore, `bookClubs/${clubId}/messages`, messageId), { hasSpoiler: true, spoilerChapterRange: spoilerData.chapterRange }); }
+  addSpoilerToMessage(clubId: string, messageId: string, spoilerData: { chapterRange: { start: number; end?: number } }) { return updateDoc(doc(firestore, `bookClubs/${clubId}/messages`, messageId), { hasSpoiler: true, ...spoilerRangeField(spoilerData.chapterRange) }); }
 
   createReadingSchedule(id: string, schedule: IReadingSchedule) { return this.settings(id, { readingSchedule: schedule }); }
   updateReadingSchedule(id: string, schedule: IReadingSchedule) { return this.settings(id, { readingSchedule: schedule }); }

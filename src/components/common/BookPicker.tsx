@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { IBookOfTheMonth } from "@/types/IClub";
-import { StoryMetadata } from "@/types/IStory";
+import { StoryMetadata } from "@novelsync/story-data-client";
 import { usePublishedStories } from "@/hooks/queries/useStoryQueries";
 import { googleBookToBook, storyToBook } from "@/utils/bookMapping";
 import BookSearch from "@/components/common/BookSearch";

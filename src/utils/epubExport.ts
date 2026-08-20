@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { Chapter, StoryMetadata } from "@/types/IStory";
+import { Chapter, StoryMetadata } from "@novelsync/story-data-client";
 
 export interface EpubCoverAsset {
   bytes: ArrayBuffer;

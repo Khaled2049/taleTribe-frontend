@@ -120,7 +120,7 @@ function loadPayload(file, options) {
 /** Validate with the same zod schema the function uses (requires a build). */
 function loadSchema() {
   try {
-    return require('../lib/adminStorySchemas').createStoryByAdminSchema
+    return require('../lib/domain/adminStorySchemas').createStoryByAdminSchema
   } catch {
     return null
   }
@@ -129,9 +129,9 @@ function loadSchema() {
 /** Build the seeded profile from the same defaults signup and createUserByAdmin use. */
 function loadUserProfileDefaults() {
   try {
-    return require('../lib/userProfileDefaults').buildUserProfileDefaults
+    return require('../lib/domain/userProfileDefaults').buildUserProfileDefaults
   } catch {
-    throw new Error('Run `npm run build` first — the seeded owner profile reuses lib/userProfileDefaults.js')
+    throw new Error('Run `npm run build` first — the seeded owner profile reuses lib/domain/userProfileDefaults.js')
   }
 }
 
@@ -166,20 +166,11 @@ async function ensureOwner({ email, prod }) {
   const generated = `seed_owner_${user.uid.slice(0, 6).toLowerCase()}`
   const userDoc = loadUserProfileDefaults()({ username: generated, email })
 
-  // Same three writes createUserByAdmin makes: username index, user doc, public profile.
-  await db.collection('usernames').doc(generated.trim().toLowerCase()).set({ uid: user.uid })
+  // Only the user document. story-data owns the public profile (created on the
+  // user's first sign-in) and enforces username uniqueness itself via
+  // public_profiles.username_lower, so the old Firestore `usernames` index is
+  // gone — it had no reader left once createUserByAdmin was removed.
   await userRef.set(userDoc, { merge: true })
-  await db.collection('publicProfiles').doc(user.uid).set(
-    {
-      username: generated,
-      bio: userDoc.bio,
-      occupation: userDoc.occupation,
-      location: userDoc.location,
-      createdAt: userDoc.createdAt,
-      updatedAt: userDoc.createdAt,
-    },
-    { merge: true },
-  )
   console.log(`  seeded owner profile users/${user.uid} (${generated})`)
   return user.uid
 }
@@ -452,7 +443,7 @@ async function main() {
   if (options.dryRun) {
     const schema = loadSchema()
     if (!schema) {
-      throw new Error('Run `npm run build` first — --dry-run validates against lib/adminStorySchemas.js')
+      throw new Error('Run `npm run build` first — --dry-run validates against lib/domain/adminStorySchemas.js')
     }
     let failed = 0
     for (const file of files) {

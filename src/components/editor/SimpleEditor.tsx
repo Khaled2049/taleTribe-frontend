@@ -34,8 +34,8 @@ import {
 import { useParams, useSearchParams } from "react-router-dom";
 import { useAuthContext } from "../../contexts/AuthContext";
 import { useDemoMode } from "@/contexts/DemoModeContext";
-import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
-import { Chapter, Story } from "@/types/IStory";
+import { storyWorkspaceRepo } from "@novelsync/story-data-client";
+import { Chapter, Story } from "@novelsync/story-data-client";
 
 // Import components
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
@@ -57,7 +57,7 @@ import { FloatingChatButton } from "../chat/FloatingChatButton";
 import { useCoWrite } from "@/hooks/useCoWrite";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { toast } from "sonner";
-import { summarizeChapter } from "@/api/ai";
+import { summarizeChapter } from "@/cloudFunctions/ai";
 
 const DEMO_STORY: Story = {
   id: "demo",

@@ -1,4 +1,4 @@
-import { Character } from "@/types/ICharacter";
+import { Character } from "@novelsync/story-data-client";
 import { X, UserPlus } from "lucide-react";
 
 interface MultiSelectCharactersProps {

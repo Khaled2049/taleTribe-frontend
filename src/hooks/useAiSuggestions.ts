@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Editor } from "@tiptap/react";
 import {
   generateNextLines,
-} from "@/api/ai";
+} from "@/cloudFunctions/ai";
 
 interface UseAiSuggestionsParams {
   storyId: string;

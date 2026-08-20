@@ -15,9 +15,9 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
-import { auth, firestore } from "../config/firebase";
+import { auth, firestore } from "@novelsync/platform-auth";
 import { storageService } from "@/services/StorageService";
-import { profileRepo } from "@/services/ProfileRepo";
+import { profileRepo } from "@novelsync/story-data-client";
 
 /** Optional profile details collected during the signup wizard. */
 export interface SignupProfile {
@@ -49,12 +49,6 @@ export const useFirebaseAuth = () => {
       username: userData.username,
       email: userData.email,
       createdAt: new Date().toISOString(),
-      followers: [],
-      following: [],
-      stories: [],
-      posts: [],
-      likedPosts: [],
-      savedPosts: [],
       lastLogin: new Date().toISOString(),
       isAnonymous: userData.isAnonymous || false,
       ...(userData.writingInterests?.trim()

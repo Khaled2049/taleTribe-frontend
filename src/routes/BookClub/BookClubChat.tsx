@@ -18,7 +18,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RATE_LIMITS } from "@/config/rateLimits";
 import { rateLimitService } from "@/services/RateLimitService";
-import { profileRepo } from "@/services/ProfileRepo";
+import {
+  useAuthorUsername,
+  useProfileNames,
+} from "@/hooks/queries/useUserQueries";
 
 interface BookClubChatProps {
   clubId: string;
@@ -40,8 +43,11 @@ const BookClubChat: React.FC<BookClubChatProps> = ({
     number | undefined
   >();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [senderNames, setSenderNames] = useState<Record<string, string>>({});
-  const [currentUsername, setCurrentUsername] = useState<string>(
+  // Keyed by the sender set, so it resolves from cache whenever those profiles
+  // were already fetched elsewhere on the page.
+  const senderNames = useProfileNames(messages.map((m) => m.senderId));
+  const currentUsername = useAuthorUsername(
+    user.uid,
     user.username || "Anonymous",
   );
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -62,64 +68,8 @@ const BookClubChat: React.FC<BookClubChatProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const hydrateCurrentUsername = async () => {
-      try {
-        const profile = await profileRepo.get(user.uid);
-        if (!isMounted) return;
-
-        const resolvedUsername =
-          profile?.username || user.username || "Anonymous";
-        setCurrentUsername(resolvedUsername);
-      } catch {
-        if (isMounted) {
-          setCurrentUsername(user.username || "Anonymous");
-        }
-      }
-    };
-
-    hydrateCurrentUsername();
-    return () => {
-      isMounted = false;
-    };
-  }, [user.uid, user.username]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const hydrateSenderNames = async () => {
-      const senderIds = [...new Set(messages.map((m) => m.senderId).filter(Boolean))];
-      if (senderIds.length === 0) return;
-
-      try {
-        const profileMap = await profileRepo.getMany(senderIds);
-        if (!isMounted) return;
-
-        setSenderNames((prev) => {
-          const next = { ...prev };
-          senderIds.forEach((senderId) => {
-            const profile = profileMap.get(senderId);
-            if (profile?.username) {
-              next[senderId] = profile.username || next[senderId];
-            }
-          });
-          return next;
-        });
-      } catch (error) {
-        console.error("Error hydrating sender usernames:", error);
-      }
-    };
-
-    hydrateSenderNames();
-    return () => {
-      isMounted = false;
-    };
-  }, [messages]);
-
   const getMessageSender = (message: IMessage) =>
-    senderNames[message.senderId] || message.sender || "Anonymous";
+    senderNames.get(message.senderId) || message.sender || "Anonymous";
 
   // Shared send pipeline: length check → rate limit → write → increment count.
   // Membership is enforced by Firestore rules; a denied write surfaces via catch.

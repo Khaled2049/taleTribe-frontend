@@ -4,7 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Sparkles, Upload, Loader2, AlertCircle, X } from "lucide-react";
 import { toast } from "sonner";
-import { generateCover } from "@/services/imageGenerationService";
+import { generateCover } from "@/cloudFunctions/images";
 
 interface CoverImagePickerProps {
   /** Used to build the default AI prompt when none is supplied. */

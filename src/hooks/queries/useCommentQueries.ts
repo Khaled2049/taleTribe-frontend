@@ -1,8 +1,8 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
-import { storySocialRepo } from "@/services/StorySocialRepo";
-import { Comment } from "@/types/IComment";
+import { storySocialRepo } from "@novelsync/story-data-client";
+import { Comment } from "@novelsync/story-data-client";
 
 export function useComments(
   storyId: string | undefined,

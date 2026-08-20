@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { Editor } from "@tiptap/react";
-import { enhanceText } from "@/api/ai";
+import { enhanceText } from "@/cloudFunctions/ai";
 
 interface UseTextEnhancementParams {
   editor: Editor | null;

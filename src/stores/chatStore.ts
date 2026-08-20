@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { ChatMessage } from "@/types/IChat";
 import { chatService } from "@/services/ChatService";
-import { clearChatSession, sendChatMessage } from "@/api/chat";
+import { clearChatSession, sendChatMessage } from "@/cloudFunctions/chat";
 import { useAuthStore } from "@/stores/authStore";
 
 interface ChatStore {

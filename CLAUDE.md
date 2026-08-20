@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Artifacts
+
+**Never publish an Artifact without explicit permission.** This overrides the
+default behaviour of publishing finished work proactively — assume the answer is
+no unless asked.
+
+Deliver documents, reports, plans and reviews as files in the repo, and say where
+they landed. If a shareable link would genuinely help, ask first and wait for a
+yes before publishing.
+
 ## Commands
 
 ```bash
@@ -19,10 +29,9 @@ yarn test:watch       # Vitest in watch mode
 yarn test:rules       # Firestore rules tests — needs a running emulator
 ```
 
-`yarn lint` currently reports ~123 pre-existing errors, most of them
-`no-explicit-any` in `src/types/`. Every file under `functions/src/` also fails
-to parse under the root ESLint config (it cannot resolve `tsconfig.dev.json`
-from there). Judge a change by whether it adds errors **in the files it
+`yarn lint` currently reports 89 pre-existing errors. Every file under
+`functions/src/` fails to parse under the root ESLint config (it cannot resolve
+`tsconfig.dev.json` from there), which accounts for most of them. Judge a change by whether it adds errors **in the files it
 touches**, not by the total.
 
 ### Tests
@@ -33,22 +42,26 @@ run separately by `yarn test:rules`, which requires
 `firebase emulators:start --only firestore`; a rules suite that silently passes
 with no emulator is worse than no suite.
 
-Modules reached by `tests/` must be listed in `tsconfig.test.json`. Two of them
-live in `functions/src/` rather than `src/lib/` — `competitionSettlementCore.ts`
-and `escrow/refundPlan.ts`. Both are deliberately **import-free** so vitest can
-load them directly, and both are money arithmetic that must not be duplicated
-into the frontend: divergent formatting is survivable, a divergent payout is not.
+Modules reached by `tests/` must be listed in `tsconfig.test.json` — including
+`packages/story-data-client/src`, which is listed as a whole directory. Everything
+the suite touches now lives in this repo's `src/` or in `packages/`; nothing under
+`functions/src/` is reachable from `tests/`.
 
 There is no component-level coverage. E2E lives in `cypress/e2e/`
-(`story_lifecycle`, `ai_chat`, `worldbuilding_indexing`)
-and is not part of `yarn test` — run it with `yarn e2e`, which brings up the
-whole stack via `scripts/e2e-stack.sh`, or `yarn cy:open` / `yarn cy:run`
-against an already-running stack. Nothing covers competitions yet; that path is
-verified by seeding the emulator (see below).
+(`story_lifecycle`, `ai_chat`, `worldbuilding_indexing`, `chapter_comments`,
+`public_discovery`) and is not part of `yarn test` — run it with `yarn e2e`, which
+brings up the whole stack via `scripts/e2e-stack.sh`, or `yarn cy:open` /
+`yarn cy:run` against an already-running stack. Nothing covers competitions yet;
+that path is verified by seeding (see below).
 
 ## Path Aliases
 
-`@/` maps to `./src/` (configured in both `vite.config.ts` and `tsconfig.json`). Always use `@/` for imports — never use deep relative paths like `../../../`.
+`@/` maps to `./src/`. Two workspace packages resolve by name:
+`@novelsync/story-data-client` and `@novelsync/platform-auth`. All three are
+declared in `tsconfig.app.json`, `tsconfig.json`, `vite.config.ts` and
+`vitest.config.ts` — adding a package means adding it in all four.
+
+Always use `@/` for app imports — never deep relative paths like `../../../`.
 
 ## Comments
 
@@ -95,7 +108,27 @@ React 19 + TypeScript 5 + Vite 5. Firebase (Auth, Firestore, Functions, Storage)
 - `src/NavbarWrapper.tsx` — Layout shell wrapping all non-auth routes
 
 ### Provider Stack (outermost → innermost)
-`SEOProvider` → `Web3Provider` (Wagmi + React Query) → `ThemeProvider` → `AuthProvider` → `AiUsageProvider` → `ChatProvider`
+
+```
+SEOProvider                  react-helmet-async
+  QueryClientProvider        the single app query client
+    Web3Provider             wagmi
+      AuthBootstrap          renders null; see below
+      RouterProvider
+      ThemeToaster
+```
+
+There is no `AuthProvider`, `ThemeProvider` or `ChatProvider` — that state is
+zustand (`src/stores/`), and `src/contexts/` holds selector hooks over those
+stores rather than React contexts. **Nothing in `src/contexts/` calls
+`createContext`.**
+
+`AuthBootstrap` renders nothing and does two jobs: at module load it calls
+`configureStoryData(...)` to give the story-data client its base URL and token
+provider, and on mount it subscribes to `onAuthStateChanged` to hydrate
+`authStore` and clear the query cache when the signed-in user changes. The
+`configureStoryData` call is at module scope deliberately — a route loader can
+fire a repo call before any component mounts, and an unconfigured client throws.
 
 ### Routing
 All routes are defined in `src/main.tsx` using React Router v7. Every route is lazy-loaded. Key route groups:
@@ -106,26 +139,60 @@ All routes are defined in `src/main.tsx` using React Router v7. Every route is l
 
 ### Data Layer
 
-**Cloud Functions API** (`src/api/index.ts`): Custom HTTP client that auto-attaches the Firebase Auth bearer token. Dev base URL points to local emulator (`localhost:5001`). Throws `ApiError` on failure.
+**Cloud Functions client** (`src/cloudFunctions/`): `index.ts` is the transport — a custom HTTP client that auto-attaches the Firebase Auth bearer token, points at the local emulator (`localhost:5001`) in dev, and throws `ApiError`. `ai.ts`, `chat.ts` and `storage.ts` are typed wrappers, one function per endpoint. Import it as `@/cloudFunctions` (or `@/cloudFunctions/ai`) — never by a relative path.
 
-**story-data repos** (`src/services/*Repo.ts`): stories, chapters, worldbuilding,
-social, guestbooks, profiles, public reads and reading history are served by the
-`story-data` PostgreSQL API, reached over the `/story-data` Vite proxy with the
-caller's Firebase ID token. Each repo currently hand-rolls its own `request()`;
-only `StoryWorkspaceRepo` and `StoryWorldbuildingRepo` send `If-Match`.
+**story-data client** (`packages/story-data-client`): stories, chapters,
+worldbuilding, social, guestbooks, profiles, public reads and reading history are
+served by the `story-data` PostgreSQL API, reached over the `/story-data` Vite
+proxy with the caller's Firebase ID token.
 
-**Remaining Firestore services** (`src/services/`):
-- `ChatService.ts` — AI chat messages; realtime, stays on Firestore
-- `RateLimitService.tsx` — `userActivity` counters
-- `StorageService.ts` — Firebase Storage uploads (covers, images)
-- `ImageGenerationService.ts` — triggers AI image gen via Cloud Function
+The seven repos live in `packages/story-data-client/src/repos/` and share one
+`request()` (`src/request.ts`). Their wire types live beside them in
+`src/types/`. Three more story-data callers stayed in the app because they carry
+app-only dependencies, but they use the same shared `request()`:
+`CompetitionService.ts`, `TokenService.ts`, and `src/routes/BookClub/bookClubRepo.tsx`.
+
+Two rules govern that package:
+
+- **It must never import firebase.** `authStore` imports `profileRepo`, so a
+  firebase import here would close a cycle; it also keeps the package loadable
+  under vitest, which is why the transport has tests. Need the current uid inside
+  a repo? `getStoryDataConfig().getUid()`, injected at bootstrap.
+- **Branch on `error.status`, never on message text.** Use `isNotFound(error)`.
+  A `{ error }` body from the server replaces the generated message, so
+  `message.includes("(404)")` misses exactly the responses it was written for.
+  That bug shipped more than once.
+
+`StoryWorkspaceRepo` and `StoryWorldbuildingRepo` send `If-Match`; a 409 comes
+back as `StoryDataConflictError`.
+
+**Firebase access** (`packages/platform-auth`): owns `initializeApp` and the
+emulator wiring, and exports `auth`, `firestore`, `storage`, `functions` plus
+`getAuthContext()` (async token), `getCurrentUid()` (sync uid) and
+`useAuthIdentity()` (`{ uid, email, isAdmin, loading, isSignedIn }`, read straight
+off the SDK via `useSyncExternalStore`). Never call `initializeApp` anywhere else.
+
+**`src/services/`** holds stateful client-side modules that own a connection or
+a cache and are not components or hooks. It is not one backend — read the
+imports to see which a given file talks to:
+- `ChatService.ts`, `RateLimitService.ts` — **Firestore** (realtime chat; `userActivity` counters)
+- `CompetitionService.ts`, `TokenService.ts` — **story-data**
+- `StorageService.ts` — Firebase Storage, with a Cloud Function reserving quota first
+- `DictionaryService.ts` — an **external** API (dictionaryapi.dev), with an in-memory cache
+- `HighlightService.ts` — **localStorage**, no network
+
+A thin typed wrapper over a single Cloud Function does *not* belong here — that
+is `src/cloudFunctions/` (see the Data Layer above). `credits.ts` and `images.ts`
+live there for that reason.
 
 Do not add new Firestore access for a domain story-data owns.
 
 **Custom Hooks** (`src/hooks/`): `useAutosave()` handles periodic draft saves to Firestore. `useEditorState()` manages TipTap state. Web3 hooks (`useEarnings`, `useTippingContract`, `useWalletState`, `useTokenBalance`) wrap Wagmi.
 
 ### Firebase
-Config in `src/config/firebase.ts`. Set `VITE_USE_EMULATORS=true` (default in dev) to connect to local emulators:
+Config in `packages/platform-auth/src/firebase.ts` (it used to be
+`src/config/firebase.ts`). Set `VITE_USE_EMULATORS=true` (default in dev) to
+connect to local emulators:
 - Auth: 9099, Firestore: 8080, Functions: 5001, Storage: 9199
 
 Firestore subcollection pattern: `stories/{id}/chapters`, `stories/{id}/chats/{id}/messages`.
@@ -135,122 +202,72 @@ Firestore subcollection pattern: `stories/{id}/chapters`, `stories/{id}/chats/{i
 - **Brainstorm / Text Enhancement**: API calls to Cloud Functions
 - **Daily quota**: UI display uses `VITE_MAX_AI_USAGE` (default 100) and user profile fields (`aiUsage`, `lastAiUsageDate`). Server-side enforcement is in `functions/src/aiSettings.ts` (`checkAiAccess` → `consumePlatformDailyQuota`), controlled by `MAX_AI_USAGE` env var. Keep `VITE_MAX_AI_USAGE` aligned with `MAX_AI_USAGE`. BYOK users bypass quota.
 - **Indexing budget**: (re)embedding is metered separately from the chat quota, at `MAX_INDEX_USAGE` (default 300/day) per user. It lives entirely in `taleTribe-agents` now — the outbox consumer (`postgres_context.py`, `indexing_usage` table in story-data) charges it; no Function is involved. A unit is one embedding pass, not one autosave: nothing collapses the outbox on the write side, so the consumer drops events superseded by a higher revision of the same source in the batch. Applies to BYOK users too: indexing uses the platform embedder regardless. Deletes are never gated. Over budget, an event is deferred to the next UTC day rather than dropped, so the index goes stale but never loses the write.
-- **Per-user story cap**: enforced by story-data. `users.storyCount` and the `onStoryWrite` trigger are the pre-cutover mechanism and no longer fire. Soft cap; the indexing budget is the hard cost ceiling.
+- **Per-user story cap**: enforced by story-data. The pre-cutover `onStoryWrite` trigger no longer exists in `functions/src/`; a vestigial `users.storyCount` field may still sit on old documents but nothing reads or writes it. Soft cap; the indexing budget is the hard cost ceiling.
 
 ### Web3
 Wagmi config in `src/blockchain/config.ts`. Target chain from `VITE_CHAIN_ID` (default 31337 for local Anvil). Tipping contract ABI in `src/blockchain/abi/TippingPlatform.abi.json`. Wallet state machine: `DISCONNECTED → CONNECTING → CONNECTED → READY` (or `WRONG_NETWORK / ERROR`).
 
 ### Competitions and TALE
 
-TALE is an internal, non-redeemable token backing competition prize pools. It is
-deliberately shaped like an ERC20 — 18 decimals, integer minor units, an asset
-id — so replacing the off-chain ledger with a real token contract does not
-change how amounts are represented. The `contracts` repo (`../contracts`) holds
-only `TippingPlatform.sol` today; there is no TALE token and no escrow contract
-yet.
+**Competitions and the TALE ledger live in `story-data`, not in Cloud Functions.**
+`internal/store/competitions.go` owns the phases, the double-entry ledger, escrow
+and the faucet; `migrations/000010_competitions.sql` and its successors own the
+schema. Read `repos/story-data/docs/service-guide.md` before changing any of it.
 
-**Money representation.** Every amount that crosses a boundary (Firestore, HTTP,
-a module edge) is a base-10 integer string in minor units; every calculation
+There is no `ledger.ts`, `escrow/`, `money.ts`, `competitionPhase.ts`,
+`competitionLifecycle.ts` or `competitionAdvanceTask.ts` under `functions/src/`
+any more, and no `ESCROW_PROVIDER`, `COMPETITION_FEE_BPS`, `INITIAL_TALE_GRANT`
+or `FAUCET_TALE_GRANT` environment variable anywhere. Ignore any older note that
+says otherwise.
+
+What lives in this repo:
+
+- `src/services/CompetitionService.ts` — the story-data client (`/v1/competitions`)
+- `src/services/TokenService.ts` — TALE balance and faucet (`/v1/me/token-balance`,
+  `/v1/me/token-faucet`)
+- `src/lib/money.ts` — amount formatting and arithmetic
+- `src/lib/competitionPhase.ts`, `competitionListing.ts`, `competitionDraft.ts`,
+  `competitionLedger.ts`, `competitionPhaseCopy.ts` — client-side phase
+  derivation and presentation
+- `src/components/explore/` — the whole competitions UI
+- `functions/scripts/seed-competitions.js` — seeds through the real story-data
+  endpoints (`STORY_DATA_URL`, default `http://127.0.0.1:8084`)
+
+**Money representation is the one rule that has not moved.** Every amount that
+crosses a boundary is a base-10 integer string in minor units; every calculation
 between is BigInt. Never a `number` — one whole TALE is 10^18 minor units, far
 past `Number.MAX_SAFE_INTEGER`, so float arithmetic on a balance is silently
-wrong. `functions/src/money.ts` and `src/lib/money.ts` are deliberate duplicates
-(separate builds, no shared workspace) and are marked KEEP IN SYNC — change both.
+wrong. `src/lib/money.ts` is the frontend's copy; the authoritative arithmetic is
+in story-data.
 
-**The ledger** (`functions/src/ledger.ts`) is double-entry. `transfer()` applies
-a balanced set of postings exactly once, keyed by a server-derived
-`idempotencyKey` that becomes the document id. Postings must sum to zero, no
-posting may be zero, and an account may appear at most once per transfer.
-Accounts: `user:{uid}`, `escrow:competition:{id}`, `platform:treasury`, and
-`system:mint`. `system:` accounts are excluded from balance materialization —
-correct for the mint, wrong for anything whose balance you want to read.
+TALE is an internal, non-redeemable token backing competition prize pools,
+deliberately shaped like an ERC20 (18 decimals, integer minor units, an asset id)
+so a real token contract could replace the off-chain ledger without changing how
+amounts are represented. The `contracts` repo holds only `TippingPlatform.sol`
+today; there is no TALE token and no escrow contract yet.
 
-**Escrow is the swap seam.** `functions/src/escrow/EscrowProvider.ts` is the
-entire boundary between competitions and money. Competition code calls
-`getEscrowProvider()` and never a concrete implementation, so swapping
-`LedgerEscrow` for a future `ChainEscrow` is a new file plus an env var. Three
-chain realities are already built into the interface: `"pending"` is a
-first-class result, payouts name a `userId` and never a wallet address, and
-every mutating method takes an idempotency key. Gas, nonces, chain ids and ABIs
-must never appear in these signatures — if one needs to, the leak belongs inside
-the provider.
+### Guestbooks and profiles
 
-**Lifecycle.** `draft → open → voting → settling → settled`, with `cancelled`
-branching off the first three. Phases are written only by Cloud Functions
-(`competitionPhase.ts`, `competitionLifecycle.ts`, `competitionAdvanceTask.ts`)
-because each transition moves money or decides who receives it.
+**Guestbooks, profiles and the follow graph are all in `story-data`.** They are
+not in Firestore, and `firestore.rules` has no opinion about them — there is no
+`publicProfiles` block, no `guestbook` block and no `mayPostOnWall()` in that
+file. Ignore any older note describing `users/{uid}.followers` arrays or a
+Firestore `publicProfiles` collection as the authority.
 
-**Entry fees.** Optional and set at creation; absent or `"0"` means free. The fee
-is charged by `submitToCompetition` and refunded by `withdrawSubmission`, held in
-escrow beside the prize rather than paid out on receipt — that is what makes
-refund-on-withdraw a movement out of an untouched balance instead of a clawback.
-It is revenue, not prize money: at settlement it splits between the platform and
-the host by `feeBps`, mirroring `TippingPlatform.calculateSplit()`
-(`floor(amount * bps / 10000)`, remainder by subtraction, cap 3000). `feeBps` is
-stored on the competition document so changing the env cannot retroactively
-re-split a running competition. Who paid what lives in
-`competitions/{id}/contributions/{userId}`; `readHeldContributions` is the single
-reader, and `refund()` takes an explicit `mode: "partial" | "final"` — `final`
-asserts escrow drains to exactly zero.
+- Wall policy is enforced by `canPostGuestbook` in
+  `story-data/internal/store/guestbook.go`.
+- The follow graph is the `user_follows` table, reached through
+  `PUT|DELETE /v1/profiles/{id}/follow` and `GET /v1/me/follows`.
+- Profiles, including `guestbookPolicy`, are `internal/store/profiles.go`.
 
-**Invariants worth not breaking:**
-- Escrow's balance is always `prizePool + entryFeesHeld`, and settlement refuses
-  to pay out of a balance it cannot account for.
-- Live vote counts live in `competitions/{id}/private/tally`, denied to every
-  client — "results hidden until settled" is a rules guarantee, not an absence
-  of UI. `votes/{voterId}` denies `list` for the same reason.
-- Settlement claims `voting → settling` before anything else, so the tally is
-  frozen and every retry recomputes a byte-identical result.
-- A refund batches at 400 funders: `transfer()` writes one document per posting
-  in a single transaction, Firestore caps that at 500, and a competition holds
-  up to 500 entries.
+`src/lib/guestbookPolicy.ts` only decides whether a compose form renders. It is
+**KEEP IN SYNC** with `canPostGuestbook` — the two matrices are asserted
+independently by `tests/guestbookPolicy.test.ts` on this side. A mismatch means
+the UI offers a box whose write the server will reject.
 
-**Seeding.** `functions/scripts/seed-competitions.js` builds every phase through
-the real endpoints (`--list` for the roster, `--only=` to filter, `--reset` to
-clear). Three scenarios charge entry fees so the multi-funder escrow paths get
-exercised locally.
-
-### Guestbooks and the follow graph
-
-A guestbook is a per-user wall at `users/{ownerId}/guestbook/{entryId}`, with
-`replies` and `votes` subcollections. `ownerId` is a path segment rather than a
-field, which is what lets the rules grant the owner rights over anyone's entry
-without a lookup.
-
-**Who may post** is `publicProfiles/{uid}.guestbookPolicy`, one of `nobody |
-following | mutuals | followers | everyone`. A missing profile, a missing field,
-and a missing user doc all read as **`everyone`** — the setting is additive, so
-accounts that predate it keep the open wall they had. It gates entry creation and
-reply creation, and nothing else: votes and the `commentCount` bump stay
-ungated, because the reply create fails first.
-
-`mayPostOnWall()` in `firestore.rules` is the authority; `canPostOnWall()` in
-`src/lib/guestbookPolicy.ts` only decides whether a compose form renders. KEEP IN
-SYNC — the two matrices are asserted independently by
-`tests/rules/wallPolicy.rules.test.ts` and `tests/guestbookPolicy.test.ts`.
-
-Every `get()` in those rules is `exists()`-guarded. Rules `get()` on a missing
-document returns null and dereferencing `.data` **errors, which denies** — it
-does not fall back to a default, so an unguarded read fails closed for any
-account whose document is absent.
-
-**The follow graph** is bidirectional arrays: `users/{uid}.followers` and
-`.following`. Storing both sides is what makes the policy resolvable from one
-document in the rules, and lets a viewer answer "does the owner follow me?"
-(`ownerId ∈ me.followers`) from their own doc — another user's doc is unreadable.
-Follow and unfollow must stay a single `writeBatch`; a half-applied follow makes
-the rules and the UI disagree. The arrays cap out around 30k uids (1 MiB), at
-which point the shape becomes `users/{id}/followers/{uid}` documents.
-
-**Search** is a username prefix range over `publicProfiles.usernameLower`, which
-is derived — never accepted from a caller — in exactly two places:
-`PublicProfileService.upsertPublicProfile` and `functions/src/adminUserService.ts`.
-`publicProfiles` is listable by any signed-in member (capped at 30 per query),
-which is what makes bio/occupation/location enumerable; that is the accepted
-price of prefix search without a paid index.
-
-Client writes to `publicProfiles` are merges, so the update rule checks
-`diff().affectedKeys()`, not `keys()`. Using `keys()` there means any field the
-client does not own locks the owner out of their own profile permanently.
+`guestbookPolicy` is one of `nobody | following | mutuals | followers | everyone`,
+and a missing value reads as **`everyone`** — the setting is additive, so accounts
+predating it keep the open wall they had.
 
 ## Design System (Inkwell)
 
@@ -283,12 +300,17 @@ Light theme: warm parchment (`#FDFCF9`) bg, sealing-wax red accent (`#B91C1C`). 
 - `explore/` — Discovery pages, plus the whole competitions UI (ledger, detail,
   host/entry dialogs, phase walkthrough)
 - `seo/` — SEOHead, StructuredData
-- `pages/` — Static page content (PrivacyPolicy, TermsOfUse)
 
-Most folders have an `index.ts` barrel; `AppBootstrap/`, `chat/`, `data/`,
-`explore/`, `plot/` and `ui/` do not — import directly from those.
+Every routed component lives under `src/routes/` — including the static legal
+pages (`routes/Legal/`) and the route guard (`routes/PrivateRoute.tsx`).
+`src/components/` holds only components that a route composes.
+
+Most folders have an `index.ts` barrel; `AppBootstrap/`, `chat/`, `explore/`,
+`guestbook/`, `plot/` and `ui/` do not — import directly from those.
 
 ## Environment Variables
+
+Frontend (`src/`, `packages/`). Verified against actual `import.meta.env` reads:
 
 ```
 VITE_FIREBASE_API_KEY
@@ -297,23 +319,41 @@ VITE_FIREBASE_PROJECT_ID
 VITE_FIREBASE_STORAGE_BUCKET
 VITE_FIREBASE_MESSAGE_SENDER_ID
 VITE_FIREBASE_APP_ID
-VITE_USE_EMULATORS          # default true in dev
-VITE_MAX_AI_USAGE           # default 100 (daily quota display — server enforces MAX_AI_USAGE)
-VITE_CHAIN_ID               # default 31337 (local Anvil)
-VITE_AGENT_MCP_URL          # agents service base URL for the /mcp-connect consent page (default http://localhost:8000)
+VITE_FIREBASE_MEASUREMENT_ID
+VITE_FIREBASE_FUNCTIONS_REGION   # default us-central1
+VITE_STORY_DATA_URL              # see the warning below
+VITE_USE_EMULATORS               # default true in dev
+VITE_MAX_AI_USAGE                # default 100 — keep aligned with MAX_AI_USAGE
+VITE_AGENT_MCP_URL               # agents base URL for /mcp-connect
+VITE_APP_NAME
+VITE_SITE_URL
+
+# Web3
+VITE_CHAIN_ID                    # default 31337 (local Anvil)
+VITE_RPC_URL
+VITE_ANVIL_RPC_URL / VITE_SEPOLIA_RPC_URL / VITE_MAINNET_RPC_URL
+VITE_TIPPING_CONTRACT_ADDRESS    # plus _ANVIL / _SEPOLIA / _MAINNET variants
+VITE_USDC_TOKEN_ADDRESS          # plus _ANVIL / _SEPOLIA / _MAINNET variants
 ```
 
-Cloud Functions read a separate set (`functions/src/`):
+**`VITE_STORY_DATA_URL` must be set in any real deployment.** Unset, the bundle
+falls back to the relative `/story-data`, which Firebase Hosting rewrites to
+`index.html` — so every API call returns HTML with a 200 rather than failing.
+`deploy.yml` fails the build rather than let that ship.
+
+Cloud Functions (`functions/src/`) read only these:
 
 ```
 MAX_AI_USAGE                # daily chat/AI quota — keep aligned with VITE_MAX_AI_USAGE
 MAX_STORAGE_UPLOADS_PER_DAY
 AI_MAX_INSTANCES            # max concurrent instances for AI functions
-ESCROW_PROVIDER             # "ledger" (default). Anything else throws — it will
-                            # not silently pay real prizes with play money.
-COMPETITION_FEE_BPS         # platform cut of entry fees (default 1000 = 10%, cap 3000)
-INITIAL_TALE_GRANT          # free TALE materialized on first spend (default 1000)
-FAUCET_TALE_GRANT           # TALE per faucet claim (default 250)
+STORY_DATA_URL              # story-data base URL for the dual-read paths
 CORS_EXTRA_ORIGINS          # comma-separated additional allowed origins
 LOCAL_REDIRECT_URL
+FUNCTIONS_EMULATOR          # set by the emulator itself
 ```
+
+The competition/escrow variables that used to be listed here (`ESCROW_PROVIDER`,
+`COMPETITION_FEE_BPS`, `INITIAL_TALE_GRANT`, `FAUCET_TALE_GRANT`) no longer exist
+— that logic moved to story-data. story-data itself reads `DATABASE_URL`,
+`AUTH_MODE`, `FIREBASE_PROJECT_ID`, `SERVICE_TOKEN` and `CORS_ORIGINS`.

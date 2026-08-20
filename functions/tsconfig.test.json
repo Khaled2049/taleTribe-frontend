@@ -6,8 +6,7 @@
     "sourceMap": false
   },
   "include": [
-    "src/adminStorySchemas.ts",
-    "src/adminStoryService.ts",
+    "src/domain/adminStorySchemas.ts",
     "tests/**/*.test.ts"
   ]
 }

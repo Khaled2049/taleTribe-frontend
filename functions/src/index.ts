@@ -10,22 +10,21 @@ setGlobalOptions({
 admin.initializeApp();
 
 // Export new agent endpoints
-export { summarizeChapter } from "./summarizeChapter";
-export { brainstormIdeas } from "./brainstormIdeas";
-export { generateNextLines } from "./generateNextLines";
-export { generateStoryChoices } from "./generateStoryChoices";
-export { searchBooks } from "./booksApi";
-export { generateCoverImage } from "./generateCoverImage";
-export { sendChatMessage } from "./sendChatMessage";
-export { clearChatSession } from "./clearChatSession";
-export { enhanceText } from "./enhanceText";
-export { enhanceWizardInput } from "./enhanceWizardInput";
-export { onInviteApproved } from "./inviteService";
-export { createUserByAdmin, setUserAdmin } from "./adminUserService";
+export { summarizeChapter } from "./endpoints/summarizeChapter";
+export { brainstormIdeas } from "./endpoints/brainstormIdeas";
+export { generateNextLines } from "./endpoints/generateNextLines";
+export { generateStoryChoices } from "./endpoints/generateStoryChoices";
+export { searchBooks } from "./endpoints/searchBooks";
+export { generateCoverImage } from "./endpoints/generateCoverImage";
+export { sendChatMessage } from "./endpoints/sendChatMessage";
+export { clearChatSession } from "./endpoints/clearChatSession";
+export { enhanceText } from "./endpoints/enhanceText";
+export { enhanceWizardInput } from "./endpoints/enhanceWizardInput";
+export { onInviteApproved } from "./endpoints/onInviteApproved";
 export {
   saveAiSettings,
   deleteAiSettings,
   validateAiKey,
-} from "./aiSettingsEndpoints";
-export { reserveStorageUpload } from "./storageUploadEndpoints";
-export { getCreditBalance, purchaseCredits } from "./creditEndpoints";
+} from "./endpoints/aiSettingsEndpoints";
+export { reserveStorageUpload } from "./endpoints/storageUploadEndpoints";
+export { getCreditBalance, purchaseCredits } from "./endpoints/creditEndpoints";

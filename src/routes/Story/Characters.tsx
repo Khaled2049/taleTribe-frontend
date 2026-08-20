@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Character, CharacterRelationship } from "@/types/ICharacter";
+import { Character, CharacterRelationship } from "@novelsync/story-data-client";
 import AddCharacterModal from "@/components/story/characters/AddCharacterModal";
 import { storageService } from "@/services/StorageService";
 import { useParams } from "react-router-dom";

@@ -1,4 +1,4 @@
-import { Character } from "@/types/ICharacter";
+import { Character } from "@novelsync/story-data-client";
 import { useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { validateImageFile } from "@/utils/imageUpload";

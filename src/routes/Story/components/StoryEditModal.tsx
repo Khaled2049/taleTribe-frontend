@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, KeyboardEvent } from "react";
 import { X } from "lucide-react";
-import { StoryMetadata } from "@/types/IStory";
+import { StoryMetadata } from "@novelsync/story-data-client";
 import {
   STORY_CATEGORIES,
   COPYRIGHT_OPTIONS,

@@ -6,34 +6,9 @@ import { APP_NAME } from "@/config/seo";
 import { useWalletState, WalletState } from "@/hooks/useWalletState";
 import { generateUsername } from "@/utils/usernameGenerator";
 import { validateImageFile } from "@/utils/imageUpload";
-import { auth } from "@/config/firebase";
+import { saveAiSettings, validateAiKey } from "@/cloudFunctions/aiSettings";
 import { PROVIDERS, MODELS, type ProviderKey } from "@/config/aiProviders";
 import { AI_SETTINGS_COPY, PLATFORM_AI_DAILY_LIMIT } from "@/config/aiQuota";
-
-// ── Firebase Functions caller (BYOK validate/save need an auth token) ────────
-const isDevelopment = import.meta.env.MODE === "development";
-const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-const region = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || "us-central1";
-const functionsBase = isDevelopment
-  ? `http://localhost:5001/${projectId}/${region}`
-  : `https://${region}-${projectId}.cloudfunctions.net`;
-
-async function callFunction(
-  name: string,
-  body: unknown,
-): Promise<{ ok: boolean; data: unknown }> {
-  const token = await auth.currentUser?.getIdToken();
-  const resp = await fetch(`${functionsBase}/${name}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  const data = await resp.json().catch(() => ({}));
-  return { ok: resp.ok, data };
-}
 
 const INPUT_CLASS = `w-full px-4 py-3
  bg-ns-surface text-ns-ink
@@ -224,21 +199,12 @@ const CompleteSignup: React.FC = () => {
     if (!apiKey.trim()) return;
     setKeyTest("testing");
     setKeyTestError("");
-    try {
-      const { ok, data } = await callFunction("validateAiKey", {
-        provider: aiProvider,
-        apiKey: apiKey.trim(),
-      });
-      const result = data as { valid?: boolean; error?: string };
-      if (ok && result.valid) {
-        setKeyTest("ok");
-      } else {
-        setKeyTest("fail");
-        setKeyTestError(result.error || "Key validation failed.");
-      }
-    } catch (err) {
+    const { valid, error } = await validateAiKey(aiProvider, apiKey.trim());
+    if (valid) {
+      setKeyTest("ok");
+    } else {
       setKeyTest("fail");
-      setKeyTestError(String(err));
+      setKeyTestError(error || "Key validation failed.");
     }
   };
 
@@ -246,19 +212,15 @@ const CompleteSignup: React.FC = () => {
     if (keyTest !== "ok") return;
     setKeySave("saving");
     try {
-      const { ok } = await callFunction("saveAiSettings", {
+      await saveAiSettings({
         provider: aiProvider,
         apiKey: apiKey.trim(),
         model: aiModel || undefined,
       });
-      if (ok) {
-        setKeySave("saved");
-        setApiKey("");
-        // Brief confirmation, then finish.
-        setTimeout(() => navigate("/"), 900);
-      } else {
-        setKeySave("error");
-      }
+      setKeySave("saved");
+      setApiKey("");
+      // Brief confirmation, then finish.
+      setTimeout(() => navigate("/"), 900);
     } catch {
       setKeySave("error");
     }

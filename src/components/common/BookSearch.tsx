@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import api from "../../api";
+import api from "@/cloudFunctions";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { rateLimitService } from "@/services/RateLimitService";
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { auth } from "@/config/firebase";
+import { auth } from "@novelsync/platform-auth";
 import { Button } from "@/components/ui/button";
 import {
   Card,

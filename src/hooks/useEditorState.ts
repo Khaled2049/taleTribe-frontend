@@ -1,5 +1,5 @@
 import { useReducer, useMemo } from "react";
-import { Chapter, Story } from "@/types/IStory";
+import { Chapter, Story } from "@novelsync/story-data-client";
 
 // State type
 export interface EditorState {

@@ -7,11 +7,11 @@ import {
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
-import { IGuestbookReply } from "@/types/IGuestbookReply";
+import { IGuestbookReply } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
 import VoteButtons from "./VoteButtons";
-import { guestbookRepo } from "@/services/GuestbookRepo";
-import { rateLimitMessage } from "@/services/rateLimitError";
+import { guestbookRepo } from "@novelsync/story-data-client";
+import { rateLimitMessage } from "@/lib/rateLimitError";
 import { useGuestbookPolicy } from "./guestbookPolicyContext";
 import { formatRelativeTime } from "@/lib/relativeTime";
 

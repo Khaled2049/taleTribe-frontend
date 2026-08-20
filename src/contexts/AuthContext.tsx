@@ -7,7 +7,6 @@ type AuthContextType = Pick<
   | "loading"
   | "followUser"
   | "unfollowUser"
-  | "updateBio"
   | "updateProfile"
 >;
 
@@ -18,7 +17,6 @@ export const useAuthContext = (): AuthContextType =>
       loading: state.loading,
       followUser: state.followUser,
       unfollowUser: state.unfollowUser,
-      updateBio: state.updateBio,
       updateProfile: state.updateProfile,
     })),
   );
