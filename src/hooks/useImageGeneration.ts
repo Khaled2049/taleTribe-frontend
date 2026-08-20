@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { Editor } from "@tiptap/react";
-import { generateCover } from "@/services/imageGenerationService";
+import { generateCover } from "@/cloudFunctions/images";
 import { storageService } from "@/services/StorageService";
 
 export const MAX_CHAPTER_IMAGES = 5;

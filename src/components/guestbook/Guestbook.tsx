@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Loader } from "lucide-react";
 import { useInView } from "react-intersection-observer";
-import { IGuestbookEntry } from "@/types/IGuestbookEntry";
+import { IGuestbookEntry } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
-import { guestbookRepo } from "@/services/GuestbookRepo";
-import { rateLimitMessage } from "@/services/rateLimitError";
+import { guestbookRepo } from "@novelsync/story-data-client";
+import { rateLimitMessage } from "@/lib/rateLimitError";
 import GuestbookEntryCard from "./GuestbookEntryCard";
 import SignGuestbookForm from "./SignGuestbookForm";
 import { GuestbookPolicyContext } from "./guestbookPolicyContext";

@@ -40,13 +40,11 @@ export const queryKeys = {
       ["people", "following", [...uids].sort()] as const,
   },
   user: {
-    walletAddress: (userId: string) =>
-      ["user", userId, "walletAddress"] as const,
     stories: (userId: string) => ["user", userId, "stories"] as const,
+    // The one entry for a user's public profile. Wallet address and guestbook
+    // policy are fields of it, read via `select` — never separate queries.
     publicProfile: (userId: string) =>
       ["user", userId, "publicProfile"] as const,
-    guestbookPolicy: (userId: string) =>
-      ["user", userId, "guestbookPolicy"] as const,
     recentlyRead: (userId: string) => ["user", userId, "recentlyRead"] as const,
     aiCredits: (userId: string) => ["user", userId, "aiCredits"] as const,
     // Sorted by the caller so a reordered list is not a different query.

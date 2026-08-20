@@ -8,7 +8,7 @@ import { APP_NAME } from "@/config/seo";
 import StoriesHeader from "@/components/story/StoriesHeader";
 import FeaturedStoryBanner from "@/components/story/FeaturedStoryBanner";
 import { AuthorName } from "@/components/common";
-import { StoryMetadata } from "@/types/IStory";
+import { StoryMetadata } from "@novelsync/story-data-client";
 import { usePublishedStories } from "@/hooks/queries/useStoryQueries";
 
 const CATEGORIES = [

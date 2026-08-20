@@ -1,4 +1,4 @@
-import { Place } from "@/types/IPlace";
+import { Place } from "@novelsync/story-data-client";
 import { MapPin } from "lucide-react";
 
 interface LocationSelectProps {

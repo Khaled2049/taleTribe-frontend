@@ -1,5 +1,5 @@
-import { storage } from "@/config/firebase";
-import { reserveStorageUpload } from "@/api/storage";
+import { storage } from "@novelsync/platform-auth";
+import { reserveStorageUpload } from "@/cloudFunctions/storage";
 import { prepareImageForUpload, createThumbnail } from "@/utils/imageUpload";
 import {
   ref,

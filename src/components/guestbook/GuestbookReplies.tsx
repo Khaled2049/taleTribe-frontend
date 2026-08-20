@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Send, ChevronUp } from "lucide-react";
-import { IGuestbookReply } from "@/types/IGuestbookReply";
+import { IGuestbookReply } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
-import { guestbookRepo } from "@/services/GuestbookRepo";
-import { rateLimitMessage } from "@/services/rateLimitError";
+import { guestbookRepo } from "@novelsync/story-data-client";
+import { rateLimitMessage } from "@/lib/rateLimitError";
 import { GuestbookReply } from "./GuestbookReply";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useGuestbookPolicy } from "./guestbookPolicyContext";

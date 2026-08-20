@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { BookMarked } from "lucide-react";
-import { PublicProfile } from "@/services/ProfileRepo";
+import { PublicProfile } from "@novelsync/story-data-client";
 import FollowButton from "@/components/common/FollowButton";
 
 interface PersonRowProps {

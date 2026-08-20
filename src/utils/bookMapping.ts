@@ -1,6 +1,6 @@
 import { IBookOfTheMonth } from "@/types/IClub";
 import { IBook } from "@/types/IBook";
-import { StoryMetadata } from "@/types/IStory";
+import { StoryMetadata } from "@novelsync/story-data-client";
 
 /**
  * Maps a published NovelSync story to the club book shape.

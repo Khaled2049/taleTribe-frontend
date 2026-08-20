@@ -22,7 +22,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Upload, Loader2, AlertCircle, FileText, PenLine } from "lucide-react";
 import { toast } from "sonner";
-import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
+import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import { storageService } from "@/services/StorageService";
 import CoverImagePicker from "./components/CoverImagePicker";
 import {

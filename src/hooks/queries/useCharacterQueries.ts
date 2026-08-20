@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
-import { storyWorldbuildingRepo } from "@/services/StoryWorldbuildingRepo";
-import { Character } from "@/types/ICharacter";
+import { storyWorldbuildingRepo } from "@novelsync/story-data-client";
+import { Character } from "@novelsync/story-data-client";
 
 export function useCharacters(storyId: string | undefined) {
   return useQuery({

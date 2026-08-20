@@ -5,9 +5,9 @@ import React, {
   useRef,
 } from "react";
 import { Link, useParams } from "react-router-dom";
-import { publicStoryRepo } from "@/services/PublicStoryRepo";
-import { Chapter, Story } from "@/types/IStory";
-import { storySocialRepo } from "@/services/StorySocialRepo";
+import { publicStoryRepo } from "@novelsync/story-data-client";
+import { Chapter, Story } from "@novelsync/story-data-client";
+import { storySocialRepo } from "@novelsync/story-data-client";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useComments, useCommentCache } from "@/hooks/queries/useCommentQueries";
 import { StoryLoadingState } from "./components/StoryLoadingState";
@@ -21,7 +21,7 @@ import { useUserWalletAddress } from "@/hooks/useUserWalletAddress";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { AuthorName } from "@/components/common";
 import { getAbsoluteUrl } from "@/config/seo";
-import { readingHistoryRepo } from "@/services/ReadingHistoryRepo";
+import { readingHistoryRepo } from "@novelsync/story-data-client";
 
 interface StoryDetailState {
   story: Story | null;

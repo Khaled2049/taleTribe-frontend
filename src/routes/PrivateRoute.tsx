@@ -1,7 +1,7 @@
 import { Navigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuthContext } from "../contexts/AuthContext";
-import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
+import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import Story from "./Story/Story";
 
 const PrivateRoute = () => {

@@ -6,8 +6,8 @@ import {
 } from "@/types/IPlot";
 import { useEffect, useRef, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Character } from "@/types/ICharacter";
-import { Place } from "@/types/IPlace";
+import { Character } from "@novelsync/story-data-client";
+import { Place } from "@novelsync/story-data-client";
 import { MultiSelectCharacters } from "./MultiSelectCharacters";
 import { LocationSelect } from "./LocationSelect";
 import { STORY_BEAT_OPTIONS, PACING_OPTIONS } from "./plotOptions";

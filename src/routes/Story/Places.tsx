@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Place } from "@/types/IPlace";
+import { Place } from "@novelsync/story-data-client";
 import AddPlaceModal from "@/components/story/places/AddPlaceModal";
 import { storageService } from "@/services/StorageService";
 import { useParams } from "react-router-dom";

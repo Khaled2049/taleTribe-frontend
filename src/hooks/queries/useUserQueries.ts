@@ -1,15 +1,26 @@
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
-import { readingHistoryRepo } from "@/services/ReadingHistoryRepo";
-import { profileRepo } from "@/services/ProfileRepo";
+import { readingHistoryRepo } from "@novelsync/story-data-client";
+import { profileRepo, type PublicProfile } from "@novelsync/story-data-client";
+
+/**
+ * One request per user profile. These three hooks read different fields of the
+ * same document, so they share a query key and derive their view with `select`
+ * — separate keys meant three identical GETs and three copies that drifted,
+ * since only one of them was ever invalidated after an edit.
+ */
+const profileQuery = (userId: string | null | undefined) => ({
+  queryKey: queryKeys.user.publicProfile(userId!),
+  queryFn: () => profileRepo.get(userId!),
+  enabled: !!userId,
+  staleTime: 1000 * 60 * 5,
+});
 
 export function useWalletAddressQuery(userId: string | null | undefined) {
   return useQuery({
-    queryKey: queryKeys.user.walletAddress(userId!),
-    queryFn: async () => (await profileRepo.get(userId!))?.walletAddress || null,
-    enabled: !!userId,
-    staleTime: Infinity, // wallet address rarely changes
+    ...profileQuery(userId),
+    select: (profile: PublicProfile | null) => profile?.walletAddress || null,
   });
 }
 
@@ -18,27 +29,28 @@ export function useSetWalletAddress(userId: string | null | undefined) {
   return useCallback(
     (address: string | null) => {
       if (!userId) return;
-      queryClient.setQueryData(queryKeys.user.walletAddress(userId), address);
+      // Patches the shared profile document rather than a wallet-only entry.
+      // A no-op when the profile is not cached yet — OwnerSettings has already
+      // persisted the address, so the next fetch returns it anyway.
+      queryClient.setQueryData<PublicProfile | null>(
+        queryKeys.user.publicProfile(userId),
+        (previous) =>
+          previous ? { ...previous, walletAddress: address ?? undefined } : previous,
+      );
     },
     [queryClient, userId],
   );
 }
 
 export function usePublicProfile(userId: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.user.publicProfile(userId!),
-    queryFn: () => profileRepo.get(userId!),
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 5,
-  });
+  return useQuery(profileQuery(userId));
 }
 
 export function useGuestbookPolicy(userId: string | undefined) {
   return useQuery({
-    queryKey: queryKeys.user.guestbookPolicy(userId!),
-    queryFn: async () => (await profileRepo.get(userId!))?.guestbookPolicy || "everyone",
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 5,
+    ...profileQuery(userId),
+    select: (profile: PublicProfile | null) =>
+      profile?.guestbookPolicy || "everyone",
   });
 }
 

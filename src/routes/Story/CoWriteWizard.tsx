@@ -24,14 +24,14 @@ import {
   Info,
 } from "lucide-react";
 import { toast } from "sonner";
-import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
-import { storyWorldbuildingRepo } from "@/services/StoryWorldbuildingRepo";
+import { storyWorkspaceRepo } from "@novelsync/story-data-client";
+import { storyWorldbuildingRepo } from "@novelsync/story-data-client";
 import { storageService } from "@/services/StorageService";
 import {
   StoryBeatType,
   PLOT_TEMPLATES,
 } from "@/types/IPlot";
-import { enhanceWizardInput, WizardEnhanceType } from "@/api/ai";
+import { enhanceWizardInput, WizardEnhanceType } from "@/cloudFunctions/ai";
 import {
   STORY_CATEGORIES as CATEGORIES,
   STORY_TAGS,

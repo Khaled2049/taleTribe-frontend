@@ -15,6 +15,11 @@ module.exports = {
   parser: "@typescript-eslint/parser",
   parserOptions: {
     project: ["tsconfig.json", "tsconfig.dev.json"],
+    // Resolve those project paths against this directory, not the caller's cwd.
+    // The root `yarn lint` runs `eslint .` from the repo root, where a bare
+    // "tsconfig.dev.json" does not exist — without this every file below
+    // functions/ fails to parse.
+    tsconfigRootDir: __dirname,
     sourceType: "module",
   },
   ignorePatterns: [

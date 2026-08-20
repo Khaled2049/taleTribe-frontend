@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ChevronDown, ChevronUp, Crown } from "lucide-react";
 import { bookClubRepo } from "./bookClubRepo";
@@ -10,7 +10,7 @@ import NextBookSection from "./components/NextBookSection";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { getAbsoluteUrl, APP_NAME } from "@/config/seo";
 import { useBookClub, useClubProgress } from "@/hooks/queries/useBookClubQueries";
-import { profileRepo } from "@/services/ProfileRepo";
+import { useProfileNames } from "@/hooks/queries/useUserQueries";
 import { BookPickerDialog } from "@/components/common/BookPicker";
 import { hasBook } from "@/utils/bookMapping";
 import { Textarea } from "@/components/ui/textarea";
@@ -58,9 +58,7 @@ const BookClubDetails: React.FC = () => {
   const { data: clubData, isPending: isLoading } = useBookClub(id);
   const club = clubData ?? undefined;
 
-  const [members, setMembers] = useState<MemberInfo[]>([]);
   const [isMembersOpen, setIsMembersOpen] = useState(false);
-  const previousMemberIdsRef = useRef<string>("");
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isEditingMeetup, setIsEditingMeetup] = useState(false);
   const [meetupDraft, setMeetupDraft] = useState("");
@@ -68,45 +66,11 @@ const BookClubDetails: React.FC = () => {
   const [isUpdatingMembership, setIsUpdatingMembership] = useState(false);
   const [isChangingBook, setIsChangingBook] = useState(false);
 
-  // Fetch usernames for member IDs
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchMemberUsernames = async () => {
-      if (!club?.members || club.members.length === 0) {
-        if (previousMemberIdsRef.current !== "") {
-          if (isMounted) setMembers([]);
-          previousMemberIdsRef.current = "";
-        }
-        return;
-      }
-
-      const memberIdsString = [...club.members].sort().join(",");
-      if (memberIdsString === previousMemberIdsRef.current) return;
-      previousMemberIdsRef.current = memberIdsString;
-
-      try {
-        const profileMap = await profileRepo.getMany(
-          club.members,
-        );
-        const memberInfos = club.members.map((memberId) => {
-          const profile = profileMap.get(memberId);
-          return {
-            id: memberId,
-            username: profile?.username || "Unknown User",
-          };
-        });
-        if (isMounted) setMembers(memberInfos);
-      } catch {
-        console.error("Error fetching member usernames");
-      }
-    };
-
-    fetchMemberUsernames();
-    return () => {
-      isMounted = false;
-    };
-  }, [club?.members?.length, club?.members]);
+  const memberNames = useProfileNames(club?.members ?? []);
+  const members: MemberInfo[] = (club?.members ?? []).map((memberId) => ({
+    id: memberId,
+    username: memberNames.get(memberId) || "Unknown User",
+  }));
 
   // The progress endpoint is members-only, so it is not queried while signed out.
   const { data: progress } = useClubProgress(id, !!user);

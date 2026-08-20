@@ -1,4 +1,4 @@
-import { auth } from "@/config/firebase";
+import { request } from "@novelsync/story-data-client";
 import {
   TALE_ASSET_ID,
   TALE_DECIMALS,
@@ -20,7 +20,7 @@ export class TokenService {
     return `user:${userId}`;
   }
 
-  private async request<T>(path:string,method="GET"):Promise<T>{const user=auth.currentUser;if(!user)throw new Error("You must be signed in.");const headers:Record<string,string>={};const token=await user.getIdToken();if(token)headers.Authorization=`Bearer ${token}`;if(import.meta.env.DEV)headers["X-User-ID"]=user.uid;const r=await fetch(`${import.meta.env.VITE_STORY_DATA_URL||"/story-data"}${path}`,{method,headers});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||"Token request failed")};return r.json() as Promise<T>}
+  private request<T>(path:string,method="GET"):Promise<T>{return request<T>(path,{method,auth:"required",label:"Token request"})}
 
   /**
    * Fetch the balance via the API rather than Firestore.

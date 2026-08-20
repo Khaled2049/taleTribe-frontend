@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { MessageCircle, Edit2, Trash2, Heart } from "lucide-react";
-import { Comment as CommentType } from "@/types/IComment";
+import { Comment as CommentType } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
 
 interface CommentProps {

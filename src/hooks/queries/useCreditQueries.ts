@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
-import { creditService, CreditBalance } from "@/services/CreditService";
+import { creditService, CreditBalance } from "@/cloudFunctions/credits";
 
 export function useAiCreditsQuery(userId: string | null | undefined) {
   return useQuery({

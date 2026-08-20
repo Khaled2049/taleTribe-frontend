@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { queryKeys } from "@/hooks/queries/queryKeys";
 import { formatMinorUnits, formatTokenAmount } from "@/lib/money";
-import { storyWorkspaceRepo } from "@/services/StoryWorkspaceRepo";
+import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import {
   TALE_SYMBOL,
   type ITokenAmount,

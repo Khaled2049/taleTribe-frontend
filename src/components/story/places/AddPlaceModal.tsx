@@ -1,4 +1,4 @@
-import { Place } from "@/types/IPlace";
+import { Place } from "@novelsync/story-data-client";
 import { useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { validateImageFile } from "@/utils/imageUpload";

@@ -1,4 +1,4 @@
-import { Chapter } from "@/types/IStory";
+import { Chapter } from "@novelsync/story-data-client";
 
 const WORD_LIMIT = 5000;
 

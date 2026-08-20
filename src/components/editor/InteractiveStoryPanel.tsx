@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Editor } from "@tiptap/react";
 import { BookOpen, Loader, RefreshCw, Sparkles, X } from "lucide-react";
-import { generateStoryChoices, StoryChoice } from "@/api/ai";
+import { generateStoryChoices, StoryChoice } from "@/cloudFunctions/ai";
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI"];
 

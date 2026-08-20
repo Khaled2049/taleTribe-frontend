@@ -18,7 +18,7 @@
  *
  * Requires (in another terminal):
  *   yarn start:emulator          # auth + firestore + functions, with triggers
- *   npm run build                # inside functions/, for lib/userProfileDefaults
+ *   npm run build                # inside functions/, for lib/domain/userProfileDefaults
  *
  * HOW THE PHASES ARE REACHED
  *
@@ -289,10 +289,10 @@ const formatTale = (minor) => {
 
 function loadUserProfileDefaults() {
   try {
-    return require('../lib/userProfileDefaults').buildUserProfileDefaults
+    return require('../lib/domain/userProfileDefaults').buildUserProfileDefaults
   } catch {
     throw new Error(
-      'Run `npm run build` in functions/ first — seeded profiles reuse lib/userProfileDefaults.js',
+      'Run `npm run build` in functions/ first — seeded profiles reuse lib/domain/userProfileDefaults.js',
     )
   }
 }

@@ -28,7 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { profileRepo } from "@/services/ProfileRepo";
+import { profileRepo } from "@novelsync/story-data-client";
 import { useChainId } from "wagmi";
 
 const TARGET_CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || "31337");

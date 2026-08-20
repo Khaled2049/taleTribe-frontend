@@ -1,8 +1,8 @@
 import { useCallback } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
-import { guestbookRepo } from "@/services/GuestbookRepo";
-import { IGuestbookEntry } from "@/types/IGuestbookEntry";
+import { guestbookRepo } from "@novelsync/story-data-client";
+import { IGuestbookEntry } from "@novelsync/story-data-client";
 
 type PageParam = string | undefined;
 

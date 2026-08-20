@@ -1,7 +1,7 @@
 import React from "react";
 import { CommentInput } from "@/components/community/CommentInput";
 import { CommentList } from "@/components/community/CommentList";
-import { Comment as IComment } from "@/types/IComment";
+import { Comment as IComment } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
 
 interface StoryCommentsSectionProps {

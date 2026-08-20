@@ -11,7 +11,7 @@ import {
   limit,
   Timestamp,
 } from "firebase/firestore";
-import { firestore } from "@/config/firebase";
+import { firestore } from "@novelsync/platform-auth";
 import { ChatMessage, ChatSession } from "@/types/IChat";
 
 class ChatService {

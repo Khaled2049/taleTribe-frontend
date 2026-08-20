@@ -24,8 +24,10 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@novelsync/story-data-client": ["./packages/story-data-client/src/index.ts"],
+      "@novelsync/platform-auth": ["./packages/platform-auth/src/index.ts"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "packages/*/src"]
 }

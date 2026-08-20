@@ -9,7 +9,7 @@ import {
   Layers,
   Plus,
 } from "lucide-react";
-import { Chapter } from "@/types/IStory";
+import { Chapter } from "@novelsync/story-data-client";
 
 type LocalTab = "chapters" | "plot" | "characters" | "places";
 

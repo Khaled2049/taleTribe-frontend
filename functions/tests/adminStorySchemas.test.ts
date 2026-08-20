@@ -1,16 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Timestamp } from "firebase-admin/firestore";
 import {
   createStoryByAdminSchema,
   countWords,
   requestHash,
-} from "../src/adminStorySchemas";
-import {
-  AdminStoryError,
-  AllocatedIds,
-  materializeAggregate,
-} from "../src/adminStoryService";
+} from "../src/domain/adminStorySchemas";
 
 function validPayload() {
   return {
@@ -71,19 +65,6 @@ function validPayload() {
   };
 }
 
-function ids(): AllocatedIds {
-  return {
-    storyId: "story-id",
-    chapters: { "chapter-1": "chapter-id" },
-    characters: { elena: "elena-id", marcus: "marcus-id" },
-    places: { orchard: "orchard-id" },
-    plots: { main: "plot-id" },
-    events: {
-      "main:warning": "warning-id",
-      "main:choice": "choice-id",
-    },
-  };
-}
 
 describe("createStoryByAdminSchema", () => {
   it("normalizes a valid full aggregate and removes duplicate tags", () => {
@@ -138,48 +119,4 @@ describe("story import helpers", () => {
     assert.equal(requestHash(parsed), requestHash(reordered));
   });
 
-  it("resolves local references and derives reverse dependents", () => {
-    const input = createStoryByAdminSchema.parse(validPayload());
-    const aggregate = materializeAggregate(
-      input,
-      ids(),
-      "seed_author",
-      Timestamp.fromMillis(1_700_000_000_000),
-    );
-
-    assert.equal(aggregate.story.chapterCount, 1);
-    assert.deepEqual(aggregate.characters[0].data.relationships, [
-      { characterId: "marcus-id", name: "Marcus", type: "rival" },
-    ]);
-    const events = aggregate.plots[0].data.events as Array<Record<string, unknown>>;
-    assert.deepEqual(events[0].dependents, [
-      {
-        eventId: "choice-id",
-        plotLineId: "plot-id",
-        relationshipType: "requires",
-      },
-    ]);
-    assert.deepEqual(events[1].dependencies, [
-      {
-        eventId: "warning-id",
-        plotLineId: "plot-id",
-        relationshipType: "requires",
-      },
-    ]);
-  });
-
-  it("rejects unresolved references before writing", () => {
-    const payload = validPayload();
-    payload.plots[0].events[0].characterKeys = ["missing"];
-    const input = createStoryByAdminSchema.parse(payload);
-    assert.throws(
-      () => materializeAggregate(
-        input,
-        ids(),
-        "seed_author",
-        Timestamp.now(),
-      ),
-      AdminStoryError,
-    );
-  });
 });

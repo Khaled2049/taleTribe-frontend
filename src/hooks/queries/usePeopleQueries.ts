@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { PublicProfile, profileRepo } from "@/services/ProfileRepo";
+import { PublicProfile, profileRepo } from "@novelsync/story-data-client";
 import { queryKeys } from "./queryKeys";
 
 const FIVE_MINUTES = 1000 * 60 * 5;

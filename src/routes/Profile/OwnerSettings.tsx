@@ -14,8 +14,8 @@ import {
 } from "@/hooks/queries/useCreditQueries";
 import SidebarBalanceCard from "@/components/explore/SidebarBalanceCard";
 import { useAccount, useChainId } from "wagmi";
-import { profileRepo } from "@/services/ProfileRepo";
-import { getApiErrorMessage } from "@/api";
+import { profileRepo } from "@novelsync/story-data-client";
+import { getApiErrorMessage } from "@/cloudFunctions";
 import { Button } from "@/components/ui/button";
 import { WalletConnectButton } from "@/components/web3/WalletConnectButton";
 import { WEB3_ENABLED } from "@/config/featureFlags";

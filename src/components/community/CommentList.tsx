@@ -1,6 +1,6 @@
 // CommentList.tsx
 import React from "react";
-import { Comment as CommentType } from "@/types/IComment";
+import { Comment as CommentType } from "@novelsync/story-data-client";
 import { Comment } from "./Comment";
 import { IUser } from "@/types/IUser";
 import { useProfileNames } from "@/hooks/queries/useUserQueries";

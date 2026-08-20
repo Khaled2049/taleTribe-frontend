@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import { User as FirebaseUser } from "firebase/auth";
-import { firestore } from "@/config/firebase";
+import { firestore } from "@novelsync/platform-auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { IUser } from "@/types/IUser";
-import { profileRepo } from "@/services/ProfileRepo";
+import { profileRepo } from "@novelsync/story-data-client";
 import { appQueryClient } from "@/lib/queryClient";
 import { queryKeys } from "@/hooks/queries/queryKeys";
 
@@ -24,21 +24,8 @@ export interface AuthStore {
   hydrateUser: (firebaseUser: FirebaseUser | null) => Promise<void>;
   followUser: (uid: string) => Promise<void>;
   unfollowUser: (uid: string) => Promise<void>;
-  updateBio: (bio: string) => Promise<void>;
   updateProfile: (data: ProfileUpdateData) => Promise<void>;
 }
-
-/**
- * Older accounts seeded `followers`/`following` with the literal string
- * "default". It matches no uid, so it is harmless to the wall-policy checks, but
- * it inflates any length and renders as a ghost row. A user cannot strip it from
- * their own `followers` — the rules forbid self-writes to that field — so it is
- * filtered on read here and cleared by `backfill-follow-graph.js`.
- */
-const realUids = (value: unknown): string[] =>
-  Array.isArray(value)
-    ? value.filter((id): id is string => typeof id === "string" && id !== "default")
-    : [];
 
 const getFallbackUser = (firebaseUser: FirebaseUser): IUser => ({
   ...firebaseUser,
@@ -46,9 +33,6 @@ const getFallbackUser = (firebaseUser: FirebaseUser): IUser => ({
   username: firebaseUser.displayName || "",
   followers: [],
   following: [],
-  stories: [],
-  likedPosts: [],
-  savedPosts: [],
   lastLogin: new Date().toISOString(),
   bio: "Write an about me section here...",
   occupation: "Occupation",
@@ -87,11 +71,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
             typeof userData.lastName === "string"
               ? userData.lastName
               : undefined,
-          followers: realUids(userData.followers),
-          following: realUids(userData.following),
-          stories: userData.stories ?? [],
-          likedPosts: userData.likedPosts,
-          savedPosts: userData.savedPosts,
+          followers: [],
+          following: [],
           lastLogin: userData.lastLogin,
           bio: userData.bio,
           occupation: userData.occupation,
@@ -153,8 +134,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (!currentUser) {
       throw new Error("User not authenticated");
     }
-    // The rules reject a follow that is already recorded (`!followers.hasAny`),
-    // so a redundant call is a guaranteed failure, not a no-op.
+    // story-data inserts `ON CONFLICT DO NOTHING`, so a repeat follow is
+    // harmless; this just saves the round trip.
     if ((currentUser.following ?? []).includes(uid)) return;
 
     try {
@@ -191,29 +172,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     } catch (error) {
       console.error("Error unfollowing user:", error);
       throw new Error("Failed to unfollow user");
-    }
-  },
-  updateBio: async (bio) => {
-    const currentUser = get().user;
-    if (!currentUser) {
-      throw new Error("User not authenticated");
-    }
-
-    try {
-      if (currentUser.username) {
-        await profileRepo.updateMe({ bio });
-        // Refresh the live-resolved public profile so the owner's own surfaces
-        // (author bios, etc.) reflect the change without waiting out staleTime.
-        appQueryClient.invalidateQueries({
-          queryKey: queryKeys.user.publicProfile(currentUser.uid),
-        });
-      }
-      set((state) => ({
-        user: state.user ? { ...state.user, bio } : null,
-      }));
-    } catch (error) {
-      console.error("Error updating user bio:", error);
-      throw new Error("Failed to update user profile");
     }
   },
   updateProfile: async (data) => {
