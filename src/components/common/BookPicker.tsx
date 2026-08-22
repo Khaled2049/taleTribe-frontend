@@ -81,7 +81,11 @@ const StoryRow = ({
  * Tabbed book picker: published NovelSync stories or Google Books.
  * Emits a normalized IBookOfTheMonth either way.
  */
-export const BookPicker = ({ onSelect, selected, autoFocus }: BookPickerProps) => {
+export const BookPicker = ({
+  onSelect,
+  selected,
+  autoFocus,
+}: BookPickerProps) => {
   const [storyQuery, setStoryQuery] = useState("");
   const {
     data,
@@ -191,7 +195,9 @@ export const BookPicker = ({ onSelect, selected, autoFocus }: BookPickerProps) =
         </TabsContent>
 
         <TabsContent value="google">
-          <BookSearch onBookSelect={(book) => onSelect(googleBookToBook(book))} />
+          <BookSearch
+            onBookSelect={(book) => onSelect(googleBookToBook(book))}
+          />
         </TabsContent>
       </Tabs>
     </div>
@@ -245,7 +251,9 @@ export const BookPickerDialog = ({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[520px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-heading text-ns-ink">{title}</DialogTitle>
+          <DialogTitle className="font-heading text-ns-ink">
+            {title}
+          </DialogTitle>
         </DialogHeader>
 
         <BookPicker onSelect={setPending} selected={pending} autoFocus />

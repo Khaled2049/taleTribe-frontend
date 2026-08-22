@@ -112,6 +112,14 @@ const PublicUserProfile: React.FC = () => {
   const username = (isSelf && user?.username) || profile.username;
   // Prefer the live auth value for the owner so a fresh upload shows instantly.
   const photoURL = (isSelf && user?.photoURL) || profile.photoURL;
+  const firstName = (isSelf && user?.firstName) || profile.firstName;
+  const lastName = (isSelf && user?.lastName) || profile.lastName;
+  const fullName = [firstName, lastName].filter(Boolean).join(" ");
+  const bio = (isSelf && user?.bio) || profile.bio;
+  const occupation = (isSelf && user?.occupation) || profile.occupation;
+  const location = (isSelf && user?.location) || profile.location;
+  const writingInterests =
+    (isSelf && user?.writingInterests) || profile.writingInterests;
   const memberSince = formatMemberSince(profile.createdAt);
   // Owners edit occupation/location inline below, so only show them as read-only
   // chips for visitors. "Member since" is shown to everyone.
@@ -184,6 +192,11 @@ const PublicUserProfile: React.FC = () => {
             <h1 className="font-heading text-3xl sm:text-4xl text-ns-ink leading-none">
               @{username}
             </h1>
+            {fullName && (
+              <span className="font-body text-base text-ns-ink-secondary">
+                {fullName}
+              </span>
+            )}
           </div>
 
           {metaItems.length > 0 && (
@@ -220,7 +233,7 @@ const PublicUserProfile: React.FC = () => {
             <div className="mt-6 space-y-4">
               <EditableField
                 label="Username"
-                value={user?.username || ""}
+                value={username || ""}
                 onSave={(v) => updateProfile({ username: v })}
                 placeholder="your_username"
                 maxLength={20}
@@ -228,14 +241,14 @@ const PublicUserProfile: React.FC = () => {
               <div className="grid gap-4 sm:grid-cols-2">
                 <EditableField
                   label="First name"
-                  value={user?.firstName || ""}
+                  value={firstName || ""}
                   onSave={(v) => updateProfile({ firstName: v })}
                   placeholder="First name"
                   maxLength={50}
                 />
                 <EditableField
                   label="Last name"
-                  value={user?.lastName || ""}
+                  value={lastName || ""}
                   onSave={(v) => updateProfile({ lastName: v })}
                   placeholder="Last name"
                   maxLength={50}
@@ -243,7 +256,7 @@ const PublicUserProfile: React.FC = () => {
               </div>
               <EditableField
                 label="Bio"
-                value={user?.bio || ""}
+                value={bio || ""}
                 onSave={(v) => updateProfile({ bio: v })}
                 placeholder="Write something about yourself…"
                 multiline
@@ -252,14 +265,14 @@ const PublicUserProfile: React.FC = () => {
               <div className="grid gap-4 sm:grid-cols-2">
                 <EditableField
                   label="Occupation"
-                  value={user?.occupation || ""}
+                  value={occupation || ""}
                   onSave={(v) => updateProfile({ occupation: v })}
                   placeholder="What do you do?"
                   maxLength={50}
                 />
                 <EditableField
                   label="Location"
-                  value={user?.location || ""}
+                  value={location || ""}
                   onSave={(v) => updateProfile({ location: v })}
                   placeholder="Where are you based?"
                   maxLength={50}
@@ -267,7 +280,7 @@ const PublicUserProfile: React.FC = () => {
               </div>
               <EditableField
                 label="What I write about"
-                value={user?.writingInterests || ""}
+                value={writingInterests || ""}
                 onSave={(v) => updateProfile({ writingInterests: v })}
                 placeholder="What do you want to write about?"
                 multiline
@@ -275,11 +288,18 @@ const PublicUserProfile: React.FC = () => {
               />
             </div>
           ) : (
-            profile.bio && (
-              <p className="font-body text-[15px] text-ns-ink-secondary leading-relaxed mt-6 max-w-prose">
-                {profile.bio}
-              </p>
-            )
+            <div className="mt-6 space-y-2 max-w-prose">
+              {profile.bio && (
+                <p className="font-body text-[15px] text-ns-ink-secondary leading-relaxed">
+                  {profile.bio}
+                </p>
+              )}
+              {writingInterests && (
+                <p className="font-body text-[13px] text-ns-ink-muted leading-relaxed">
+                  Writes about: {writingInterests}
+                </p>
+              )}
+            </div>
           )}
         </header>
 

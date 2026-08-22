@@ -79,14 +79,13 @@ async function seedUser({ email, password, user = {} }) {
     linkSentCount: 1,
   });
 
-  // user profile — quota fields default to a clean slate; `user` overrides them.
-  // `followers`/`following` MUST be present: the own-profile firestore.rules
-  // update branch requires `request.resource.data.followers == resource.data
-  // .followers`, so the app's lastLogin merge on sign-in fails without them.
+  // user profile — mirrors what createUserDocument writes on a real signup,
+  // plus the quota fields; quota fields default to a clean slate and `user`
+  // overrides them. The public profile — username, photo, bio, occupation,
+  // location — belongs to story-data, not Firestore (see scripts/seed-dev-user.mjs).
   await patchDoc(`users/${uid}`, {
     email,
     username: "e2e_user",
-    bio: "E2E user",
     createdAt: now,
     lastLogin: now,
     isAnonymous: false,
@@ -94,13 +93,6 @@ async function seedUser({ email, password, user = {} }) {
     lastAiUsageDate: today,
     indexUsage: 0,
     lastIndexUsageDate: today,
-    storyCount: 0,
-    followers: ["default"],
-    following: ["default"],
-    stories: [],
-    posts: [],
-    likedPosts: [],
-    savedPosts: [],
     ...user,
   });
 

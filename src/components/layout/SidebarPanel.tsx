@@ -147,7 +147,8 @@ export const SidebarPanel: React.FC<SidebarPanelProps> = ({
             {onChapterAdd && (
               <div className="flex items-center justify-between flex-shrink-0 px-4 pt-3 pb-2">
                 <span className="font-ui text-[10px] font-semibold text-ns-ink-muted uppercase tracking-widest">
-                  {chapters.length} {chapters.length === 1 ? "Chapter" : "Chapters"}
+                  {chapters.length}{" "}
+                  {chapters.length === 1 ? "Chapter" : "Chapters"}
                 </span>
                 <button
                   onClick={onChapterAdd}
@@ -165,80 +166,83 @@ export const SidebarPanel: React.FC<SidebarPanelProps> = ({
               </div>
             )}
             <div className="flex-1 overflow-y-auto pb-3 px-3">
-            {chapters.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-3 py-12">
-                <div className="w-12 h-12 rounded-full bg-ns-accent-subtle flex items-center justify-center">
-                  <BookOpen className="w-5 h-5 text-ns-accent opacity-60" />
-                </div>
-                <p className="font-ui text-xs text-ns-ink-muted text-center leading-relaxed">
-                  No chapters yet.
-                  <br />
-                  Create your first chapter.
-                </p>
-                {onChapterAdd && (
-                  <button
-                    onClick={onChapterAdd}
-                    className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns bg-ns-accent text-white font-ui text-xs font-medium hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150 shadow-ns-sm"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    New Chapter
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-0.5">
-                {chapters.map((chapter) => {
-                  const isActive = currentChapterId === chapter.id;
-                  return (
-                    <div
-                      key={chapter.id}
-                      className={`flex items-center rounded-ns transition-all duration-150 group ${
-                        isActive
-                          ? "bg-ns-accent-subtle"
-                          : "hover:bg-ns-surface-hover"
-                      }`}
+              {chapters.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full gap-3 py-12">
+                  <div className="w-12 h-12 rounded-full bg-ns-accent-subtle flex items-center justify-center">
+                    <BookOpen className="w-5 h-5 text-ns-accent opacity-60" />
+                  </div>
+                  <p className="font-ui text-xs text-ns-ink-muted text-center leading-relaxed">
+                    No chapters yet.
+                    <br />
+                    Create your first chapter.
+                  </p>
+                  {onChapterAdd && (
+                    <button
+                      onClick={onChapterAdd}
+                      className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns bg-ns-accent text-white font-ui text-xs font-medium hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150 shadow-ns-sm"
                     >
-                      <button
-                        onClick={() => onChapterSelect(chapter)}
-                        className="flex-1 text-left px-3 py-2.5 min-w-0"
+                      <Plus className="w-3.5 h-3.5" />
+                      New Chapter
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {chapters.map((chapter) => {
+                    const isActive = currentChapterId === chapter.id;
+                    return (
+                      <div
+                        key={chapter.id}
+                        className={`flex items-center rounded-ns transition-all duration-150 group ${
+                          isActive
+                            ? "bg-ns-accent-subtle"
+                            : "hover:bg-ns-surface-hover"
+                        }`}
                       >
-                        <div className="flex items-start gap-2.5">
-                          <Book
-                            className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 transition-colors ${
-                              isActive ? "text-ns-accent" : "text-ns-ink-muted"
-                            }`}
-                          />
-                          <div className="min-w-0">
-                            <p
-                              className={`font-ui text-xs font-medium line-clamp-2 transition-colors ${
+                        <button
+                          onClick={() => onChapterSelect(chapter)}
+                          className="flex-1 text-left px-3 py-2.5 min-w-0"
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <Book
+                              className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 transition-colors ${
                                 isActive
-                                  ? "text-ns-ink"
-                                  : "text-ns-ink-secondary"
+                                  ? "text-ns-accent"
+                                  : "text-ns-ink-muted"
                               }`}
-                            >
-                              {chapter.title || "Untitled"}
-                            </p>
-                            <p className="font-ui text-[10px] text-ns-ink-muted mt-0.5 tabular-nums">
-                              {(chapter.wordCount || 0).toLocaleString()} words
-                            </p>
+                            />
+                            <div className="min-w-0">
+                              <p
+                                className={`font-ui text-xs font-medium line-clamp-2 transition-colors ${
+                                  isActive
+                                    ? "text-ns-ink"
+                                    : "text-ns-ink-secondary"
+                                }`}
+                              >
+                                {chapter.title || "Untitled"}
+                              </p>
+                              <p className="font-ui text-[10px] text-ns-ink-muted mt-0.5 tabular-nums">
+                                {(chapter.wordCount || 0).toLocaleString()}{" "}
+                                words
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onChapterDelete(chapter.id);
-                        }}
-                        className="flex-shrink-0 p-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 text-ns-ink-muted hover:text-ns-destructive transition-all duration-150"
-                        aria-label="Delete chapter"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onChapterDelete(chapter.id);
+                          }}
+                          className="flex-shrink-0 p-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 text-ns-ink-muted hover:text-ns-destructive transition-all duration-150"
+                          aria-label="Delete chapter"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}

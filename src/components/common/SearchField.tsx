@@ -3,7 +3,10 @@ import { Search, X } from "lucide-react";
 import { Input, type InputProps } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-interface SearchFieldProps extends Omit<InputProps, "type" | "value" | "onChange"> {
+interface SearchFieldProps extends Omit<
+  InputProps,
+  "type" | "value" | "onChange"
+> {
   value: string;
   onChange: (value: string) => void;
   ariaLabel?: string;

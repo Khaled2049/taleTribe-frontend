@@ -20,7 +20,13 @@ export class TokenService {
     return `user:${userId}`;
   }
 
-  private request<T>(path:string,method="GET"):Promise<T>{return request<T>(path,{method,auth:"required",label:"Token request"})}
+  private request<T>(path: string, method = "GET"): Promise<T> {
+    return request<T>(path, {
+      method,
+      auth: "required",
+      label: "Token request",
+    });
+  }
 
   /**
    * Fetch the balance via the API rather than Firestore.
@@ -40,7 +46,10 @@ export class TokenService {
   /** Claim the once-daily faucet. Throws with the server's message on 429. */
   async claimFaucet(): Promise<ITokenBalance & { granted: MinorUnits }> {
     try {
-      return this.request<ITokenBalance & { granted: MinorUnits }>("/v1/me/token-faucet","POST");
+      return this.request<ITokenBalance & { granted: MinorUnits }>(
+        "/v1/me/token-faucet",
+        "POST",
+      );
     } catch (error) {
       throw error;
     }

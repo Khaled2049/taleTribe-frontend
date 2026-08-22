@@ -32,7 +32,9 @@ export function SidebarBalanceCard() {
 
   if (!userId) return null;
 
-  const [wholeAmount, symbol] = amount ? amount.split(" ") : [null, TALE_SYMBOL];
+  const [wholeAmount, symbol] = amount
+    ? amount.split(" ")
+    : [null, TALE_SYMBOL];
 
   const handleClaim = () => {
     claimFaucet.mutate(undefined, {

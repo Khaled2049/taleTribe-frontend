@@ -7,8 +7,7 @@ const RESTORE_REAPPLY_MS = 300;
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 function currentScrollPercent(): number {
-  const max =
-    document.documentElement.scrollHeight - window.innerHeight;
+  const max = document.documentElement.scrollHeight - window.innerHeight;
   return max > 0 ? clamp01(window.scrollY / max) : 0;
 }
 
@@ -106,8 +105,7 @@ export function useScrollProgress({
     suppressUntilRef.current = Date.now() + RESTORE_SUPPRESS_MS;
 
     const apply = () => {
-      const max =
-        document.documentElement.scrollHeight - window.innerHeight;
+      const max = document.documentElement.scrollHeight - window.innerHeight;
       window.scrollTo(0, clamp01(savedPercentForChapter) * max);
     };
 

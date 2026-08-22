@@ -398,7 +398,11 @@ const ReadingPaceSection: React.FC<ReadingPaceSectionProps> = ({
             </p>
             <div className="space-y-2.5">
               {activeProgress.map((p) => {
-                const denominator = Math.max(totalChapters, p.currentChapter, 1);
+                const denominator = Math.max(
+                  totalChapters,
+                  p.currentChapter,
+                  1,
+                );
                 const pct = Math.min(
                   (p.currentChapter / denominator) * 100,
                   100,

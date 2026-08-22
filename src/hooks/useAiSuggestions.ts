@@ -1,9 +1,7 @@
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Editor } from "@tiptap/react";
-import {
-  generateNextLines,
-} from "@/cloudFunctions/ai";
+import { generateNextLines } from "@/cloudFunctions/ai";
 
 interface UseAiSuggestionsParams {
   storyId: string;
@@ -46,7 +44,11 @@ export function useAiSuggestions({
         setShowSuggestionMenu(true);
       } catch (error) {
         console.error("Error fetching suggestions:", error);
-        toast.error(error instanceof Error ? error.message : "Failed to generate suggestions. Please try again.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to generate suggestions. Please try again.",
+        );
       } finally {
         setIsGenerating(false);
       }

@@ -260,6 +260,13 @@ Firestore `publicProfiles` collection as the authority.
   `PUT|DELETE /v1/profiles/{id}/follow` and `GET /v1/me/follows`.
 - Profiles, including `guestbookPolicy`, are `internal/store/profiles.go`.
 
+`public_profiles` also owns `firstName`/`lastName`/`writingInterests`
+(migration `000017_profile_names.sql`) — nothing profile-related is split
+across Firestore any more. Firestore's `users/{uid}` doc keeps only private,
+owner-only state (`email`, `aiSettings`, quota counters); it has no `username`
+either, since `authStore.hydrateUser`'s bootstrap path falls back to Firebase
+Auth's own `displayName` instead, kept in sync by `authStore.updateProfile`.
+
 `src/lib/guestbookPolicy.ts` only decides whether a compose form renders. It is
 **KEEP IN SYNC** with `canPostGuestbook` — the two matrices are asserted
 independently by `tests/guestbookPolicy.test.ts` on this side. A mismatch means

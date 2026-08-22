@@ -112,11 +112,7 @@ const McpAccessCard: React.FC<{ userId: string | undefined }> = ({
       );
     }
     return (
-      <Button
-        variant="outline"
-        disabled={requesting}
-        onClick={() => request()}
-      >
+      <Button variant="outline" disabled={requesting} onClick={() => request()}>
         {requesting ? (
           <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
@@ -140,9 +136,7 @@ const McpAccessCard: React.FC<{ userId: string | undefined }> = ({
       >
         {body()}
       </Row>
-      {error && (
-        <p className="text-xs font-ui text-red-500 pt-3">{error}</p>
-      )}
+      {error && <p className="text-xs font-ui text-red-500 pt-3">{error}</p>}
     </Card>
   );
 };
@@ -184,8 +178,7 @@ const AiCreditsCard: React.FC<{ userId: string | undefined }> = ({
         </p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {CREDIT_TIERS.map((amount) => {
-            const pending =
-              purchase.isPending && purchase.variables === amount;
+            const pending = purchase.isPending && purchase.variables === amount;
             return (
               <Button
                 key={amount}
@@ -519,8 +512,7 @@ const OwnerSettings: React.FC = () => {
 
           {stories.some(
             (s) =>
-              parseFloat(s.earnings.eth) > 0 ||
-              parseFloat(s.earnings.usdc) > 0,
+              parseFloat(s.earnings.eth) > 0 || parseFloat(s.earnings.usdc) > 0,
           ) && (
             <Card title="Per-Story Earnings">
               <div className="divide-y divide-ns-border">

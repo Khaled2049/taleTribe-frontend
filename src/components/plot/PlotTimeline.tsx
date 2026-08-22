@@ -110,7 +110,10 @@ const PlotTimeline: React.FC = () => {
       setActivePlotLineId(null);
       return;
     }
-    if (!activePlotLineId || !plotLines.some((p) => p.id === activePlotLineId)) {
+    if (
+      !activePlotLineId ||
+      !plotLines.some((p) => p.id === activePlotLineId)
+    ) {
       setActivePlotLineId(plotLines[0].id);
     }
   }, [plotLines, activePlotLineId]);
@@ -156,9 +159,7 @@ const PlotTimeline: React.FC = () => {
           line.id === plotLineId
             ? {
                 ...line,
-                events: line.events.map((e) =>
-                  e.id === event.id ? event : e,
-                ),
+                events: line.events.map((e) => (e.id === event.id ? event : e)),
               }
             : line,
         ),
@@ -420,9 +421,7 @@ const PlotTimeline: React.FC = () => {
                       onUpdateEvent={(ev) =>
                         updateEventInline(activePlotLine.id, ev)
                       }
-                      onDeleteEvent={(id) =>
-                        deleteEvent(activePlotLine.id, id)
-                      }
+                      onDeleteEvent={(id) => deleteEvent(activePlotLine.id, id)}
                       onAddEvent={() => {
                         if (requireAuth()) addEvent(activePlotLine.id);
                       }}

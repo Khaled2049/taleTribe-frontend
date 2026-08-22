@@ -104,9 +104,9 @@ const Signup: React.FC = () => {
                 className="text-sm text-ns-ink-muted font-body mb-6 opacity-0 animate-ns-fade-in"
                 style={{ animationDelay: "0.3s" }}
               >
-                When you're welcomed into the tribe, you'll receive an email with
-                a magic link to set up your author profile. Keep an eye on your
-                inbox!
+                When you're welcomed into the tribe, you'll receive an email
+                with a magic link to set up your author profile. Keep an eye on
+                your inbox!
               </p>
 
               <div

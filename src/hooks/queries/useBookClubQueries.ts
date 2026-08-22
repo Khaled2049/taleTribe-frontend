@@ -8,7 +8,9 @@ export function useBookClub(clubId: string | undefined) {
   const queryClient = useQueryClient();
   const queryKey = queryKeys.bookClubs.detail(clubId!);
   useEffect(() => {
-    const refresh = () => { void queryClient.invalidateQueries({ queryKey }); };
+    const refresh = () => {
+      void queryClient.invalidateQueries({ queryKey });
+    };
     window.addEventListener("book-club-changed", refresh);
     return () => window.removeEventListener("book-club-changed", refresh);
   }, [queryClient, queryKey]);

@@ -92,7 +92,7 @@ const Navbar = () => {
                       </div>
                     )}
                     <span className="font-ui text-sm font-semibold text-ns-ink truncate max-w-[180px]">
-                      @{user.username || "account"}
+                      @{user.username || "user"}
                     </span>
                   </button>
                   <UserDropdown

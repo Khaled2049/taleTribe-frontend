@@ -14,7 +14,9 @@ class CreditService {
       const { data } = await api.get<CreditBalance>("/getCreditBalance");
       return data;
     } catch (error) {
-      throw new Error(getApiErrorMessage(error, "Failed to load credit balance"));
+      throw new Error(
+        getApiErrorMessage(error, "Failed to load credit balance"),
+      );
     }
   }
 

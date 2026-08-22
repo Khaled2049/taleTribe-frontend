@@ -69,7 +69,8 @@ export function cmpMinor(a: MinorUnits, b: MinorUnits): -1 | 0 | 1 {
   return 0;
 }
 
-export const gteMinor = (a: MinorUnits, b: MinorUnits): boolean => cmpMinor(a, b) >= 0;
+export const gteMinor = (a: MinorUnits, b: MinorUnits): boolean =>
+  cmpMinor(a, b) >= 0;
 export const isZero = (a: MinorUnits): boolean => BigInt(a) === 0n;
 export const isPositive = (a: MinorUnits): boolean => BigInt(a) > 0n;
 
@@ -83,9 +84,7 @@ export function formatMinorUnits(
   decimals: number = TALE_DECIMALS,
 ): string {
   const formatted = formatUnits(BigInt(value), decimals);
-  return formatted.includes(".")
-    ? formatted.replace(/\.?0+$/, "")
-    : formatted;
+  return formatted.includes(".") ? formatted.replace(/\.?0+$/, "") : formatted;
 }
 
 /** Formatted amount plus symbol, e.g. "1,000 TALE". */

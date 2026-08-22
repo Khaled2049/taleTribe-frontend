@@ -1,6 +1,12 @@
 // src/components/reader/ChapterReader.tsx
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ChevronLeft, ChevronRight, AlertCircle, RotateCw } from "lucide-react";
 import { Chapter, Highlight, RenderMark } from "@/types/IReader";
 import { READER_THEMES } from "../../constants/readerThemes";
@@ -214,7 +220,9 @@ export const ChapterReader: React.FC<ChapterReaderProps> = ({
         onSearchToggle={handleSearchToggle}
         onSettingsToggle={handleSettingsToggle}
         onReadAloudToggle={
-          READ_ALOUD_ENABLED ? () => setShowReadAloud(!showReadAloud) : undefined
+          READ_ALOUD_ENABLED
+            ? () => setShowReadAloud(!showReadAloud)
+            : undefined
         }
         readAloudActive={
           readAloud.status !== "idle" && readAloud.status !== "error"

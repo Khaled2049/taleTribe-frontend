@@ -45,15 +45,15 @@ export const useFirebaseAuth = () => {
       photoURL?: string;
     },
   ) => {
+    // username lives in story-data (below); Firebase Auth's displayName,
+    // already set by completeMagicLinkSignup's updateProfile() call before
+    // this runs, is the bootstrap source until that profile loads (see
+    // authStore.hydrateUser) — no need for a third copy here.
     const dbUser = {
-      username: userData.username,
       email: userData.email,
       createdAt: new Date().toISOString(),
       lastLogin: new Date().toISOString(),
       isAnonymous: userData.isAnonymous || false,
-      ...(userData.writingInterests?.trim()
-        ? { writingInterests: userData.writingInterests.trim() }
-        : {}),
     };
     await setDoc(doc(firestore, "users", userId), dbUser);
     await profileRepo.createMe({
@@ -62,6 +62,7 @@ export const useFirebaseAuth = () => {
       bio: userData.bio?.trim() || "",
       occupation: userData.occupation?.trim() || "",
       location: userData.location?.trim() || "",
+      writingInterests: userData.writingInterests?.trim() || "",
       walletAddress: userData.walletAddress || "",
     });
   };

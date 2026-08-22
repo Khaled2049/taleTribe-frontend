@@ -18,7 +18,15 @@ export const PACING_OPTIONS: {
   label: string;
   description: string;
 }[] = [
-  { value: "slow", label: "Slow", description: "Descriptive, atmospheric scenes" },
-  { value: "moderate", label: "Moderate", description: "Balanced narrative flow" },
+  {
+    value: "slow",
+    label: "Slow",
+    description: "Descriptive, atmospheric scenes",
+  },
+  {
+    value: "moderate",
+    label: "Moderate",
+    description: "Balanced narrative flow",
+  },
   { value: "fast", label: "Fast", description: "Action-packed, quick cuts" },
 ];

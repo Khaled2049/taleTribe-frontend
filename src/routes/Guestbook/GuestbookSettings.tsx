@@ -13,7 +13,8 @@ import WallPolicySelect from "@/components/guestbook/WallPolicySelect";
  */
 const GuestbookSettings: React.FC = () => {
   const { user, loading: authLoading } = useAuthContext();
-  const { data: guestbookPolicy, isLoading: policyLoading } = useGuestbookPolicy(user?.uid);
+  const { data: guestbookPolicy, isLoading: policyLoading } =
+    useGuestbookPolicy(user?.uid);
 
   if (authLoading || (user && policyLoading)) {
     return (
@@ -54,10 +55,7 @@ const GuestbookSettings: React.FC = () => {
 
         <GuestbookTabs active="settings" wallUserId={user.uid} />
 
-        <WallPolicySelect
-          userId={user.uid}
-          current={guestbookPolicy}
-        />
+        <WallPolicySelect userId={user.uid} current={guestbookPolicy} />
       </div>
     </div>
   );

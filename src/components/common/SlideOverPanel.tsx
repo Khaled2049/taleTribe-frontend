@@ -36,7 +36,9 @@ export function SlideOverPanel({
         aria-label={title}
         className={cn(
           "absolute top-0 bottom-0 z-50 w-full max-w-sm bg-ns-surface shadow-ns-lg animate-ns-slide-up",
-          side === "left" ? "left-0 border-r border-ns-border" : "right-0 border-l border-ns-border",
+          side === "left"
+            ? "left-0 border-r border-ns-border"
+            : "right-0 border-l border-ns-border",
         )}
       >
         <div className="flex items-center justify-between border-b border-ns-border px-4 py-3">

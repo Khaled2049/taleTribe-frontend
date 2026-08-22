@@ -8,7 +8,11 @@ import {
 } from "@/components/ui/dialog";
 import { formatMinorUnits, formatTokenAmount } from "@/lib/money";
 import { getEntryFeeLabel } from "@/lib/competitionListing";
-import { TALE_SYMBOL, type ITokenAmount, type MinorUnits } from "@/types/IToken";
+import {
+  TALE_SYMBOL,
+  type ITokenAmount,
+  type MinorUnits,
+} from "@/types/IToken";
 import type { ICompetition } from "@/types/ICompetition";
 
 export interface EntryFeeDialogProps {

@@ -185,11 +185,7 @@ export const enhanceText = async (
 // ---------------------------------------------------------------------------
 
 export type WizardEnhanceType =
-  | "premise"
-  | "character"
-  | "place"
-  | "conflict"
-  | "blueprint";
+  "premise" | "character" | "place" | "conflict" | "blueprint";
 
 export interface WizardEnhanceRequest {
   type: WizardEnhanceType;

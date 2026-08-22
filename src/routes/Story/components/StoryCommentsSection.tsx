@@ -40,10 +40,7 @@ export const StoryCommentsSection: React.FC<StoryCommentsSectionProps> = ({
 
       {currentUser && (
         <div className="mb-10">
-          <CommentInput
-            currentUser={currentUser}
-            onSubmit={onCreate}
-          />
+          <CommentInput currentUser={currentUser} onSubmit={onCreate} />
         </div>
       )}
 

@@ -1,6 +1,10 @@
 import type { ICompetition } from "@/types/ICompetition";
 import type { ITokenAmount } from "@/types/IToken";
-import { DEFAULT_FEE_BPS, formatMinorUnits, formatTokenAmount } from "@/lib/money";
+import {
+  DEFAULT_FEE_BPS,
+  formatMinorUnits,
+  formatTokenAmount,
+} from "@/lib/money";
 
 /** Prize display, honoring the legacy-pool rule: pre-TALE competitions show their label, not a fabricated TALE amount. */
 export function getPrizeDisplay(competition: ICompetition): {

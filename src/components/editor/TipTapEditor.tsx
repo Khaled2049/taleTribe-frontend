@@ -127,7 +127,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
 
   pasteErrorRef.current = showError;
 
-
   // ── Feature hooks ──────────────────────────────────────────────────────────
 
   const {
@@ -138,7 +137,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     isGenerating,
     fetchNextLineSuggestions,
   } = useAiSuggestions({ storyId, chapterId });
-
 
   const { isEnhancing, handleTextEnhancement } = useTextEnhancement({
     editor: editorRef.current,
@@ -259,12 +257,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         ];
       },
     });
-  }, [
-    fetchNextLineSuggestions,
-    openImagePrompt,
-    onOpenCoWrite,
-    requireAuth,
-  ]);
+  }, [fetchNextLineSuggestions, openImagePrompt, onOpenCoWrite, requireAuth]);
 
   // ── Editor instance ────────────────────────────────────────────────────────
 
@@ -432,9 +425,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           <div className="bg-ns-elevated border border-ns-border rounded-lg p-6 shadow-xl transition-colors w-72">
             <div className="flex items-center gap-3">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ns-accent"></div>
-              <span className="text-ns-ink">
-                Generating…
-              </span>
+              <span className="text-ns-ink">Generating…</span>
             </div>
             <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-ns-surface">
               <div

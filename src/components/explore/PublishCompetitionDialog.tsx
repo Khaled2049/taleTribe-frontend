@@ -24,7 +24,8 @@ export interface PublishCompetitionDialogProps {
   isPublishing: boolean;
 }
 
-const tale = (amount: MinorUnits) => `${formatMinorUnits(amount)} ${TALE_SYMBOL}`;
+const tale = (amount: MinorUnits) =>
+  `${formatMinorUnits(amount)} ${TALE_SYMBOL}`;
 
 /**
  * Confirmation for publishing. This is the only irreversible step in the host

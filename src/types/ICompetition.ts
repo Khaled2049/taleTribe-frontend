@@ -33,11 +33,7 @@ export type CompetitionPhase =
 
 /** Lifecycle of the prize pool held for a competition. */
 export type EscrowState =
-  | "unfunded"
-  | "funding"
-  | "funded"
-  | "released"
-  | "refunded";
+  "unfunded" | "funding" | "funded" | "released" | "refunded";
 
 /** One line of the final standings, exactly as settlement recorded it. */
 export interface ICompetitionResult {

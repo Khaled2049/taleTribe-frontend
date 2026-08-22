@@ -21,7 +21,10 @@ export const AuthBootstrap = () => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       const nextUid = firebaseUser?.uid ?? null;
 
-      if (previousUidRef.current !== null && previousUidRef.current !== nextUid) {
+      if (
+        previousUidRef.current !== null &&
+        previousUidRef.current !== nextUid
+      ) {
         appQueryClient.clear();
         useChatStore.getState().resetChatState();
       }

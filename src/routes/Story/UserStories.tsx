@@ -14,7 +14,10 @@ import {
   useUpdateStoryMetadata,
   useUpdateStoryCover,
 } from "@/hooks/queries/useStoryQueries";
-import { useRecentlyRead, useClearReadingHistory } from "@/hooks/queries/useUserQueries";
+import {
+  useRecentlyRead,
+  useClearReadingHistory,
+} from "@/hooks/queries/useUserQueries";
 
 const RowSkeleton = () => (
   <div className="flex gap-4 py-6 border-b border-ns-border animate-pulse">
@@ -159,8 +162,7 @@ const UserStories = () => {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-8 text-xs sm:text-sm font-ui text-ns-ink-secondary">
               <span className="flex items-center gap-1.5">
                 <PenLine className="w-3.5 h-3.5 text-ns-ink-muted" />
-                {stories.length}{" "}
-                {stories.length === 1 ? "story" : "stories"}
+                {stories.length} {stories.length === 1 ? "story" : "stories"}
               </span>
               {!recentlyReadLoading && recentlyRead.length > 0 && (
                 <span className="flex items-center gap-1.5">
@@ -310,7 +312,9 @@ const UserStories = () => {
                       onPublish={handleTogglePublishStory}
                       onUnpublish={handleTogglePublishStory}
                       onEditDetails={(id) =>
-                        setEditingStory(stories.find((s) => s.id === id) ?? null)
+                        setEditingStory(
+                          stories.find((s) => s.id === id) ?? null,
+                        )
                       }
                       onImageUpdate={handleImageUpdate}
                       isLoading={operationLoading === story.id}

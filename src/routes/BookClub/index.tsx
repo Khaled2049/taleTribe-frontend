@@ -124,7 +124,10 @@ const BookClubs = () => {
         setBookClubs((prevClubs) =>
           prevClubs.map((club) =>
             club.id === clubId
-              ? { ...club, members: club.members.filter((id) => id !== user.uid) }
+              ? {
+                  ...club,
+                  members: club.members.filter((id) => id !== user.uid),
+                }
               : club,
           ),
         );

@@ -47,7 +47,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     try {
       set({ currentStoryId: storyId, error: null });
 
-      const sessionId = await chatService.getOrCreateChatSession(storyId, user.uid);
+      const sessionId = await chatService.getOrCreateChatSession(
+        storyId,
+        user.uid,
+      );
       const history = await chatService.getChatHistory(storyId, sessionId);
 
       set({

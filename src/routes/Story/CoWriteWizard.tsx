@@ -27,10 +27,7 @@ import { toast } from "sonner";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import { storyWorldbuildingRepo } from "@novelsync/story-data-client";
 import { storageService } from "@/services/StorageService";
-import {
-  StoryBeatType,
-  PLOT_TEMPLATES,
-} from "@/types/IPlot";
+import { StoryBeatType, PLOT_TEMPLATES } from "@/types/IPlot";
 import { enhanceWizardInput, WizardEnhanceType } from "@/cloudFunctions/ai";
 import {
   STORY_CATEGORIES as CATEGORIES,
@@ -105,9 +102,10 @@ const NEXT_LABELS = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-
 // Reusable banner reminding users these steps are optional and feed the AI.
-const OptionalNote: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+const OptionalNote: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => (
   <div className="flex items-start gap-2.5 rounded-lg border border-ns-border bg-ns-surface px-3.5 py-2.5">
     <Info className="w-4 h-4 text-ns-accent flex-shrink-0 mt-0.5" />
     <p className="font-body text-xs text-ns-ink-secondary leading-relaxed">
@@ -308,24 +306,38 @@ const CoWriteWizard: React.FC<CoWriteWizardProps> = ({
       });
       const storyId = story.id;
       await Promise.all(
-        characters.filter((character) => character.name.trim()).map(({ expanded: _expanded, age, ...character }) =>
-          storyWorldbuildingRepo.addCharacter(storyId, {
-            ...character,
-            age: age ? Number(age) : undefined,
-            relationships: [],
-            userId,
-          }),
-        ),
+        characters
+          .filter((character) => character.name.trim())
+          .map(({ expanded: _expanded, age, ...character }) =>
+            storyWorldbuildingRepo.addCharacter(storyId, {
+              ...character,
+              age: age ? Number(age) : undefined,
+              relationships: [],
+              userId,
+            }),
+          ),
       );
       await Promise.all(
-        places.filter((place) => place.name.trim()).map(({ expanded: _expanded, ...place }) =>
-          storyWorldbuildingRepo.addPlace(storyId, { ...place, userId, storyId }),
-        ),
+        places
+          .filter((place) => place.name.trim())
+          .map(({ expanded: _expanded, ...place }) =>
+            storyWorldbuildingRepo.addPlace(storyId, {
+              ...place,
+              userId,
+              storyId,
+            }),
+          ),
       );
       if (plotLineName.trim() && (conflict.trim() || events.length > 0)) {
-        const line = await storyWorldbuildingRepo.addPlot(storyId, plotLineName.trim());
+        const line = await storyWorldbuildingRepo.addPlot(
+          storyId,
+          plotLineName.trim(),
+        );
         if (conflict.trim()) {
-          await storyWorldbuildingRepo.updatePlotMeta(storyId, { ...line, description: conflict });
+          await storyWorldbuildingRepo.updatePlotMeta(storyId, {
+            ...line,
+            description: conflict,
+          });
         }
         for (let index = 0; index < events.length; index += 1) {
           const event = events[index];

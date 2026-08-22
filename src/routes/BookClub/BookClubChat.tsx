@@ -120,7 +120,10 @@ const BookClubChat: React.FC<BookClubChatProps> = ({
     if (!spoilerContent.trim()) return;
 
     // Validate chapter range
-    if (spoilerEndChapter !== undefined && spoilerEndChapter < spoilerStartChapter) {
+    if (
+      spoilerEndChapter !== undefined &&
+      spoilerEndChapter < spoilerStartChapter
+    ) {
       setErrorMessage("End chapter cannot be before start chapter.");
       return;
     }

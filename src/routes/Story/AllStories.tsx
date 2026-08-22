@@ -212,7 +212,11 @@ const AllStories: React.FC = () => {
                     {CATEGORIES.map((category) => {
                       const isActive = selectedCategory === category.value;
                       return (
-                        <li key={category.id} role="option" aria-selected={isActive}>
+                        <li
+                          key={category.id}
+                          role="option"
+                          aria-selected={isActive}
+                        >
                           <button
                             type="button"
                             onClick={() => handleCategoryChange(category.value)}
@@ -232,7 +236,9 @@ const AllStories: React.FC = () => {
                             >
                               {category.symbol}
                             </span>
-                            <span className="flex-1 truncate">{category.name}</span>
+                            <span className="flex-1 truncate">
+                              {category.name}
+                            </span>
                             {isActive && (
                               <Check className="w-4 h-4 text-ns-accent shrink-0" />
                             )}

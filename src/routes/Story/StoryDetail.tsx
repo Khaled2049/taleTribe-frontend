@@ -1,15 +1,13 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-} from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import { publicStoryRepo } from "@novelsync/story-data-client";
 import { Chapter, Story } from "@novelsync/story-data-client";
 import { storySocialRepo } from "@novelsync/story-data-client";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useComments, useCommentCache } from "@/hooks/queries/useCommentQueries";
+import {
+  useComments,
+  useCommentCache,
+} from "@/hooks/queries/useCommentQueries";
 import { StoryLoadingState } from "./components/StoryLoadingState";
 import { StoryErrorState } from "./components/StoryErrorState";
 import { StorySynopsis } from "./components/StorySynopsis";
@@ -115,11 +113,7 @@ const StoryDetail: React.FC = () => {
 
   // Best-effort background fetch of a neighbouring chapter into the cache.
   const prefetchChapter = useCallback(
-    (
-      chapters: Omit<Chapter, "content">[],
-      index: number,
-      authorId: string,
-    ) => {
+    (chapters: Omit<Chapter, "content">[], index: number, authorId: string) => {
       if (!id) return;
       const meta = chapters[index];
       if (!meta || chapterContentCache.current[meta.id]) return;
@@ -222,7 +216,9 @@ const StoryDetail: React.FC = () => {
 
         const [detail, me] = await Promise.all([
           publicStoryRepo.getStoryDetail(storyId),
-          user ? storySocialRepo.getMe(storyId).catch(() => null) : Promise.resolve(null),
+          user
+            ? storySocialRepo.getMe(storyId).catch(() => null)
+            : Promise.resolve(null),
         ]);
 
         if (!detail) {
@@ -236,7 +232,9 @@ const StoryDetail: React.FC = () => {
 
         const { story: storyData, chapters: chaptersMetaList } = detail;
         const savedChapterIndex = resumeChapterId
-          ? chaptersMetaList.findIndex((chapter) => chapter.id === resumeChapterId)
+          ? chaptersMetaList.findIndex(
+              (chapter) => chapter.id === resumeChapterId,
+            )
           : -1;
         const validChapterIndex = Math.max(
           0,
@@ -373,7 +371,8 @@ const StoryDetail: React.FC = () => {
         : { chapterLoading: true }),
     }));
 
-    if (!cached) loadChapterContent(prevIndex, state.chapters, state.story?.userId || "");
+    if (!cached)
+      loadChapterContent(prevIndex, state.chapters, state.story?.userId || "");
     window.scrollTo(0, 0);
   }, [
     id,
@@ -413,7 +412,8 @@ const StoryDetail: React.FC = () => {
         : { chapterLoading: true }),
     }));
 
-    if (!cached) loadChapterContent(nextIndex, state.chapters, state.story?.userId || "");
+    if (!cached)
+      loadChapterContent(nextIndex, state.chapters, state.story?.userId || "");
     window.scrollTo(0, 0);
   }, [
     id,
@@ -430,12 +430,18 @@ const StoryDetail: React.FC = () => {
       state.chapters,
       state.story?.userId || "",
     );
-  }, [loadChapterContent, state.currentChapterIndex, state.chapters, state.story?.userId]);
+  }, [
+    loadChapterContent,
+    state.currentChapterIndex,
+    state.chapters,
+    state.story?.userId,
+  ]);
 
   const handleScrollPersist = useCallback(
     (percent: number) => {
       if (!id || !user) return;
-      if (state.currentChapter) readingHistoryRepo.saveProgress(id, state.currentChapter.id, percent);
+      if (state.currentChapter)
+        readingHistoryRepo.saveProgress(id, state.currentChapter.id, percent);
     },
     [id, user, state.currentChapterIndex],
   );
@@ -447,7 +453,11 @@ const StoryDetail: React.FC = () => {
     async (message: string) => {
       if (!id || !state.currentChapter) return;
       upsertComment(
-        await storySocialRepo.createComment(id, state.currentChapter.id, message),
+        await storySocialRepo.createComment(
+          id,
+          state.currentChapter.id,
+          message,
+        ),
       );
     },
     [id, state.currentChapter, upsertComment],
@@ -458,7 +468,12 @@ const StoryDetail: React.FC = () => {
       if (!id || !state.currentChapter) return;
       try {
         upsertComment(
-          await storySocialRepo.createComment(id, state.currentChapter.id, message, parentId),
+          await storySocialRepo.createComment(
+            id,
+            state.currentChapter.id,
+            message,
+            parentId,
+          ),
         );
       } catch (error) {
         console.error("Error adding reply:", error);
@@ -471,7 +486,11 @@ const StoryDetail: React.FC = () => {
     async (commentId: string) => {
       if (!id || !state.currentChapter) return;
       try {
-        await storySocialRepo.deleteComment(id, state.currentChapter.id, commentId);
+        await storySocialRepo.deleteComment(
+          id,
+          state.currentChapter.id,
+          commentId,
+        );
         removeComment(commentId);
       } catch (error) {
         console.error("Error deleting comment:", error);
@@ -485,7 +504,12 @@ const StoryDetail: React.FC = () => {
       if (!id || !state.currentChapter) return;
       try {
         upsertComment(
-          await storySocialRepo.updateComment(id, state.currentChapter.id, commentId, newMessage),
+          await storySocialRepo.updateComment(
+            id,
+            state.currentChapter.id,
+            commentId,
+            newMessage,
+          ),
         );
       } catch (error) {
         console.error("Error updating comment:", error);
@@ -499,7 +523,12 @@ const StoryDetail: React.FC = () => {
       if (!id || !state.currentChapter) return;
       try {
         upsertComment(
-          await storySocialRepo.setCommentLike(id, state.currentChapter.id, commentId, liked),
+          await storySocialRepo.setCommentLike(
+            id,
+            state.currentChapter.id,
+            commentId,
+            liked,
+          ),
         );
       } catch (error) {
         console.error("Error updating comment like:", error);
@@ -682,7 +711,11 @@ const StoryDetail: React.FC = () => {
                       if (readNowPending) return;
                       setReadNowPending(true);
                       if (id && user && state.story) {
-                        if (state.currentChapter) readingHistoryRepo.saveProgress(id, state.currentChapter.id);
+                        if (state.currentChapter)
+                          readingHistoryRepo.saveProgress(
+                            id,
+                            state.currentChapter.id,
+                          );
                       }
                       setTimeout(() => {
                         setReadNowPending(false);

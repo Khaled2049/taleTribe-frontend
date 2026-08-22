@@ -72,14 +72,8 @@ const PeekingCat: React.FC = () => {
         className="text-ns-ink drop-shadow-sm"
       >
         {/* Ears */}
-        <path
-          d="M14 30 L10 12 L26 22 Z"
-          fill="currentColor"
-        />
-        <path
-          d="M50 30 L54 12 L38 22 Z"
-          fill="currentColor"
-        />
+        <path d="M14 30 L10 12 L26 22 Z" fill="currentColor" />
+        <path d="M50 30 L54 12 L38 22 Z" fill="currentColor" />
         {/* Inner ears */}
         <path d="M15 26 L13 16 L22 22 Z" className="fill-ns-accent" />
         <path d="M49 26 L51 16 L42 22 Z" className="fill-ns-accent" />
@@ -121,7 +115,12 @@ const PeekingCat: React.FC = () => {
         {/* Paws gripping the edge */}
         <ellipse cx="18" cy="66" rx="7" ry="5" fill="currentColor" />
         <ellipse cx="46" cy="66" rx="7" ry="5" fill="currentColor" />
-        <g stroke="#1f2937" strokeWidth="0.9" strokeLinecap="round" opacity="0.5">
+        <g
+          stroke="#1f2937"
+          strokeWidth="0.9"
+          strokeLinecap="round"
+          opacity="0.5"
+        >
           <line x1="15" y1="64" x2="15" y2="68" />
           <line x1="18" y1="64" x2="18" y2="68.5" />
           <line x1="21" y1="64" x2="21" y2="68" />

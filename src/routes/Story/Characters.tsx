@@ -289,7 +289,9 @@ const Characters: React.FC = () => {
           )}
         </div>
         <button
-          onClick={() => { if (requireAuth()) setIsAddModalOpen(true); }}
+          onClick={() => {
+            if (requireAuth()) setIsAddModalOpen(true);
+          }}
           data-cy="add-character"
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ns-accent text-white font-ui text-xs font-medium rounded-ns hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150"
         >
@@ -571,7 +573,9 @@ const Characters: React.FC = () => {
                       </>
                     ) : (
                       <button
-                        onClick={() => { if (requireAuth()) startEditing(); }}
+                        onClick={() => {
+                          if (requireAuth()) startEditing();
+                        }}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface hover:text-ns-ink active:scale-[0.97] transition-all duration-150"
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -781,7 +785,10 @@ const Characters: React.FC = () => {
                 {!editing && (
                   <div className="pt-2 border-t border-ns-border">
                     <button
-                      onClick={() => { if (requireAuth()) handleDeleteCharacter(selectedCharacter.id); }}
+                      onClick={() => {
+                        if (requireAuth())
+                          handleDeleteCharacter(selectedCharacter.id);
+                      }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns font-ui text-xs text-ns-destructive border border-ns-destructive/20 hover:bg-ns-destructive/5 hover:border-ns-destructive/40 active:scale-[0.97] transition-all duration-150"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

@@ -2,7 +2,11 @@ import "./polyfills";
 import "./index.css";
 import { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
-import { createBrowserRouter, redirect, RouterProvider } from "react-router-dom";
+import {
+  createBrowserRouter,
+  redirect,
+  RouterProvider,
+} from "react-router-dom";
 import { NavbarWrapper } from "./NavbarWrapper";
 import { Web3Provider } from "./contexts/Web3Provider";
 import { ThemeToaster } from "./components/common/ThemeToaster";

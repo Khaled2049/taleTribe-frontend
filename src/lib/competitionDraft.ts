@@ -1,6 +1,9 @@
 import { parseTokenInput } from "@/lib/money";
 import { MIN_VOTING_WINDOW_MS } from "@/lib/competitionListing";
-import type { ICompetition, ICompetitionDraftInput } from "@/types/ICompetition";
+import type {
+  ICompetition,
+  ICompetitionDraftInput,
+} from "@/types/ICompetition";
 import type { MinorUnits } from "@/types/IToken";
 
 /**
@@ -52,12 +55,16 @@ export function formStateFrom(
   formatAmount: (amount: MinorUnits, decimals: number) => string,
 ): CompetitionFormState {
   return {
-    title: competition.title === "Untitled competition" ? "" : competition.title,
+    title:
+      competition.title === "Untitled competition" ? "" : competition.title,
     category: competition.category === "General" ? "" : competition.category,
     description: competition.description,
     tags: competition.tags.join(", "),
     prizeAmount: competition.prizePool
-      ? formatAmount(competition.prizePool.amount, competition.prizePool.decimals)
+      ? formatAmount(
+          competition.prizePool.amount,
+          competition.prizePool.decimals,
+        )
       : "",
     entryFee: competition.entryFee
       ? formatAmount(competition.entryFee.amount, competition.entryFee.decimals)
@@ -96,9 +103,7 @@ export const normalizeAmountInput = (value: string): string =>
   value.replace(/,/g, "").replace(/\s/g, "").replace(/TALE$/i, "");
 
 /** `undefined` when blank, `null` when present but unparseable. */
-export const parseAmount = (
-  value: string,
-): MinorUnits | undefined | null => {
+export const parseAmount = (value: string): MinorUnits | undefined | null => {
   const normalized = normalizeAmountInput(value);
   if (!normalized) return undefined;
   try {
@@ -126,9 +131,7 @@ export function toDraftInput(
     description: form.description.trim(),
     category: form.category.trim(),
     tags: parseTags(form.tags),
-    maxParticipants: form.maxParticipants
-      ? Number(form.maxParticipants)
-      : null,
+    maxParticipants: form.maxParticipants ? Number(form.maxParticipants) : null,
     startDate: parseDate(form.startDate),
     deadline: parseDate(form.deadline),
     votingDeadline: parseDate(form.votingDeadline),
@@ -183,7 +186,9 @@ export function publishBlockers(form: CompetitionFormState): string[] {
     voting &&
     voting.getTime() - deadline.getTime() < MIN_VOTING_WINDOW_MS
   ) {
-    blockers.push("Voting must stay open at least an hour after submissions close");
+    blockers.push(
+      "Voting must stay open at least an hour after submissions close",
+    );
   }
 
   return blockers;

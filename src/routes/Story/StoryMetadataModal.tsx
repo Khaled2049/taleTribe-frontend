@@ -177,7 +177,8 @@ const StoryMetadataModal: React.FC<StoryMetadataModalProps> = ({
       const newStoryId = createdStory.id;
 
       // Fetch the auto-created first chapter so we can overwrite it
-      const existingChapters = await storyWorkspaceRepo.getChapters(createdStory);
+      const existingChapters =
+        await storyWorkspaceRepo.getChapters(createdStory);
       const autoChapter = existingChapters[0];
 
       // Update the first chapter with imported content
