@@ -2,7 +2,10 @@ import React from "react";
 import { Link, useParams } from "react-router-dom";
 import { UserX } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useGuestbookPolicy, usePublicProfile } from "@/hooks/queries/useUserQueries";
+import {
+  useGuestbookPolicy,
+  usePublicProfile,
+} from "@/hooks/queries/useUserQueries";
 import { SEOHead } from "@/components/seo/SEOHead";
 import Guestbook from "@/components/guestbook/Guestbook";
 import GuestbookTabs from "@/components/guestbook/GuestbookTabs";

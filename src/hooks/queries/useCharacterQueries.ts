@@ -15,7 +15,13 @@ export function useDeleteCharacter(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (characterId: string) =>
-      storyWorldbuildingRepo.deleteCharacter(storyId!, characterId, queryClient.getQueryData<Character[]>(queryKeys.characters.byStory(storyId!))?.find((x) => x.id === characterId)?.revision),
+      storyWorldbuildingRepo.deleteCharacter(
+        storyId!,
+        characterId,
+        queryClient
+          .getQueryData<Character[]>(queryKeys.characters.byStory(storyId!))
+          ?.find((x) => x.id === characterId)?.revision,
+      ),
     onMutate: async (characterId) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.characters.byStory(storyId!),
@@ -31,7 +37,10 @@ export function useDeleteCharacter(storyId: string | undefined) {
     },
     onError: (_err, _characterId, ctx) => {
       if (ctx?.prev) {
-        queryClient.setQueryData(queryKeys.characters.byStory(storyId!), ctx.prev);
+        queryClient.setQueryData(
+          queryKeys.characters.byStory(storyId!),
+          ctx.prev,
+        );
       }
     },
     onSettled: () => {

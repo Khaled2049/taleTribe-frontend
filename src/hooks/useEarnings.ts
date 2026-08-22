@@ -41,7 +41,10 @@ export const useEarnings = () => {
           .readContract({
             ...tippingPlatformConfig,
             functionName: "lifetimeEarnings",
-            args: [walletAddress as `0x${string}`, USDC_ADDRESS as `0x${string}`],
+            args: [
+              walletAddress as `0x${string}`,
+              USDC_ADDRESS as `0x${string}`,
+            ],
           })
           .catch(() => 0n),
       ]);

@@ -15,7 +15,15 @@ export const Chatbot: React.FC<ChatbotProps> = ({
   onClose,
   mode = "sidebar",
 }) => {
-  const { messages, isLoading, error, sendMessage, initializeChat, clearChat, clearError } = useChat();
+  const {
+    messages,
+    isLoading,
+    error,
+    sendMessage,
+    initializeChat,
+    clearChat,
+    clearError,
+  } = useChat();
   const [inputMessage, setInputMessage] = useState("");
   const [confirmingClear, setConfirmingClear] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -72,7 +80,9 @@ export const Chatbot: React.FC<ChatbotProps> = ({
       <div className="flex items-center justify-between px-4 py-3 border-b border-ns-border shrink-0">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-ns-accent" />
-          <span className="font-heading text-sm text-ns-ink">Writing Assistant</span>
+          <span className="font-heading text-sm text-ns-ink">
+            Writing Assistant
+          </span>
         </div>
         <div className="flex items-center gap-1">
           {confirmingClear ? (
@@ -120,7 +130,10 @@ export const Chatbot: React.FC<ChatbotProps> = ({
       {error && (
         <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-ns-destructive/10 border-b border-ns-destructive/20 shrink-0">
           <p className="font-ui text-xs text-ns-destructive">{error}</p>
-          <button onClick={clearError} className="text-ns-destructive hover:opacity-70 transition-opacity">
+          <button
+            onClick={clearError}
+            className="text-ns-destructive hover:opacity-70 transition-opacity"
+          >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -144,9 +157,18 @@ export const Chatbot: React.FC<ChatbotProps> = ({
             </div>
             <div className="px-4 py-3 bg-ns-elevated border border-ns-border rounded-2xl rounded-bl-md">
               <div className="flex gap-1 items-center">
-                <span className="w-1.5 h-1.5 rounded-full bg-ns-ink-muted animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-ns-ink-muted animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-ns-ink-muted animate-bounce" style={{ animationDelay: "300ms" }} />
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-ns-ink-muted animate-bounce"
+                  style={{ animationDelay: "0ms" }}
+                />
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-ns-ink-muted animate-bounce"
+                  style={{ animationDelay: "150ms" }}
+                />
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-ns-ink-muted animate-bounce"
+                  style={{ animationDelay: "300ms" }}
+                />
               </div>
             </div>
           </div>

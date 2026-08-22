@@ -192,7 +192,10 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
     case "SET_STORY_PUBLISHED":
       if (!state.story) return state;
-      return { ...state, story: { ...state.story, isPublished: action.payload } };
+      return {
+        ...state,
+        story: { ...state.story, isPublished: action.payload },
+      };
 
     case "RESET":
       return initialState;

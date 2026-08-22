@@ -51,9 +51,9 @@ const CompleteSignup: React.FC = () => {
     "idle",
   );
   const [keyTestError, setKeyTestError] = useState("");
-  const [keySave, setKeySave] = useState<
-    "idle" | "saving" | "saved" | "error"
-  >("idle");
+  const [keySave, setKeySave] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle",
+  );
 
   const [isLoading, setIsLoading] = useState(false);
   const [isValidLink, setIsValidLink] = useState<boolean | null>(null);
@@ -636,8 +636,8 @@ const CompleteSignup: React.FC = () => {
 
                 {walletState === WalletState.WRONG_NETWORK && (
                   <p className="text-xs text-ns-gold mt-2 font-ui">
-                    Wallet connected on a different network. You can still finish
-                    signup and change network later.
+                    Wallet connected on a different network. You can still
+                    finish signup and change network later.
                   </p>
                 )}
 
@@ -717,8 +717,9 @@ const CompleteSignup: React.FC = () => {
                   </p>
                   <p className="text-xs text-ns-ink-secondary font-body leading-relaxed">
                     You use {AI_SETTINGS_COPY.platformLabel} — a shared daily
-                    allowance of {PLATFORM_AI_DAILY_LIMIT} AI requests, resetting
-                    at midnight UTC. Perfect for getting started, no setup needed.
+                    allowance of {PLATFORM_AI_DAILY_LIMIT} AI requests,
+                    resetting at midnight UTC. Perfect for getting started, no
+                    setup needed.
                   </p>
                 </div>
                 <div className="h-px bg-ns-border" />

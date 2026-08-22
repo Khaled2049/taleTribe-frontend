@@ -26,7 +26,10 @@ export function useGuestbookEntries(
     readonly unknown[],
     PageParam
   >({
-    queryKey: [...queryKeys.guestbook.byOwner(ownerId ?? ""), viewerId] as const,
+    queryKey: [
+      ...queryKeys.guestbook.byOwner(ownerId ?? ""),
+      viewerId,
+    ] as const,
     enabled: !!ownerId,
     queryFn: async ({ pageParam }) => {
       return guestbookRepo.listEntries(ownerId!, pageParam);

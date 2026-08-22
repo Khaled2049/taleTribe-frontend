@@ -163,7 +163,7 @@ export function SimpleEditor() {
         // MUST be included — otherwise the in-memory chapters cache keeps the
         // old text and switching back to this chapter shows stale content
         // (Firestore is correct, only the cache is stale).
-      actions.updateChapterInList(state.currentChapter.id, {
+        actions.updateChapterInList(state.currentChapter.id, {
           ...savedChapter,
         });
       }
@@ -272,11 +272,18 @@ export function SimpleEditor() {
 
     setIsSummarizing(true);
     try {
-      const result = await summarizeChapter({ storyId: state.story.id, chapterId: state.currentChapter.id });
+      const result = await summarizeChapter({
+        storyId: state.story.id,
+        chapterId: state.currentChapter.id,
+      });
       setSummaryResult(result.summary);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to summarize chapter.");
-    } finally { setIsSummarizing(false); }
+      toast.error(
+        error instanceof Error ? error.message : "Failed to summarize chapter.",
+      );
+    } finally {
+      setIsSummarizing(false);
+    }
   };
 
   // Copy the generated summary to the clipboard.
@@ -304,11 +311,16 @@ export function SimpleEditor() {
 
     try {
       setIsPublishing(true);
-      const savedStory = await storyWorkspaceRepo.updateStory({ ...state.story, isPublished: !wasPublished });
+      const savedStory = await storyWorkspaceRepo.updateStory({
+        ...state.story,
+        isPublished: !wasPublished,
+      });
       actions.replaceStory(savedStory);
 
       if (!wasPublished) {
-        toast.success("Story marked published. Public discovery will be available after its migration.");
+        toast.success(
+          "Story marked published. Public discovery will be available after its migration.",
+        );
       } else {
         // Just unpublished — stay in editor
         toast.success("Story unpublished.");
@@ -389,7 +401,9 @@ export function SimpleEditor() {
     if (isDemo || !state.story || !chapterToDelete) return;
 
     try {
-      const chapter = state.chapters.find((item) => item.id === chapterToDelete);
+      const chapter = state.chapters.find(
+        (item) => item.id === chapterToDelete,
+      );
       if (!chapter) throw new Error("Chapter not found");
       await storyWorkspaceRepo.deleteChapter(state.story, chapter);
       actions.deleteChapter(chapterToDelete);
@@ -1150,7 +1164,9 @@ export function SimpleEditor() {
                           ? "bg-ns-destructive hover:bg-ns-destructive-hover"
                           : "bg-ns-accent hover:bg-ns-accent-hover"
                       }`}
-                      aria-label={isPublished ? "Unpublish story" : "Publish story"}
+                      aria-label={
+                        isPublished ? "Unpublish story" : "Publish story"
+                      }
                     >
                       {isPublishing ? (
                         <Loader className="w-3.5 h-3.5 animate-spin" />

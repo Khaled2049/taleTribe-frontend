@@ -20,7 +20,9 @@ function formatDate(date: Date): string {
   });
 }
 
-export function CompetitionKeyDatesCard({ competition }: CompetitionKeyDatesCardProps) {
+export function CompetitionKeyDatesCard({
+  competition,
+}: CompetitionKeyDatesCardProps) {
   const now = Date.now();
   const milestones: Milestone[] = [
     {
@@ -42,7 +44,11 @@ export function CompetitionKeyDatesCard({ competition }: CompetitionKeyDatesCard
   // `votingDeadline` is the best estimate of when results land, labeled as one
   // rather than presented as a firm date.
   if (competition.settledAt) {
-    milestones.push({ label: "Results", date: competition.settledAt, done: true });
+    milestones.push({
+      label: "Results",
+      date: competition.settledAt,
+      done: true,
+    });
   } else if (competition.votingDeadline) {
     milestones.push({
       label: "Results (estimated)",

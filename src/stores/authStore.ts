@@ -1,7 +1,10 @@
 import { create } from "zustand";
-import { User as FirebaseUser } from "firebase/auth";
-import { firestore } from "@novelsync/platform-auth";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import {
+  User as FirebaseUser,
+  updateProfile as updateFirebaseAuthProfile,
+} from "firebase/auth";
+import { auth, firestore } from "@novelsync/platform-auth";
+import { doc, getDoc } from "firebase/firestore";
 import { IUser } from "@/types/IUser";
 import { profileRepo } from "@novelsync/story-data-client";
 import { appQueryClient } from "@/lib/queryClient";
@@ -58,26 +61,25 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       if (userDoc.exists()) {
         const userData = userDoc.data();
         const tokenResult = await firebaseUser.getIdTokenResult();
+        // username lives in story-data now; Firebase Auth's displayName (set
+        // at signup, kept in sync by updateProfile — see authStore.updateProfile)
+        // is the bootstrap source until the story-data profile loads below.
+        const seedUsername =
+          typeof userData.username === "string" &&
+          userData.username.trim().length > 0
+            ? userData.username
+            : firebaseUser.displayName || "";
         const newUser: IUser = {
           ...firebaseUser,
           ...userData,
           createdAt: userData.createdAt,
-          username: userData.username,
-          firstName:
-            typeof userData.firstName === "string"
-              ? userData.firstName
-              : undefined,
-          lastName:
-            typeof userData.lastName === "string"
-              ? userData.lastName
-              : undefined,
+          username: seedUsername,
           followers: [],
           following: [],
           lastLogin: userData.lastLogin,
           bio: userData.bio,
           occupation: userData.occupation,
           location: userData.location,
-          writingInterests: userData.writingInterests,
           walletAddress: userData.walletAddress,
           hasCustomAiProvider: userData.hasCustomAiProvider === true,
           isAdmin: tokenResult.claims["admin"] === true,
@@ -89,24 +91,55 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         };
 
         let hydratedUser = newUser;
-        const profileUsername =
-          typeof userData.username === "string" && userData.username.trim().length > 0
-            ? userData.username
-            : firebaseUser.displayName || "";
+        const profileUsername = seedUsername;
         if (profileUsername) {
           try {
             let profile = await profileRepo.getMe();
             if (!profile) {
-              profile = await profileRepo.createMe({ username: profileUsername, photoURL: firebaseUser.photoURL || "", bio: typeof userData.bio === "string" ? userData.bio : "", occupation: typeof userData.occupation === "string" ? userData.occupation : "", location: typeof userData.location === "string" ? userData.location : "", walletAddress: typeof userData.walletAddress === "string" ? userData.walletAddress : "" });
+              // Self-heal for a Firestore doc with no story-data profile yet.
+              // Also carries firstName/lastName/writingInterests forward from
+              // any pre-migration Firestore doc that still has them.
+              profile = await profileRepo.createMe({
+                username: profileUsername,
+                photoURL: firebaseUser.photoURL || "",
+                firstName:
+                  typeof userData.firstName === "string"
+                    ? userData.firstName
+                    : "",
+                lastName:
+                  typeof userData.lastName === "string"
+                    ? userData.lastName
+                    : "",
+                bio: typeof userData.bio === "string" ? userData.bio : "",
+                occupation:
+                  typeof userData.occupation === "string"
+                    ? userData.occupation
+                    : "",
+                location:
+                  typeof userData.location === "string"
+                    ? userData.location
+                    : "",
+                writingInterests:
+                  typeof userData.writingInterests === "string"
+                    ? userData.writingInterests
+                    : "",
+                walletAddress:
+                  typeof userData.walletAddress === "string"
+                    ? userData.walletAddress
+                    : "",
+              });
             }
             const follows = await profileRepo.getMyFollows();
             hydratedUser = {
               ...newUser,
               username: profile.username,
               photoURL: profile.photoURL || firebaseUser.photoURL,
+              firstName: profile.firstName || undefined,
+              lastName: profile.lastName || undefined,
               bio: profile.bio ?? "",
               occupation: profile.occupation ?? "",
               location: profile.location ?? "",
+              writingInterests: profile.writingInterests,
               walletAddress: profile.walletAddress,
               following: follows.following,
               followers: follows.followers,
@@ -165,7 +198,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         user: state.user
           ? {
               ...state.user,
-              following: (state.user.following ?? []).filter((id) => id !== uid),
+              following: (state.user.following ?? []).filter(
+                (id) => id !== uid,
+              ),
             }
           : null,
       }));
@@ -206,15 +241,24 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       const publicProfileData: {
         username?: string;
         photoURL?: string;
+        firstName?: string;
+        lastName?: string;
         bio?: string;
         occupation?: string;
         location?: string;
+        writingInterests?: string;
       } = {};
       if (typeof filteredData.username === "string") {
         publicProfileData.username = filteredData.username;
       }
       if (typeof filteredData.photoURL === "string") {
         publicProfileData.photoURL = filteredData.photoURL;
+      }
+      if (typeof filteredData.firstName === "string") {
+        publicProfileData.firstName = filteredData.firstName;
+      }
+      if (typeof filteredData.lastName === "string") {
+        publicProfileData.lastName = filteredData.lastName;
       }
       if (typeof filteredData.bio === "string") {
         publicProfileData.bio = filteredData.bio;
@@ -225,11 +269,31 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       if (typeof filteredData.location === "string") {
         publicProfileData.location = filteredData.location;
       }
+      if (typeof filteredData.writingInterests === "string") {
+        publicProfileData.writingInterests = filteredData.writingInterests;
+      }
       if (Object.keys(publicProfileData).length > 0) {
         await profileRepo.updateMe(publicProfileData);
       }
-      const privateData = Object.fromEntries(Object.entries(filteredData).filter(([key]) => key === "firstName" || key === "lastName" || key === "writingInterests"));
-      if (Object.keys(privateData).length) await updateDoc(doc(firestore, "users", currentUser.uid), privateData);
+
+      // Firebase Auth's own displayName/photoURL are set once at signup and
+      // otherwise unused, but keeping them current avoids a stale copy
+      // surfacing through firebaseUser.displayName/.photoURL fallbacks
+      // (e.g. getFallbackUser, or before the story-data profile loads).
+      if (
+        auth.currentUser &&
+        (publicProfileData.username !== undefined ||
+          publicProfileData.photoURL !== undefined)
+      ) {
+        await updateFirebaseAuthProfile(auth.currentUser, {
+          ...(publicProfileData.username !== undefined
+            ? { displayName: publicProfileData.username }
+            : {}),
+          ...(publicProfileData.photoURL !== undefined
+            ? { photoURL: publicProfileData.photoURL }
+            : {}),
+        });
+      }
 
       // Refresh the live-resolved public profile so every surface that shows
       // this author's username/photo (feed, comments, story cards/bios) picks
@@ -249,7 +313,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       });
     } catch (error) {
       console.error("Error updating user profile:", error);
-      if (error instanceof Error && error.message.includes("username already taken")) {
+      if (
+        error instanceof Error &&
+        error.message.includes("username already taken")
+      ) {
         throw new Error("That username is already taken.");
       }
       throw new Error("Failed to update user profile");

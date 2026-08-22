@@ -91,11 +91,7 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
     if (!pendingDeleteId) return;
     setIsDeletingReply(true);
     try {
-      await guestbookRepo.deleteReply(
-        ownerId,
-        entryId,
-        pendingDeleteId,
-      );
+      await guestbookRepo.deleteReply(ownerId, entryId, pendingDeleteId);
       await loadReplies();
       setPendingDeleteId(null);
     } catch (error) {

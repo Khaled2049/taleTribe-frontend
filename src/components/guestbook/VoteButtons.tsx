@@ -63,7 +63,9 @@ const VoteButtons: React.FC<VoteButtonsProps> = ({
         }`}
       >
         <ChevronDown size={iconSize} />
-        <span className="text-xs font-medium tabular-nums">{downvoteCount}</span>
+        <span className="text-xs font-medium tabular-nums">
+          {downvoteCount}
+        </span>
       </Button>
     </div>
   );

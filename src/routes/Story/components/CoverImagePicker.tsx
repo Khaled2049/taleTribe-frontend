@@ -38,7 +38,8 @@ const CoverImagePicker: React.FC<CoverImagePickerProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => onChange(file, (ev.target?.result as string) ?? null);
+    reader.onload = (ev) =>
+      onChange(file, (ev.target?.result as string) ?? null);
     reader.readAsDataURL(file);
     e.target.value = "";
   };

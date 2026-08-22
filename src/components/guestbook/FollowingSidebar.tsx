@@ -156,10 +156,7 @@ export const FollowingStrip: React.FC<FollowingProps> = ({
                   aria-current={active ? "page" : undefined}
                   className="group flex flex-col items-center gap-1.5 shrink-0 w-[60px] no-underline"
                 >
-                  <Avatar
-                    username={person.username}
-                    size="w-11 h-11 text-sm"
-                  />
+                  <Avatar username={person.username} size="w-11 h-11 text-sm" />
                   <span
                     className={`
                       w-full truncate text-center font-ui text-[11px] leading-tight

@@ -20,7 +20,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
         </div>
       )}
 
-      <div className={`flex flex-col gap-1 max-w-[78%] ${isUser ? "items-end" : "items-start"}`}>
+      <div
+        className={`flex flex-col gap-1 max-w-[78%] ${isUser ? "items-end" : "items-start"}`}
+      >
         <div
           className={`px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
             isUser

@@ -3,11 +3,7 @@ import { AuthStore, useAuthStore } from "@/stores";
 
 type AuthContextType = Pick<
   AuthStore,
-  | "user"
-  | "loading"
-  | "followUser"
-  | "unfollowUser"
-  | "updateProfile"
+  "user" | "loading" | "followUser" | "unfollowUser" | "updateProfile"
 >;
 
 export const useAuthContext = (): AuthContextType =>

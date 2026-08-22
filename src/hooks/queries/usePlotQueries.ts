@@ -35,14 +35,12 @@ export function usePlots(storyId: string | undefined) {
 export function useAddPlotLine(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) => storyWorldbuildingRepo.addPlot(storyId!, name),
+    mutationFn: (name: string) =>
+      storyWorldbuildingRepo.addPlot(storyId!, name),
     onSuccess: (line) => {
       queryClient.setQueryData<PlotLine[]>(
         queryKeys.plots.byStory(storyId!),
-        (old) => [
-          ...(old ?? []),
-          line,
-        ],
+        (old) => [...(old ?? []), line],
       );
     },
   });
@@ -51,7 +49,8 @@ export function useAddPlotLine(storyId: string | undefined) {
 export function useUpdatePlotLineMeta(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (line: PlotLine) => storyWorldbuildingRepo.updatePlotMeta(storyId!, line),
+    mutationFn: (line: PlotLine) =>
+      storyWorldbuildingRepo.updatePlotMeta(storyId!, line),
     onMutate: async (line) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.plots.byStory(storyId!),
@@ -87,7 +86,13 @@ export function useDeletePlotLine(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (plotLineId: string) =>
-      storyWorldbuildingRepo.deletePlot(storyId!, plotLineId, queryClient.getQueryData<PlotLine[]>(queryKeys.plots.byStory(storyId!))?.find((x) => x.id === plotLineId)?.revision),
+      storyWorldbuildingRepo.deletePlot(
+        storyId!,
+        plotLineId,
+        queryClient
+          .getQueryData<PlotLine[]>(queryKeys.plots.byStory(storyId!))
+          ?.find((x) => x.id === plotLineId)?.revision,
+      ),
     onMutate: async (plotLineId) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.plots.byStory(storyId!),
@@ -179,7 +184,13 @@ export function useUpdateEvent(storyId: string | undefined) {
     onSuccess: (updated, { plotLineId }) => {
       queryClient.setQueryData<PlotLine[]>(
         queryKeys.plots.byStory(storyId!),
-        (old) => patchLine(old, plotLineId, (line) => ({ ...line, events: line.events.map((event) => event.id === updated.id ? updated : event) })),
+        (old) =>
+          patchLine(old, plotLineId, (line) => ({
+            ...line,
+            events: line.events.map((event) =>
+              event.id === updated.id ? updated : event,
+            ),
+          })),
       );
     },
     onSettled: (_data, _err, { revalidate }) => {
@@ -200,7 +211,16 @@ export function useDeleteEvent(storyId: string | undefined) {
     }: {
       plotLineId: string;
       eventId: string;
-    }) => storyWorldbuildingRepo.deleteEvent(storyId!, plotLineId, eventId, queryClient.getQueryData<PlotLine[]>(queryKeys.plots.byStory(storyId!))?.find((line) => line.id === plotLineId)?.events.find((event) => event.id === eventId)?.revision),
+    }) =>
+      storyWorldbuildingRepo.deleteEvent(
+        storyId!,
+        plotLineId,
+        eventId,
+        queryClient
+          .getQueryData<PlotLine[]>(queryKeys.plots.byStory(storyId!))
+          ?.find((line) => line.id === plotLineId)
+          ?.events.find((event) => event.id === eventId)?.revision,
+      ),
     onMutate: async ({ plotLineId, eventId }) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.plots.byStory(storyId!),
@@ -250,7 +270,9 @@ export function useReorderEvents(storyId: string | undefined) {
       plotLineId: string;
       orderedIds: string[];
     }) => {
-      const line = queryClient.getQueryData<PlotLine[]>(queryKeys.plots.byStory(storyId!))?.find((item) => item.id === plotLineId);
+      const line = queryClient
+        .getQueryData<PlotLine[]>(queryKeys.plots.byStory(storyId!))
+        ?.find((item) => item.id === plotLineId);
       if (!line) throw new Error("Plot line is not loaded.");
       return storyWorldbuildingRepo.reorderEvents(storyId!, line, orderedIds);
     },

@@ -66,7 +66,9 @@ const Section: React.FC<{
   children: React.ReactNode;
 }> = ({ title, blurb, children }) => (
   <section className="py-8 border-b border-ns-border">
-    <h2 className="font-heading text-[28px] leading-none text-ns-ink">{title}</h2>
+    <h2 className="font-heading text-[28px] leading-none text-ns-ink">
+      {title}
+    </h2>
     {blurb && (
       <p className="font-body text-[15px] text-ns-ink-secondary mt-2 max-w-[60ch]">
         {blurb}
@@ -198,7 +200,10 @@ const CompetitionEditor: React.FC = () => {
           title: form.title.trim(),
           description: form.description.trim(),
           category: form.category.trim(),
-          tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+          tags: form.tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean),
           maxParticipants: form.maxParticipants
             ? Number(form.maxParticipants)
             : null,
@@ -247,7 +252,9 @@ const CompetitionEditor: React.FC = () => {
       toast.success("Draft discarded");
       navigate("/competitions");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to discard draft.");
+      toast.error(
+        err instanceof Error ? err.message : "Failed to discard draft.",
+      );
     }
   };
 
@@ -390,11 +397,14 @@ const CompetitionEditor: React.FC = () => {
                 placeholder="1000"
               />
               <p className={hint}>
-                Moved from your balance into escrow on publish. Winner takes all.
+                Moved from your balance into escrow on publish. Winner takes
+                all.
               </p>
             </div>
             <div className="space-y-1.5">
-              <label className={label}>Entry fee ({TALE_SYMBOL}) — optional</label>
+              <label className={label}>
+                Entry fee ({TALE_SYMBOL}) — optional
+              </label>
               <input
                 type="text"
                 inputMode="decimal"

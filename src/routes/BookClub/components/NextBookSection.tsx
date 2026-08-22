@@ -198,8 +198,7 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
     return counts;
   };
 
-  const getTotalVotes = (poll: IPoll): number =>
-    Object.keys(poll.votes).length;
+  const getTotalVotes = (poll: IPoll): number => Object.keys(poll.votes).length;
 
   const getPercentage = (count: number, total: number): number =>
     total === 0 ? 0 : Math.round((count / total) * 100);
@@ -256,8 +255,8 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
                   const count = voteCounts[index];
                   const percentage = getPercentage(count, totalVotes);
                   const isSelected = userVote === index;
-                  const thumbnail = option.bookData?.volumeInfo.imageLinks
-                    ?.thumbnail;
+                  const thumbnail =
+                    option.bookData?.volumeInfo.imageLinks?.thumbnail;
 
                   return (
                     <button
@@ -326,9 +325,7 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
               {isCreator && totalVotes > 0 && winningBook && (
                 <button
                   type="button"
-                  onClick={() =>
-                    setAdoptTarget({ poll, book: winningBook })
-                  }
+                  onClick={() => setAdoptTarget({ poll, book: winningBook })}
                   className="mt-3 font-ui text-[11px] font-semibold tracking-[0.14em] uppercase text-ns-accent hover:opacity-80 transition-opacity"
                 >
                   Adopt winner as current book →

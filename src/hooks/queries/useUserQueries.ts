@@ -35,7 +35,9 @@ export function useSetWalletAddress(userId: string | null | undefined) {
       queryClient.setQueryData<PublicProfile | null>(
         queryKeys.user.publicProfile(userId),
         (previous) =>
-          previous ? { ...previous, walletAddress: address ?? undefined } : previous,
+          previous
+            ? { ...previous, walletAddress: address ?? undefined }
+            : previous,
       );
     },
     [queryClient, userId],

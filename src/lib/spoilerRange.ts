@@ -12,9 +12,9 @@ export interface SpoilerRange {
  * Returns a fragment to spread, not a value to assign — assigning is what
  * reintroduces the key.
  */
-export function spoilerRangeField(
-  range: SpoilerRange | undefined,
-): { spoilerChapterRange?: SpoilerRange } {
+export function spoilerRangeField(range: SpoilerRange | undefined): {
+  spoilerChapterRange?: SpoilerRange;
+} {
   if (!range) return {};
   return {
     spoilerChapterRange: {

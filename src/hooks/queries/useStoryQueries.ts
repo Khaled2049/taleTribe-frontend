@@ -23,20 +23,36 @@ async function updateStoryCover(
   previewUrl: string | null,
 ) {
   const user = auth.currentUser;
-  if (!user) throw new Error("You must be signed in to update the cover image.");
+  if (!user)
+    throw new Error("You must be signed in to update the cover image.");
   const story = await storyWorkspaceRepo.getStory(storyId);
   if (!story) throw new Error("Story not found");
-  if (story.userId !== user.uid) throw new Error("You do not have permission to update this cover.");
-  if (story.coverImageUrl) await storageService.deleteCoverImage(story.coverImageUrl);
-  if (story.thumbnailUrl && story.thumbnailUrl !== story.coverImageUrl) await storageService.deleteCoverImage(story.thumbnailUrl);
+  if (story.userId !== user.uid)
+    throw new Error("You do not have permission to update this cover.");
+  if (story.coverImageUrl)
+    await storageService.deleteCoverImage(story.coverImageUrl);
+  if (story.thumbnailUrl && story.thumbnailUrl !== story.coverImageUrl)
+    await storageService.deleteCoverImage(story.thumbnailUrl);
   let coverImageUrl = "";
   let thumbnailUrl = "";
   if (imageFile) {
-    ({ coverImageUrl, thumbnailUrl } = await storageService.uploadCoverImage(imageFile, user.uid, storyId));
+    ({ coverImageUrl, thumbnailUrl } = await storageService.uploadCoverImage(
+      imageFile,
+      user.uid,
+      storyId,
+    ));
   } else if (previewUrl?.startsWith("data:")) {
-    ({ coverImageUrl, thumbnailUrl } = await storageService.uploadCoverImage(storageService.dataUrlToFile(previewUrl), user.uid, storyId));
+    ({ coverImageUrl, thumbnailUrl } = await storageService.uploadCoverImage(
+      storageService.dataUrlToFile(previewUrl),
+      user.uid,
+      storyId,
+    ));
   }
-  return storyWorkspaceRepo.updateStory({ ...story, coverImageUrl, thumbnailUrl });
+  return storyWorkspaceRepo.updateStory({
+    ...story,
+    coverImageUrl,
+    thumbnailUrl,
+  });
 }
 
 const toBigInt = (value: unknown): bigint => {
@@ -124,7 +140,8 @@ export function useUserStoriesWithEarnings(userId: string | undefined) {
 export function useDeleteStory(userId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (storyId: string) => storyWorkspaceRepo.deleteStoryByID(storyId),
+    mutationFn: (storyId: string) =>
+      storyWorkspaceRepo.deleteStoryByID(storyId),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.user.stories(userId!),
@@ -142,7 +159,10 @@ export function useTogglePublishStory(userId: string | undefined) {
     mutationFn: async (storyId: string) => {
       const story = await storyWorkspaceRepo.getStory(storyId);
       if (!story) throw new Error("Story not found");
-      return storyWorkspaceRepo.updateStory({ ...story, isPublished: !story.isPublished });
+      return storyWorkspaceRepo.updateStory({
+        ...story,
+        isPublished: !story.isPublished,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

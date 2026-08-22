@@ -5,7 +5,10 @@ export async function reserveStorageUpload(): Promise<void> {
     await api.post("/reserveStorageUpload", {});
   } catch (error) {
     throw new Error(
-      getApiErrorMessage(error, "Daily image upload limit reached. Try again tomorrow."),
+      getApiErrorMessage(
+        error,
+        "Daily image upload limit reached. Try again tomorrow.",
+      ),
     );
   }
 }

@@ -9,11 +9,7 @@
  */
 
 export type GuestbookPolicy =
-  | "nobody"
-  | "following"
-  | "mutuals"
-  | "followers"
-  | "everyone";
+  "nobody" | "following" | "mutuals" | "followers" | "everyone";
 
 export const GUESTBOOK_POLICIES: readonly GuestbookPolicy[] = [
   "everyone",
@@ -105,10 +101,7 @@ export const canPostOnWall = ({
 };
 
 /** Why the compose form is hidden, for the reader of someone else's wall. */
-export const wallClosedReason = (
-  policy: unknown,
-  username: string,
-): string => {
+export const wallClosedReason = (policy: unknown, username: string): string => {
   switch (normalizePolicy(policy)) {
     case "followers":
       return `@${username} only accepts notes from people who follow them.`;

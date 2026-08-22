@@ -15,7 +15,13 @@ export function useDeletePlace(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (placeId: string) =>
-      storyWorldbuildingRepo.deletePlace(storyId!, placeId, queryClient.getQueryData<Place[]>(queryKeys.places.byStory(storyId!))?.find((x) => x.id === placeId)?.revision),
+      storyWorldbuildingRepo.deletePlace(
+        storyId!,
+        placeId,
+        queryClient
+          .getQueryData<Place[]>(queryKeys.places.byStory(storyId!))
+          ?.find((x) => x.id === placeId)?.revision,
+      ),
     onMutate: async (placeId) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.places.byStory(storyId!),
@@ -63,7 +69,8 @@ export function useAddPlace(storyId: string | undefined) {
 export function useUpdatePlace(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (place: Place) => storyWorldbuildingRepo.updatePlace(storyId!, place),
+    mutationFn: (place: Place) =>
+      storyWorldbuildingRepo.updatePlace(storyId!, place),
     onMutate: async (updated) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.places.byStory(storyId!),

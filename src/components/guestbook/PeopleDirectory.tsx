@@ -3,7 +3,10 @@ import { Loader2, Users } from "lucide-react";
 import { SearchField } from "@/components/common";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { useRecentMembers, useUserSearch } from "@/hooks/queries/usePeopleQueries";
+import {
+  useRecentMembers,
+  useUserSearch,
+} from "@/hooks/queries/usePeopleQueries";
 import { useAuthContext } from "@/contexts/AuthContext";
 import PersonRow from "./PersonRow";
 import GuestbookTabs from "./GuestbookTabs";

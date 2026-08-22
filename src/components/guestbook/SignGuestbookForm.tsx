@@ -51,7 +51,9 @@ const SignGuestbookForm: React.FC<SignGuestbookFormProps> = ({
         onChange={(e) => setContent(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={
-          isOwnGuestbook ? "Leave a note on your own page…" : "Sign the guestbook…"
+          isOwnGuestbook
+            ? "Leave a note on your own page…"
+            : "Sign the guestbook…"
         }
         rows={2}
         maxLength={maxCharacters}

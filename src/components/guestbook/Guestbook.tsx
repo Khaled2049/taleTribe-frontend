@@ -107,7 +107,10 @@ const Guestbook: React.FC<GuestbookProps> = ({
       console.error("Error signing guestbook:", err);
       removeEntry(tempId);
       setError(
-        rateLimitMessage(err, "Failed to sign the guestbook. Please try again."),
+        rateLimitMessage(
+          err,
+          "Failed to sign the guestbook. Please try again.",
+        ),
       );
     } finally {
       setIsSigning(false);

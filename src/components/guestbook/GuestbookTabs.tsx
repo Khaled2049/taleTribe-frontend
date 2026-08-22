@@ -33,8 +33,7 @@ const GuestbookTabs: React.FC<GuestbookTabsProps> = ({
 
   // Settings are always your own, never the viewed user's — so the tab is
   // hidden while reading someone else's wall, where it would read as theirs.
-  const showSettings =
-    !!user && (active !== "wall" || user.uid === wallUserId);
+  const showSettings = !!user && (active !== "wall" || user.uid === wallUserId);
 
   return (
     <nav

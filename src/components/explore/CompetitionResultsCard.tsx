@@ -22,7 +22,10 @@ export function CompetitionResultsCard({
   entries,
   currentUserId,
 }: CompetitionResultsCardProps) {
-  const results = useMemo(() => competition.results ?? [], [competition.results]);
+  const results = useMemo(
+    () => competition.results ?? [],
+    [competition.results],
+  );
 
   const winner = useMemo(
     () => results.find((r) => r.rank === 1 && BigInt(r.amount) > 0n),

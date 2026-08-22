@@ -73,7 +73,13 @@ export function buildChapterModel(content: string): ChapterModel {
     const start = cursor;
     parts.push(text);
     cursor += text.length;
-    blocks.push({ key: `block-${blocks.length}`, kind, start, end: cursor, text });
+    blocks.push({
+      key: `block-${blocks.length}`,
+      kind,
+      start,
+      end: cursor,
+      text,
+    });
     wordCount += countWords(text);
   };
 

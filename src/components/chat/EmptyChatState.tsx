@@ -12,14 +12,18 @@ const suggestions = [
   { icon: MessageSquare, text: "What are the main themes?" },
 ];
 
-export const EmptyChatState: React.FC<EmptyChatStateProps> = ({ onSuggestion }) => {
+export const EmptyChatState: React.FC<EmptyChatStateProps> = ({
+  onSuggestion,
+}) => {
   return (
     <div className="flex flex-col items-center justify-center h-full text-center px-4 py-8 gap-6">
       <div>
         <div className="w-12 h-12 rounded-full bg-ns-accent-subtle flex items-center justify-center mx-auto mb-3">
           <MessageSquare className="w-6 h-6 text-ns-accent" />
         </div>
-        <h3 className="font-heading text-base text-ns-ink mb-1">Writing Assistant</h3>
+        <h3 className="font-heading text-base text-ns-ink mb-1">
+          Writing Assistant
+        </h3>
         <p className="font-ui text-xs text-ns-ink-muted max-w-[200px] mx-auto">
           Ask anything about your story — I have full context.
         </p>

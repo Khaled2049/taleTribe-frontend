@@ -48,7 +48,6 @@ const HowCompetitionsWork = () => {
         canonical="/competitions/how-it-works"
       />
       <div className="container mx-auto px-4 max-w-7xl">
-
         <div className="flex items-center py-[22px] border-b border-ns-border">
           <Link
             to="/competitions"
@@ -76,10 +75,10 @@ const HowCompetitionsWork = () => {
               A prize, a deadline, and a fair count
             </h1>
             <p className="font-body text-xl leading-[1.55] text-ns-ink-secondary max-w-[62ch] mt-5">
-              Every competition begins as a private draft, then moves through five
-              published stages on a clock that runs whether anyone is watching or
-              not. Here is what happens at each one — and, at every point, exactly
-              where the prize money is sitting.
+              Every competition begins as a private draft, then moves through
+              five published stages on a clock that runs whether anyone is
+              watching or not. Here is what happens at each one — and, at every
+              point, exactly where the prize money is sitting.
             </p>
           </div>
         </div>

@@ -25,7 +25,9 @@ export function CompetitionsEmptyState({
         }}
       />
       <h2 className="font-heading text-[40px] leading-[1.05] text-ns-ink">
-        {isSearch ? "No competitions match your search" : "No competitions just yet"}
+        {isSearch
+          ? "No competitions match your search"
+          : "No competitions just yet"}
       </h2>
       <p className="font-body text-[17px] leading-[1.55] max-w-[36ch] text-ns-ink-secondary">
         {isSearch

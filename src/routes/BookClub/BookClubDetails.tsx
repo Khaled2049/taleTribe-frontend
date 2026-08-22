@@ -9,7 +9,10 @@ import DiscussionSection from "./components/DiscussionSection";
 import NextBookSection from "./components/NextBookSection";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { getAbsoluteUrl, APP_NAME } from "@/config/seo";
-import { useBookClub, useClubProgress } from "@/hooks/queries/useBookClubQueries";
+import {
+  useBookClub,
+  useClubProgress,
+} from "@/hooks/queries/useBookClubQueries";
 import { useProfileNames } from "@/hooks/queries/useUserQueries";
 import { BookPickerDialog } from "@/components/common/BookPicker";
 import { hasBook } from "@/utils/bookMapping";
@@ -28,7 +31,10 @@ interface MemberInfo {
 }
 
 const Ornament = () => (
-  <div className="flex items-center justify-center gap-3 py-2" aria-hidden="true">
+  <div
+    className="flex items-center justify-center gap-3 py-2"
+    aria-hidden="true"
+  >
     <span className="w-10 h-px bg-ns-border" />
     <span className="text-ns-ink-muted text-xs">✦</span>
     <span className="w-10 h-px bg-ns-border" />
@@ -240,7 +246,10 @@ const BookClubDetails: React.FC = () => {
                       by {book.volumeInfo.authors.join(", ")}
                     </p>
                   )}
-                  <div className="w-10 h-0.5 bg-ns-accent mb-3" aria-hidden="true" />
+                  <div
+                    className="w-10 h-0.5 bg-ns-accent mb-3"
+                    aria-hidden="true"
+                  />
                   {book.volumeInfo.description && (
                     <p className="font-body text-sm text-ns-ink-secondary leading-relaxed line-clamp-4 mb-4">
                       {book.volumeInfo.description}

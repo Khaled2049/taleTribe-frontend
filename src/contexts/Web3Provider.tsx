@@ -7,9 +7,5 @@ interface Web3ProviderProps {
 }
 
 export const Web3Provider = ({ children }: Web3ProviderProps) => {
-  return (
-    <WagmiProvider config={wagmiConfig}>
-      {children}
-    </WagmiProvider>
-  );
+  return <WagmiProvider config={wagmiConfig}>{children}</WagmiProvider>;
 };

@@ -49,7 +49,9 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [upvoteCount, setUpvoteCount] = useState(reply.upvoteCount || 0);
-    const [downvoteCount, setDownvoteCount] = useState(reply.downvoteCount || 0);
+    const [downvoteCount, setDownvoteCount] = useState(
+      reply.downvoteCount || 0,
+    );
     const [userVote, setUserVote] = useState<"up" | "down" | null>(
       reply.userVote || null,
     );
@@ -115,7 +117,12 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
       setIsVoting(true);
 
       try {
-        await guestbookRepo.voteReply(ownerId, reply.entryId, reply.id, voteType);
+        await guestbookRepo.voteReply(
+          ownerId,
+          reply.entryId,
+          reply.id,
+          voteType,
+        );
       } catch (error) {
         console.error("Error voting on reply:", error);
         setUpvoteCount(previousUpvotes);
@@ -129,7 +136,11 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
     const hasChildren = children.length > 0;
 
     return (
-      <div className={depth > 0 ? "mt-1.5 pl-3 border-l border-ns-border" : "mt-1.5"}>
+      <div
+        className={
+          depth > 0 ? "mt-1.5 pl-3 border-l border-ns-border" : "mt-1.5"
+        }
+      >
         <div className="flex items-start gap-1.5">
           {hasChildren ? (
             <button
@@ -228,16 +239,20 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                         Reply
                       </button>
                     )}
-                    {(currentUser?.uid === reply.authorId || currentUser?.uid === ownerId || currentUser?.uid === entryAuthorId) && (
+                    {(currentUser?.uid === reply.authorId ||
+                      currentUser?.uid === ownerId ||
+                      currentUser?.uid === entryAuthorId) && (
                       <>
-                        {currentUser?.uid === reply.authorId && <button
-                          onClick={() => setIsEditing(true)}
-                          disabled={isLoading}
-                          className="flex items-center gap-1 font-ui text-[10px] text-ns-ink-muted hover:text-ns-ink transition-colors"
-                        >
-                          <Edit2 size={10} />
-                          Edit
-                        </button>}
+                        {currentUser?.uid === reply.authorId && (
+                          <button
+                            onClick={() => setIsEditing(true)}
+                            disabled={isLoading}
+                            className="flex items-center gap-1 font-ui text-[10px] text-ns-ink-muted hover:text-ns-ink transition-colors"
+                          >
+                            <Edit2 size={10} />
+                            Edit
+                          </button>
+                        )}
                         <button
                           onClick={() => onDelete(reply.id)}
                           disabled={isLoading}

@@ -70,7 +70,12 @@ function englishVoices(all: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
     });
 }
 
-export function useReadAloud({ text, voice, speed, onError }: ReadAloudOptions) {
+export function useReadAloud({
+  text,
+  voice,
+  speed,
+  onError,
+}: ReadAloudOptions) {
   const [status, setStatus] = useState<ReadAloudStatus>("idle");
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [spokenRange, setSpokenRangeState] = useState<{
@@ -193,7 +198,8 @@ export function useReadAloud({ text, voice, speed, onError }: ReadAloudOptions) 
         utterance.onerror = (event) => {
           if (epoch !== epochRef.current) return;
           // `interrupted`/`canceled` are what cancel() raises — not real errors.
-          if (event.error === "interrupted" || event.error === "canceled") return;
+          if (event.error === "interrupted" || event.error === "canceled")
+            return;
           setSpokenRange(null);
           setStatus("error");
           onErrorRef.current?.("Speech playback failed.");

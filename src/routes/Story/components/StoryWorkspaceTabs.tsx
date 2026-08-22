@@ -14,7 +14,11 @@ const NAV_ITEMS = [
   { label: "Places", segment: "places", icon: MapPin, end: false },
 ] as const;
 
-function buildTo(basePath: "/create" | "/try", storyId: string | undefined, segment: string) {
+function buildTo(
+  basePath: "/create" | "/try",
+  storyId: string | undefined,
+  segment: string,
+) {
   if (basePath === "/try") {
     return segment ? `/try/${segment}` : "/try";
   }

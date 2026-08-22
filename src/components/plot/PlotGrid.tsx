@@ -233,7 +233,10 @@ const PlotGrid: React.FC<PlotGridProps> = ({
                                       ...event,
                                       tensionLevel: Math.min(
                                         10,
-                                        Math.max(1, Number(e.target.value) || 1),
+                                        Math.max(
+                                          1,
+                                          Number(e.target.value) || 1,
+                                        ),
                                       ),
                                     })
                                   }
