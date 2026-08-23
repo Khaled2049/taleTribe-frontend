@@ -35,6 +35,13 @@
     --ns-gold: #92400e;
     --ns-gold-bright: #b45309;
 
+    /* Teal — marks "someone else's identity" (another writer's avatar, a
+       Following state) distinctly from your own ink-black avatar and the
+       brand-red used everywhere else, e.g. Follow buttons. */
+    --ns-teal: #5c7a6e;
+    --ns-teal-border: #cfe0d6;
+    --ns-teal-subtle: rgba(92, 122, 110, 0.1);
+
     /* Borders */
     --ns-border: #e5e3db;
     --ns-border-strong: #d4d1c6;
@@ -83,6 +90,10 @@
 
     --ns-gold: #f59e0b;
     --ns-gold-bright: #fbbf24;
+
+    --ns-teal: #7ca595;
+    --ns-teal-border: #2a3b34;
+    --ns-teal-subtle: rgba(124, 165, 149, 0.14);
 
     --ns-border: #2d2d2b;
     --ns-border-strong: #3d3d3a;

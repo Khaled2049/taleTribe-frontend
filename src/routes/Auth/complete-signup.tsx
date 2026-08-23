@@ -33,6 +33,8 @@ const CompleteSignup: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   // Step 2 — profile (all optional)
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [bio, setBio] = useState("");
   const [occupation, setOccupation] = useState("");
   const [location, setLocation] = useState("");
@@ -151,6 +153,8 @@ const CompleteSignup: React.FC = () => {
       username.trim(),
       password,
       {
+        firstName,
+        lastName,
         bio,
         occupation,
         location,
@@ -174,6 +178,8 @@ const CompleteSignup: React.FC = () => {
     email,
     username,
     password,
+    firstName,
+    lastName,
     bio,
     occupation,
     location,
@@ -521,6 +527,42 @@ const CompleteSignup: React.FC = () => {
                     {imageError}
                   </p>
                 )}
+              </div>
+
+              {/* Name */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="firstName" className={LABEL_CLASS}>
+                    First name
+                  </label>
+                  <input
+                    id="firstName"
+                    name="firstName"
+                    type="text"
+                    autoComplete="given-name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    maxLength={50}
+                    placeholder="First name"
+                    className={INPUT_CLASS}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="lastName" className={LABEL_CLASS}>
+                    Last name
+                  </label>
+                  <input
+                    id="lastName"
+                    name="lastName"
+                    type="text"
+                    autoComplete="family-name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    maxLength={50}
+                    placeholder="Last name"
+                    className={INPUT_CLASS}
+                  />
+                </div>
               </div>
 
               {/* Bio */}

@@ -8,11 +8,19 @@ type GuestbookTab = "wall" | "people" | "settings";
 interface GuestbookTabsProps {
   active: GuestbookTab;
   /**
-   * Whose wall the Wall tab points at — the viewed user on a guestbook page, or
-   * your own when the directory or settings are open. Omitted for a signed-out
-   * viewer, who has no wall of their own to return to.
+   * The wall being viewed when active === "wall" — your own uid on the
+   * combined feed (WallPage), someone else's on their single wall
+   * (GuestbookPage). The Wall tab itself always points at your own feed now
+   * (/guestbook); this only decides whether Settings, which is always about
+   * your own wall, should show here. Omitted for a signed-out viewer.
    */
   wallUserId?: string;
+  /**
+   * "{n} entries" shown right-aligned in place of the Settings slot — only
+   * relevant while visiting someone else's wall, where Settings is hidden
+   * anyway. Ignored whenever Settings would show instead.
+   */
+  trailingCount?: number;
 }
 
 const tabClass = (isActive: boolean) => `
@@ -28,6 +36,7 @@ const Underline = () => (
 const GuestbookTabs: React.FC<GuestbookTabsProps> = ({
   active,
   wallUserId,
+  trailingCount,
 }) => {
   const { user } = useAuthContext();
 
@@ -40,9 +49,9 @@ const GuestbookTabs: React.FC<GuestbookTabsProps> = ({
       aria-label="Guestbook"
       className="flex items-center gap-6 border-b border-ns-border mb-8"
     >
-      {wallUserId && (
+      {user && (
         <Link
-          to={`/guestbook/${wallUserId}`}
+          to="/guestbook"
           aria-current={active === "wall" ? "page" : undefined}
           className={tabClass(active === "wall")}
         >
@@ -60,7 +69,7 @@ const GuestbookTabs: React.FC<GuestbookTabsProps> = ({
         {active === "people" && <Underline />}
       </Link>
 
-      {showSettings && (
+      {showSettings ? (
         <Link
           to="/guestbook/settings"
           aria-current={active === "settings" ? "page" : undefined}
@@ -73,6 +82,12 @@ const GuestbookTabs: React.FC<GuestbookTabsProps> = ({
           <Settings className="w-4 h-4" />
           {active === "settings" && <Underline />}
         </Link>
+      ) : (
+        trailingCount !== undefined && (
+          <span className="ml-auto font-ui text-[13px] text-ns-ink-muted pb-2">
+            {trailingCount} {trailingCount === 1 ? "entry" : "entries"}
+          </span>
+        )
       )}
     </nav>
   );

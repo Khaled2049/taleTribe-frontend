@@ -22,6 +22,7 @@ export const queryKeys = {
   },
   guestbook: {
     byOwner: (ownerId: string) => ["guestbook", ownerId] as const,
+    wall: (filter: string) => ["guestbook", "wall", filter] as const,
   },
   comments: {
     byChapter: (storyId: string, chapterId: string) =>
@@ -34,10 +35,13 @@ export const queryKeys = {
   },
   people: {
     search: (term: string) => ["people", "search", term] as const,
-    recent: () => ["people", "recent"] as const,
+    directory: (sort: string) => ["people", "directory", sort] as const,
     // Sorted so a reordered follow array does not read as a different query.
     following: (uids: readonly string[]) =>
       ["people", "following", [...uids].sort()] as const,
+    followers: (uids: readonly string[]) =>
+      ["people", "followers", [...uids].sort()] as const,
+    recentFollowers: () => ["people", "recentFollowers"] as const,
   },
   user: {
     stories: (userId: string) => ["user", userId, "stories"] as const,

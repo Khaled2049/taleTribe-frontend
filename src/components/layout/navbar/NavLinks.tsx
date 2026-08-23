@@ -25,17 +25,14 @@ const NavLinks = ({ className = "", onLinkClick }: NavLinksProps) => {
   // navbar, which is why it is not listed here.
   const links = [
     ...SECTIONS,
-    ...(user
-      ? [{ to: `/guestbook/${user.uid}`, label: "Guestbook" } as const]
-      : []),
+    ...(user ? [{ to: "/guestbook", label: "Guestbook" } as const] : []),
   ];
 
   const isActive = (to: string) =>
     location.pathname === to ||
-    // Any guestbook route counts — the directory and settings live there too,
-    // and so do other users' walls.
-    (to.startsWith("/guestbook/") &&
-      location.pathname.startsWith("/guestbook/")) ||
+    // Any guestbook route counts — the directory, settings and other users'
+    // walls all live under this section too.
+    (to === "/guestbook" && location.pathname.startsWith("/guestbook")) ||
     // A competition detail page is still the competitions section.
     location.pathname.startsWith(`${to}/`);
 

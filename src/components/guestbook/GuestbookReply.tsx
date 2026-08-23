@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
+  ChevronUp,
   MessageCircle,
   Edit2,
   Trash2,
@@ -9,7 +10,6 @@ import {
 } from "lucide-react";
 import { IGuestbookReply } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
-import VoteButtons from "./VoteButtons";
 import { guestbookRepo } from "@novelsync/story-data-client";
 import { rateLimitMessage } from "@/lib/rateLimitError";
 import { useGuestbookPolicy } from "./guestbookPolicyContext";
@@ -49,12 +49,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [upvoteCount, setUpvoteCount] = useState(reply.upvoteCount || 0);
-    const [downvoteCount, setDownvoteCount] = useState(
-      reply.downvoteCount || 0,
-    );
-    const [userVote, setUserVote] = useState<"up" | "down" | null>(
-      reply.userVote || null,
-    );
+    const [hasUpvoted, setHasUpvoted] = useState(reply.userVote === "up");
     const [isVoting, setIsVoting] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -96,24 +91,13 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
       }
     };
 
-    const handleVote = async (voteType: "up" | "down" | null) => {
+    const handleUpvote = async () => {
       if (!currentUser || isVoting) return;
 
-      const previousVote = userVote;
-      const previousUpvotes = upvoteCount;
-      const previousDownvotes = downvoteCount;
-
-      let newUpvotes = previousUpvotes;
-      let newDownvotes = previousDownvotes;
-
-      if (previousVote === "up") newUpvotes -= 1;
-      else if (previousVote === "down") newDownvotes -= 1;
-      if (voteType === "up") newUpvotes += 1;
-      else if (voteType === "down") newDownvotes += 1;
-
-      setUpvoteCount(newUpvotes);
-      setDownvoteCount(newDownvotes);
-      setUserVote(voteType);
+      const wasUpvoted = hasUpvoted;
+      const previousCount = upvoteCount;
+      setHasUpvoted(!wasUpvoted);
+      setUpvoteCount(wasUpvoted ? previousCount - 1 : previousCount + 1);
       setIsVoting(true);
 
       try {
@@ -121,13 +105,12 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
           ownerId,
           reply.entryId,
           reply.id,
-          voteType,
+          wasUpvoted ? null : "up",
         );
       } catch (error) {
         console.error("Error voting on reply:", error);
-        setUpvoteCount(previousUpvotes);
-        setDownvoteCount(previousDownvotes);
-        setUserVote(previousVote);
+        setHasUpvoted(wasUpvoted);
+        setUpvoteCount(previousCount);
       } finally {
         setIsVoting(false);
       }
@@ -220,15 +203,18 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                   )}
 
                   <div className="flex items-center gap-3 mt-2">
-                    <VoteButtons
-                      upvoteCount={upvoteCount}
-                      downvoteCount={downvoteCount}
-                      userVote={userVote}
-                      onVote={handleVote}
-                      isLoading={isVoting}
-                      disabled={!currentUser}
-                      size="sm"
-                    />
+                    <button
+                      onClick={handleUpvote}
+                      disabled={!currentUser || isVoting}
+                      className={`flex items-center gap-1 font-ui text-[10px] font-semibold transition-colors disabled:opacity-50 ${
+                        hasUpvoted
+                          ? "text-ns-accent"
+                          : "text-ns-ink-muted hover:text-ns-ink"
+                      }`}
+                    >
+                      <ChevronUp size={12} />
+                      {upvoteCount}
+                    </button>
                     {depth < MAX_DEPTH && currentUser && canPost && (
                       <button
                         onClick={() => setIsReplying(!isReplying)}

@@ -1,5 +1,5 @@
-import React from "react";
-import { Link, useParams } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { UserX } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import {
@@ -9,6 +9,8 @@ import {
 import { SEOHead } from "@/components/seo/SEOHead";
 import Guestbook from "@/components/guestbook/Guestbook";
 import GuestbookTabs from "@/components/guestbook/GuestbookTabs";
+import AboutOwner from "@/components/guestbook/AboutOwner";
+import WriterSuggestions from "@/components/guestbook/WriterSuggestions";
 import FollowingSidebar, {
   FollowingStrip,
 } from "@/components/guestbook/FollowingSidebar";
@@ -18,8 +20,11 @@ const GuestbookPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
   const { user, loading: authLoading } = useAuthContext();
   const isSelf = !!user && user.uid === userId;
+  const [entryCount, setEntryCount] = useState<number | undefined>(undefined);
 
   // usePublicProfile no-ops while signed out; the sign-in prompt below covers it.
+  // Called unconditionally regardless of isSelf, which only becomes known
+  // after auth resolves — a hook can't sit behind that check.
   const { data: profile, isLoading: profileLoading } = usePublicProfile(userId);
   const { data: guestbookPolicy } = useGuestbookPolicy(userId);
 
@@ -29,6 +34,12 @@ const GuestbookPage: React.FC = () => {
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ns-accent"></div>
       </div>
     );
+  }
+
+  // Your own wall now lives at the combined feed — this page is only for
+  // visiting someone else's.
+  if (isSelf) {
+    return <Navigate to="/guestbook" replace />;
   }
 
   if (profileLoading) {
@@ -61,47 +72,59 @@ const GuestbookPage: React.FC = () => {
     );
   }
 
-  // Prefer the live auth value for the owner so a username edit shows instantly.
-  const username = (isSelf && user?.username) || profile.username;
+  // Viewing someone else's wall — isSelf redirected above, so this is
+  // always the visited profile's own username.
+  const username = profile.username;
+  const initial = (username || "?").charAt(0).toUpperCase();
 
   return (
     <div className="min-h-screen bg-ns-bg">
       <SEOHead title={`@${username}'s guestbook`} noindex />
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
-        <div className="flex gap-8 items-start">
-          <FollowingSidebar
-            following={user?.following ?? []}
-            activeUserId={userId}
-          />
+      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-8 sm:py-9">
+        <header className="mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 flex-shrink-0 rounded-full bg-ns-teal text-white flex items-center justify-center font-ui font-bold text-lg">
+              {initial}
+            </div>
+            <h1 className="font-heading text-3xl sm:text-[38px] text-ns-ink leading-none tracking-[-0.015em]">
+              @{username}'s guestbook
+            </h1>
+          </div>
+          <div className="mt-4">
+            <GuestbookTabs
+              active="wall"
+              wallUserId={userId}
+              trailingCount={entryCount}
+            />
+          </div>
+        </header>
 
-          {/* max-w-3xl keeps the wall the same reading width it has without the
-              sidebar, rather than stretching to fill the wider container. */}
-          <div className="flex-1 min-w-0 max-w-3xl">
-            <header className="pb-8 mb-8 border-b border-ns-border">
-              <h1 className="font-heading text-3xl sm:text-4xl text-ns-ink leading-none mb-6">
-                {isSelf ? "Your guestbook" : `@${username}'s guestbook`}
-              </h1>
+        <FollowingStrip
+          following={user?.following ?? []}
+          activeUserId={userId}
+        />
 
-              <GuestbookTabs active="wall" wallUserId={userId} />
-
-              <p className="font-body text-[15px] text-ns-ink-secondary leading-relaxed">
-                {isSelf
-                  ? "Notes other members have left for you. You can remove anything on your own page."
-                  : `Leave a note for @${username}.`}
-              </p>
-            </header>
-
-            <FollowingStrip
+        <div className="grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_268px] gap-8 lg:gap-10 items-start">
+          <div className="hidden lg:block lg:sticky lg:top-6">
+            <FollowingSidebar
               following={user?.following ?? []}
               activeUserId={userId}
             />
+          </div>
 
+          <div className="min-w-0">
             <Guestbook
               ownerId={userId}
               currentUser={user}
               guestbookPolicy={normalizePolicy(guestbookPolicy)}
               ownerUsername={username}
+              onEntryCountChange={setEntryCount}
             />
+          </div>
+
+          <div className="hidden lg:flex lg:sticky lg:top-6 flex-col gap-5">
+            <AboutOwner owner={profile} />
+            <WriterSuggestions />
           </div>
         </div>
       </div>

@@ -58,8 +58,14 @@ const FollowingSidebar: React.FC<FollowingProps> = ({
   return (
     <aside className="hidden lg:block w-56 shrink-0">
       <div className="sticky top-20">
-        <div className="flex items-center h-9 mb-2 px-3 border-b border-ns-border">
+        <div className="flex items-baseline justify-between h-9 mb-2 px-3 border-b border-ns-border">
           <SectionLabel />
+          <Link
+            to="/guestbook/people"
+            className="font-ui text-xs font-semibold text-ns-accent no-underline hover:underline"
+          >
+            Manage
+          </Link>
         </div>
 
         {following.length === 0 ? (
@@ -106,6 +112,24 @@ const FollowingSidebar: React.FC<FollowingProps> = ({
               );
             })}
           </nav>
+        )}
+
+        {following.length > 0 && (
+          <div className="mt-[26px] border border-ns-border rounded-ns-lg bg-ns-surface px-[15px] py-3.5">
+            <div className="font-heading text-[17px] text-ns-ink mb-1">
+              Quiet week?
+            </div>
+            <p className="font-body text-[13px] leading-relaxed text-ns-ink-secondary">
+              Your wall only shows people you follow. Find more writers in{" "}
+              <Link
+                to="/guestbook/people"
+                className="text-ns-accent no-underline hover:underline"
+              >
+                People
+              </Link>
+              .
+            </p>
+          </div>
         )}
       </div>
     </aside>
