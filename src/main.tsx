@@ -59,6 +59,7 @@ const PeopleDirectory = lazy(
 const GuestbookSettings = lazy(
   () => import("./routes/Guestbook/GuestbookSettings"),
 );
+const WallPage = lazy(() => import("./routes/Guestbook/WallPage"));
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen bg-ns-bg">
@@ -207,11 +208,21 @@ const router = createBrowserRouter([
           </Suspense>
         ),
       },
+      // Your personal combined feed — own posts, people you follow, notes
+      // left on your page. Declared before the dynamic sibling below; React
+      // Router ranks static segments higher regardless of order, but the
+      // intent should not depend on knowing that.
+      {
+        path: "/guestbook",
+        element: (
+          <Suspense fallback={<LoadingFallback />}>
+            <WallPage />
+          </Suspense>
+        ),
+      },
       // The member directory is a section of the guestbook, not a per-user page,
-      // so it takes a static segment. Declared before the dynamic sibling below;
-      // React Router ranks static segments higher regardless of order, but the
-      // intent should not depend on knowing that. No uid can collide with
-      // "people" — Firebase uids are 28 alphanumeric characters.
+      // so it takes a static segment. No uid can collide with "people" —
+      // Firebase uids are 28 alphanumeric characters.
       {
         path: "/guestbook/people",
         element: (

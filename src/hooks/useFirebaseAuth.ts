@@ -21,6 +21,8 @@ import { profileRepo } from "@novelsync/story-data-client";
 
 /** Optional profile details collected during the signup wizard. */
 export interface SignupProfile {
+  firstName?: string;
+  lastName?: string;
   bio?: string;
   occupation?: string;
   location?: string;
@@ -38,6 +40,8 @@ export const useFirebaseAuth = () => {
       email: string;
       isAnonymous?: boolean;
       walletAddress?: string;
+      firstName?: string;
+      lastName?: string;
       bio?: string;
       occupation?: string;
       location?: string;
@@ -59,6 +63,8 @@ export const useFirebaseAuth = () => {
     await profileRepo.createMe({
       username: userData.username,
       photoURL: userData.photoURL || "",
+      firstName: userData.firstName?.trim() || "",
+      lastName: userData.lastName?.trim() || "",
       bio: userData.bio?.trim() || "",
       occupation: userData.occupation?.trim() || "",
       location: userData.location?.trim() || "",
@@ -179,6 +185,8 @@ export const useFirebaseAuth = () => {
         email,
         isAnonymous: false,
         walletAddress,
+        firstName: profile?.firstName,
+        lastName: profile?.lastName,
         bio: profile?.bio,
         occupation: profile?.occupation,
         location: profile?.location,

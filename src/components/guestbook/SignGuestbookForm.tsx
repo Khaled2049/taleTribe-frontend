@@ -1,15 +1,15 @@
 import React, { useState } from "react";
 
 interface SignGuestbookFormProps {
+  ownerUsername: string;
   onSubmit: (content: string) => Promise<void>;
   isLoading?: boolean;
-  isOwnGuestbook?: boolean;
 }
 
 const SignGuestbookForm: React.FC<SignGuestbookFormProps> = ({
+  ownerUsername,
   onSubmit,
   isLoading = false,
-  isOwnGuestbook = false,
 }) => {
   const [content, setContent] = useState("");
   const maxCharacters = 280;
@@ -44,17 +44,18 @@ const SignGuestbookForm: React.FC<SignGuestbookFormProps> = ({
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-ns-surface border border-ns-border rounded-ns-lg px-[22px] py-5 mb-7"
+      className="bg-ns-elevated border border-ns-border rounded-ns-lg px-[22px] py-5 mb-7"
     >
+      <p className="font-ui text-[13px] text-ns-ink-muted mb-2">
+        Leave a note for{" "}
+        <span className="font-bold text-ns-ink">@{ownerUsername}</span>.
+      </p>
+
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={
-          isOwnGuestbook
-            ? "Leave a note on your own page…"
-            : "Sign the guestbook…"
-        }
+        placeholder="Sign the guestbook…"
         rows={2}
         maxLength={maxCharacters}
         disabled={isLoading}
@@ -62,7 +63,7 @@ const SignGuestbookForm: React.FC<SignGuestbookFormProps> = ({
         className="
           w-full resize-none bg-transparent border-0 outline-none
           font-body text-ns-ink placeholder:text-ns-ink-muted
-          text-[17px] leading-relaxed min-h-[44px]
+          text-[19px] leading-relaxed min-h-[44px]
           disabled:opacity-50
         "
       />
@@ -80,20 +81,25 @@ const SignGuestbookForm: React.FC<SignGuestbookFormProps> = ({
           {content.length} / {maxCharacters}
         </span>
 
-        <button
-          type="submit"
-          disabled={!content.trim() || isLoading || isOverLimit}
-          className="
-            inline-flex items-center px-5 py-[9px]
-            bg-ns-accent text-white rounded-full
-            font-ui text-sm
-            hover:bg-ns-accent-hover
-            transition-colors duration-200
-            disabled:opacity-40 disabled:cursor-not-allowed
-          "
-        >
-          {isLoading ? "Signing…" : "Sign"}
-        </button>
+        <div className="flex items-center gap-3">
+          <span className="font-ui text-[12.5px] text-ns-ink-muted">
+            Visible on their wall
+          </span>
+          <button
+            type="submit"
+            disabled={!content.trim() || isLoading || isOverLimit}
+            className="
+              inline-flex items-center px-5 py-[9px]
+              bg-ns-accent text-white rounded-full
+              font-ui text-sm font-bold
+              hover:bg-ns-accent-hover
+              transition-colors duration-200
+              disabled:opacity-40 disabled:cursor-not-allowed
+            "
+          >
+            {isLoading ? "Signing…" : "Sign"}
+          </button>
+        </div>
       </div>
     </form>
   );

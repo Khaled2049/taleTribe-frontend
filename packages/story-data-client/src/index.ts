@@ -29,7 +29,7 @@ export type { IReadingProgress } from "./types/IReadingProgress";
 export type { Chapter, ILikes, Story, StoryMetadata } from "./types/IStory";
 
 export { guestbookRepo } from "./repos/GuestbookRepo";
-export { PEOPLE_PAGE_SIZE, profileRepo, type ProfileUpdate, type PublicProfile } from "./repos/ProfileRepo";
+export { PEOPLE_PAGE_SIZE, profileRepo, type ProfileUpdate, type PublicProfile, type RecentFollower } from "./repos/ProfileRepo";
 export { publicStoryRepo, type PublicStoryPage } from "./repos/PublicStoryRepo";
 export { readingHistoryRepo } from "./repos/ReadingHistoryRepo";
 export {

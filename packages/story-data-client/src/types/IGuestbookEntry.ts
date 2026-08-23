@@ -10,6 +10,8 @@ export interface IGuestbookEntry {
   id: string;
   /** Whose guestbook this entry sits in. Also the parent path segment. */
   ownerId: string;
+  /** Set only on entries returned by the personal Wall feed (GuestbookRepo.listWall). */
+  ownerUsername?: string;
   content: string;
   createdAt: GuestbookDate;
   authorUsername: string;

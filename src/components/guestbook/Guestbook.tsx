@@ -5,7 +5,7 @@ import { IGuestbookEntry } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
 import { guestbookRepo } from "@novelsync/story-data-client";
 import { rateLimitMessage } from "@/lib/rateLimitError";
-import GuestbookEntryCard from "./GuestbookEntryCard";
+import WallPostCard from "./WallPostCard";
 import SignGuestbookForm from "./SignGuestbookForm";
 import { GuestbookPolicyContext } from "./guestbookPolicyContext";
 import {
@@ -25,6 +25,8 @@ interface GuestbookProps {
   /** From the owner's public profile; absent reads as "everyone". */
   guestbookPolicy?: unknown;
   ownerUsername: string;
+  /** Bubbles the wall's total entry count up for the tab row's "{n} entries" label. */
+  onEntryCountChange?: (count: number) => void;
 }
 
 const Guestbook: React.FC<GuestbookProps> = ({
@@ -32,6 +34,7 @@ const Guestbook: React.FC<GuestbookProps> = ({
   currentUser,
   guestbookPolicy,
   ownerUsername,
+  onEntryCountChange,
 }) => {
   const [isSigning, setIsSigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +68,7 @@ const Guestbook: React.FC<GuestbookProps> = ({
   const addEntry = useAddEntryToCache(ownerId, viewerId);
 
   const entries = data?.pages.flatMap((p) => p.entries) ?? [];
+  const totalCount = data?.pages[0]?.totalCount;
 
   const { ref: loadMoreRef, inView } = useInView({
     threshold: 0,
@@ -76,6 +80,10 @@ const Guestbook: React.FC<GuestbookProps> = ({
       fetchNextPage();
     }
   }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  useEffect(() => {
+    if (totalCount !== undefined) onEntryCountChange?.(totalCount);
+  }, [totalCount, onEntryCountChange]);
 
   const handleSign = async (content: string) => {
     if (!currentUser) return;
@@ -122,9 +130,9 @@ const Guestbook: React.FC<GuestbookProps> = ({
       <section>
         {currentUser && canPost && (
           <SignGuestbookForm
+            ownerUsername={ownerUsername}
             onSubmit={handleSign}
             isLoading={isSigning}
-            isOwnGuestbook={currentUser.uid === ownerId}
           />
         )}
 
@@ -166,14 +174,24 @@ const Guestbook: React.FC<GuestbookProps> = ({
           </div>
         ) : (
           <div>
-            {entries.map((entry) => (
-              <GuestbookEntryCard
-                key={entry.id}
-                entry={entry}
-                currentUser={currentUser}
-                onEntryDeleted={removeEntry}
-              />
-            ))}
+            <div className="flex items-center gap-3.5 mb-3.5">
+              <span className="font-ui text-[11px] font-bold tracking-[0.14em] uppercase text-ns-ink-muted whitespace-nowrap">
+                Guestbook entries
+              </span>
+              <span className="flex-1 h-px bg-ns-border" />
+            </div>
+
+            <div className="flex flex-col gap-3.5">
+              {entries.map((entry) => (
+                <WallPostCard
+                  key={entry.id}
+                  entry={entry}
+                  currentUser={currentUser}
+                  onEntryDeleted={removeEntry}
+                  contextLineOverride={`left a note on ${ownerUsername}'s page`}
+                />
+              ))}
+            </div>
 
             <div
               ref={loadMoreRef}
