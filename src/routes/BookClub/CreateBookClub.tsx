@@ -63,7 +63,10 @@ const CreateBookClub = ({
       id: uuidv4(),
       members: [user.uid],
       activity: "New",
-      image: "/api/placeholder/400/250",
+      // Left empty rather than a placeholder path: the API only accepts an
+      // absolute http(s) image URL, and nothing renders this as an image —
+      // BookClubDetails already falls back when it is blank.
+      image: "",
       creatorId: user.uid,
       // Only persist a book when one was actually chosen — legacy code wrote
       // an all-empty-strings placeholder object here.

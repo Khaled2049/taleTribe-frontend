@@ -21,6 +21,20 @@ interface ApiStory {
     updatedAt: string;
 }
 
+/**
+ * The list endpoint returns each story with the aggregates the shelf renders.
+ * They are derived per request, so only `GET /v1/stories` carries them — a
+ * story from get/create/update has none of these fields.
+ */
+interface ApiStoryListItem extends ApiStory {
+    chapterCount: number;
+    wordCount: number;
+    views: number;
+    likeCount: number;
+    averageRating?: number;
+    ratingsCount: number;
+}
+
 interface ApiChapter {
     id: string;
     storyId: string;
@@ -83,8 +97,16 @@ export class StoryWorkspaceRepo {
         try { return this.story(await this.request<ApiStory>("GET", `/v1/stories/${storyId}`)); } catch (error) { if (isNotFound(error)) return null; throw error; }
     }
     async getUserStories(): Promise<StoryMetadata[]> {
-        const stories = await this.request<ApiStory[]>("GET", "/v1/stories");
-        return stories.map((story) => this.story(story));
+        const stories = await this.request<ApiStoryListItem[]>("GET", "/v1/stories");
+        return stories.map((api) => ({
+            ...this.story(api),
+            chapterCount: api.chapterCount,
+            wordCount: api.wordCount,
+            views: api.views,
+            likes: api.likeCount,
+            averageRating: api.averageRating,
+            ratingsCount: api.ratingsCount,
+        }));
     }
     async createStory(input: Omit<ApiStory, "id" | "ownerId" | "revision" | "createdAt" | "updatedAt">): Promise<Story> {
         return this.story(await this.request<ApiStory>("POST", "/v1/stories", input));

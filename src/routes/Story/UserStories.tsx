@@ -38,21 +38,28 @@ const RowSkeleton = () => (
 );
 
 const UserStories = () => {
-  const { user } = useAuthContext();
+  const { user, loading: authLoading } = useAuthContext();
 
   const {
     data: stories = [],
-    isLoading: loading,
+    isPending: storiesPending,
     isError: storiesError,
     error: storiesErrorValue,
   } = useUserStoriesWithEarnings(user?.uid);
 
   const {
     data: recentlyRead = [],
-    isLoading: recentlyReadLoading,
+    isPending: recentlyReadPending,
     isError: recentlyReadError,
     error: recentlyReadErrorValue,
   } = useRecentlyRead(user?.uid, 5);
+
+  // Both queries are disabled until auth resolves a uid, and a disabled query
+  // reports isLoading === false with data undefined — which would render the
+  // "No stories yet" empty state for a beat before the real list arrives.
+  // Gate on auth plus isPending so the skeleton covers the whole wait.
+  const loading = authLoading || (!!user && storiesPending);
+  const recentlyReadLoading = authLoading || (!!user && recentlyReadPending);
 
   const deleteStory = useDeleteStory(user?.uid);
   const togglePublish = useTogglePublishStory(user?.uid);

@@ -24,6 +24,31 @@ import {
 import { RATE_LIMITS } from "@/config/rateLimits";
 import { spoilerRangeField } from "@/lib/spoilerRange";
 
+/**
+ * The write body the API accepts for create and update. The server rejects
+ * unknown fields outright, so an `IClub` cannot be sent as-is: `id`,
+ * `creatorId` and `members` are all assigned server-side (from the new uuid,
+ * the authenticated uid, and an owner membership row), and the nested
+ * collections have their own endpoints.
+ */
+interface ClubInput {
+  name: string;
+  description: string;
+  image: string;
+  category: string;
+  activity: string;
+  meetUp: string;
+}
+
+export const clubInput = (club: IClub): ClubInput => ({
+  name: club.name,
+  description: club.description,
+  image: club.image,
+  category: club.category,
+  activity: club.activity,
+  meetUp: club.meetUp ?? "",
+});
+
 class BookClubRepo {
   private async request<T>(
     method: string,
@@ -42,9 +67,12 @@ class BookClubRepo {
   }
 
   createBookClub(club: IClub): Promise<string> {
-    return this.request<IClub>("POST", "/v1/book-clubs", club, true).then(
-      (x) => x.id,
-    );
+    return this.request<IClub>(
+      "POST",
+      "/v1/book-clubs",
+      clubInput(club),
+      true,
+    ).then((x) => x.id);
   }
   getBookClubs(): Promise<IClub[]> {
     return this.request<IClub[]>("GET", "/v1/book-clubs");
@@ -56,7 +84,12 @@ class BookClubRepo {
     });
   }
   updateBookClub(id: string, club: IClub) {
-    return this.request<IClub>("PATCH", `/v1/book-clubs/${id}`, club, true);
+    return this.request<IClub>(
+      "PATCH",
+      `/v1/book-clubs/${id}`,
+      clubInput(club),
+      true,
+    );
   }
   updateMeetUp(id: string, meetUp: string) {
     return this.settings(id, { meetUp });

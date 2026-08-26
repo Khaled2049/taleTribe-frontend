@@ -58,6 +58,8 @@ import { useCoWrite } from "@/hooks/useCoWrite";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { toast } from "sonner";
 import { summarizeChapter } from "@/cloudFunctions/ai";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/hooks/queries/queryKeys";
 
 const DEMO_STORY: Story = {
   id: "demo",
@@ -88,6 +90,7 @@ export function SimpleEditor() {
   const [searchParams] = useSearchParams();
   const openInteractivePanelOnMount = searchParams.get("wizard") === "true";
   const { user } = useAuthContext();
+  const queryClient = useQueryClient();
 
   // Use the new consolidated state hook
   const { state, actions } = useEditorState();
@@ -235,6 +238,17 @@ export function SimpleEditor() {
     }
   }, [storyId, user, loadStory, isDemo, actions]);
 
+  // The shelf renders a chapter count derived server-side, so adding or
+  // removing a chapter here makes its cached list wrong. The query is not
+  // mounted while the editor is open, so this only marks it stale — the
+  // refetch happens when the user actually navigates to the shelf.
+  const invalidateShelf = useCallback(() => {
+    if (!user) return;
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.user.stories(user.uid),
+    });
+  }, [queryClient, user]);
+
   // Handle new chapter creation
   const handleNewChapter = async () => {
     if (!requireAuth()) return;
@@ -253,6 +267,7 @@ export function SimpleEditor() {
       );
       actions.addChapter(newChapter);
       resetSaveState();
+      invalidateShelf();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to add chapter.",
@@ -408,6 +423,7 @@ export function SimpleEditor() {
       await storyWorkspaceRepo.deleteChapter(state.story, chapter);
       actions.deleteChapter(chapterToDelete);
       resetSaveState();
+      invalidateShelf();
     } catch (error) {
       console.error("Error deleting chapter:", error);
     }

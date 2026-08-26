@@ -88,9 +88,15 @@ export function usePublishedStories(category: string) {
   });
 }
 
+const NO_EARNINGS = { eth: "0", usdc: "0" } as const;
+
 /**
  * Fetches user's own stories and their on-chain earnings in one query.
  * Earnings are fetched in parallel (fixes the N+1 problem).
+ *
+ * Only `userId` gates the query. The shelf is primarily a list of the user's
+ * writing, so it must not sit disabled — rendering as an empty list — while
+ * wagmi settles; a story with no reachable chain simply reports zero earnings.
  */
 export function useUserStoriesWithEarnings(userId: string | undefined) {
   const publicClient = usePublicClient();
@@ -101,17 +107,20 @@ export function useUserStoriesWithEarnings(userId: string | undefined) {
     queryKey: [...queryKeys.user.stories(userId!), chainId] as const,
     queryFn: async () => {
       const storyList = await storyWorkspaceRepo.getUserStories();
+      if (!publicClient) {
+        return storyList.map((story) => ({ ...story, earnings: NO_EARNINGS }));
+      }
       return Promise.all(
         storyList.map(async (story) => {
           const [ethRaw, usdcRaw] = await Promise.all([
-            publicClient!
+            publicClient
               .readContract({
                 ...tippingPlatformConfig,
                 functionName: "storyEarnings",
                 args: [story.id, ZERO_ADDRESS],
               })
               .catch(() => 0n),
-            publicClient!
+            publicClient
               .readContract({
                 ...tippingPlatformConfig,
                 functionName: "storyEarnings",
@@ -130,7 +139,7 @@ export function useUserStoriesWithEarnings(userId: string | undefined) {
         }),
       );
     },
-    enabled: !!userId && !!publicClient && !!chainId,
+    enabled: !!userId,
     staleTime: 1000 * 60 * 5,
   });
 }

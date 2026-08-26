@@ -115,14 +115,23 @@ export const generateCoverImage = onRequest(
 
       console.log("Replicate output:", output);
 
-      // Handle different output types from Replicate
-      if (!Array.isArray(output) || output.length === 0) {
+      // Replicate models usually return an array of outputs, but some model
+      // versions return the single output directly (not wrapped in an
+      // array) when only one file is produced. Handle both shapes.
+      let firstItem: unknown;
+      if (Array.isArray(output)) {
+        if (output.length === 0) {
+          throw new Error("Invalid output from model. Received an empty array.");
+        }
+        firstItem = output[0];
+      } else if (output !== null && output !== undefined) {
+        firstItem = output;
+      } else {
         throw new Error(
-          `Invalid output from model. Expected array, got: ${typeof output}`
+          `Invalid output from model. Got: ${typeof output}`
         );
       }
 
-      const firstItem = output[0];
       let imageBase64: string;
 
       // Check if it's a ReadableStream
