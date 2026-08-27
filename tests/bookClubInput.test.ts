@@ -45,12 +45,12 @@ describe("clubInput", () => {
   });
 
   it("drops the server-assigned identity fields", () => {
-    const body = clubInput(fullClub) as Record<string, unknown>;
+    const body = clubInput(fullClub);
     // id comes from a new uuid, creatorId from the authed uid, and members
     // from the owner row the create transaction inserts.
-    expect(body.id).toBeUndefined();
-    expect(body.creatorId).toBeUndefined();
-    expect(body.members).toBeUndefined();
+    expect(body).not.toHaveProperty("id");
+    expect(body).not.toHaveProperty("creatorId");
+    expect(body).not.toHaveProperty("members");
   });
 
   it("preserves the user-entered values", () => {

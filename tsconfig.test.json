@@ -3,22 +3,7 @@
   "compilerOptions": {
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
-    "types": ["node"]
+    "types": ["node", "vite/client"]
   },
-  "include": [
-    "tests",
-    "packages/story-data-client/src",
-    "src/types/IPlot.ts",
-    "src/routes/Auth/mcpConsentScopes.ts",
-    "src/utils/epubExport.ts",
-    "src/lib/money.ts",
-    "src/types/IToken.ts",
-    "src/lib/competitionPhase.ts",
-    "src/lib/competitionListing.ts",
-    "src/lib/competitionDraft.ts",
-    "src/lib/pagination.ts",
-    "src/lib/spoilerRange.ts",
-    "src/lib/guestbookPolicy.ts",
-    "src/types/ICompetition.ts"
-  ]
+  "include": ["tests", "src", "packages/*/src"]
 }
