@@ -10,7 +10,7 @@ import { SEOHead } from "@/components/seo/SEOHead";
 import Guestbook from "@/components/guestbook/Guestbook";
 import GuestbookTabs from "@/components/guestbook/GuestbookTabs";
 import AboutOwner from "@/components/guestbook/AboutOwner";
-import WriterSuggestions from "@/components/guestbook/WriterSuggestions";
+import GuestbookSigners from "@/components/guestbook/GuestbookSigners";
 import FollowingSidebar, {
   FollowingStrip,
 } from "@/components/guestbook/FollowingSidebar";
@@ -124,7 +124,7 @@ const GuestbookPage: React.FC = () => {
 
           <div className="hidden lg:flex lg:sticky lg:top-6 flex-col gap-5">
             <AboutOwner owner={profile} />
-            <WriterSuggestions />
+            <GuestbookSigners ownerId={userId} viewerId={user?.uid ?? null} />
           </div>
         </div>
       </div>

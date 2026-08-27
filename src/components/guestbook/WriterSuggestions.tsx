@@ -5,8 +5,8 @@ import React from "react";
  *
  * There is no recommendation source in the product yet (no "followed by",
  * no similarity model), so these are not real accounts and "Follow" is
- * intentionally a no-op. Hardcoded per explicit direction, same as
- * WallDigest. Replace once there's a real suggestion source to query.
+ * intentionally a no-op. Replace once there's a real suggestion source to
+ * query.
  */
 const DEMO_SUGGESTIONS = [
   { initial: "D", handle: "@dev_user", why: "followed by @e2e_user" },

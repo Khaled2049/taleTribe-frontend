@@ -112,10 +112,6 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
         type: "book-selection",
         question: newPoll.question.trim(),
         options: newPoll.options,
-        votes: {},
-        createdAt: new Date().toISOString(),
-        creatorId: user!.uid,
-        isActive: true,
         ...(newPoll.endDate ? { endDate: newPoll.endDate } : {}),
       });
 

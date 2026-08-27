@@ -8,9 +8,7 @@ interface AboutOwnerProps {
 }
 
 /**
- * The right-rail "About {handle}" card on a visited wall — replaces the
- * Wall's own "Since you were last here" digest slot, which makes no sense
- * for a visitor reading someone else's page.
+ * The right-rail "About {handle}" card on a visited wall.
  */
 const AboutOwner: React.FC<AboutOwnerProps> = ({ owner }) => {
   const { user, followUser, unfollowUser } = useAuthContext();

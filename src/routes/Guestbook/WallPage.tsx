@@ -8,7 +8,7 @@ import GuestbookTabs from "@/components/guestbook/GuestbookTabs";
 import WallComposer from "@/components/guestbook/WallComposer";
 import WallFilters from "@/components/guestbook/WallFilters";
 import WallPostCard from "@/components/guestbook/WallPostCard";
-import WallDigest from "@/components/guestbook/WallDigest";
+import GuestbookAccessCard from "@/components/guestbook/GuestbookAccessCard";
 import WriterSuggestions from "@/components/guestbook/WriterSuggestions";
 import FollowingSidebar, {
   FollowingStrip,
@@ -36,7 +36,8 @@ const WallPage: React.FC = () => {
   const [isPosting, setIsPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
 
-  const { data: guestbookPolicy } = useGuestbookPolicy(user?.uid);
+  const { data: guestbookPolicy, isLoading: policyLoading } =
+    useGuestbookPolicy(user?.uid);
 
   const {
     data,
@@ -140,12 +141,12 @@ const WallPage: React.FC = () => {
 
         <FollowingStrip following={user.following ?? []} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_268px] gap-8 lg:gap-10 items-start">
-          <div className="hidden lg:block lg:sticky lg:top-6">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[248px_minmax(0,1fr)_268px] lg:gap-10">
+          <div className="hidden lg:sticky lg:top-6 lg:col-start-1 lg:row-start-1 lg:block">
             <FollowingSidebar following={user.following ?? []} />
           </div>
 
-          <div className="min-w-0 flex flex-col gap-[22px]">
+          <div className="order-2 flex min-w-0 flex-col gap-[22px] lg:order-none lg:col-start-2 lg:row-start-1">
             <WallComposer
               currentUser={user}
               policy={normalizePolicy(guestbookPolicy)}
@@ -228,9 +229,15 @@ const WallPage: React.FC = () => {
             )}
           </div>
 
-          <div className="hidden lg:flex lg:sticky lg:top-6 flex-col gap-5">
-            <WallDigest />
-            <WriterSuggestions />
+          <div className="order-1 flex flex-col gap-5 lg:order-none lg:sticky lg:top-6 lg:col-start-3 lg:row-start-1">
+            <GuestbookAccessCard
+              userId={user.uid}
+              current={guestbookPolicy}
+              isLoading={policyLoading}
+            />
+            <div className="hidden lg:block">
+              <WriterSuggestions />
+            </div>
           </div>
         </div>
       </div>

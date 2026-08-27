@@ -16,6 +16,7 @@
     "kill-ports": "test -x ../../kill-ports && ../../kill-ports || echo 'kill-ports moved to the NovelSync workspace root (it now stops story-data and creditProxy too). Run ./kill-ports from there.'",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "typecheck": "tsc -b",
     "preview": "vite preview",
     "start:agent": "cd python && python server.py",
     "start:emulator": "npm run emulator --prefix functions",

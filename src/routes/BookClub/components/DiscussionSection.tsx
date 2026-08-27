@@ -98,9 +98,6 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
         chapterNumber: newPrompt.chapterNumber,
         question: newPrompt.question.trim(),
         description: newPrompt.description.trim(),
-        createdAt: new Date().toISOString(),
-        creatorId: user!.uid,
-        responses: [],
       });
 
       setIsCreatingPrompt(false);
@@ -143,10 +140,7 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
     setIsSaving(true);
     try {
       await bookClubRepo.addPromptResponse(club.id, promptId, {
-        userId: user.uid,
-        username: user.username,
         content: newResponse.trim(),
-        createdAt: new Date().toISOString(),
       });
 
       setNewResponse("");
