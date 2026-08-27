@@ -1,9 +1,8 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { PublicProfile, guestbookRepo } from "@novelsync/story-data-client";
+import { PublicProfile } from "@novelsync/story-data-client";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { formatRelativeTime } from "@/lib/relativeTime";
-import { rateLimitMessage } from "@/lib/rateLimitError";
 import { toast } from "sonner";
 
 interface MemberCardProps {
@@ -14,16 +13,10 @@ interface MemberCardProps {
 }
 
 const NEW_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
-const NOTE_MAX = 280;
 
 const MemberCard: React.FC<MemberCardProps> = ({ member, viewerFollowers }) => {
   const { user, followUser, unfollowUser } = useAuthContext();
   const [followPending, setFollowPending] = useState(false);
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [noteContent, setNoteContent] = useState("");
-  const [noteSending, setNoteSending] = useState(false);
-  const [noteError, setNoteError] = useState<string | null>(null);
-  const [noteSent, setNoteSent] = useState(false);
 
   const initial = (member.username || "?").charAt(0).toUpperCase();
   const isFollowing = (user?.following ?? []).includes(member.uid);
@@ -46,23 +39,6 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, viewerFollowers }) => {
       toast.error("That didn't save. Try again.");
     } finally {
       setFollowPending(false);
-    }
-  };
-
-  const sendNote = async () => {
-    if (!noteContent.trim() || noteSending) return;
-    setNoteSending(true);
-    setNoteError(null);
-    try {
-      await guestbookRepo.createEntry(member.uid, noteContent.trim());
-      setNoteContent("");
-      setNoteSent(true);
-    } catch (error) {
-      setNoteError(
-        rateLimitMessage(error, "Failed to post. Please try again."),
-      );
-    } finally {
-      setNoteSending(false);
     }
   };
 
@@ -125,46 +101,6 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, viewerFollowers }) => {
             Follows you
           </div>
         )}
-
-        {noteOpen && (
-          <div data-no-rowclick className="mt-1 pt-3 border-t border-ns-border">
-            {noteSent ? (
-              <p className="font-ui text-xs text-ns-ink-muted">
-                Note sent to @{member.username}.
-              </p>
-            ) : (
-              <>
-                {noteError && (
-                  <p className="mb-1.5 font-ui text-xs text-ns-destructive">
-                    {noteError}
-                  </p>
-                )}
-                <textarea
-                  value={noteContent}
-                  onChange={(e) => setNoteContent(e.target.value)}
-                  maxLength={NOTE_MAX}
-                  rows={2}
-                  disabled={noteSending}
-                  placeholder={`Leave a note for @${member.username}…`}
-                  className="w-full resize-none px-3 py-2 rounded-ns bg-ns-surface border border-ns-border text-ns-ink placeholder:text-ns-ink-muted font-body text-sm leading-relaxed focus:outline-none focus:border-ns-border-strong transition-colors disabled:opacity-50"
-                />
-                <div className="flex items-center justify-between mt-1.5">
-                  <span className="font-ui text-[11px] text-ns-ink-muted">
-                    {noteContent.length} / {NOTE_MAX}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={sendNote}
-                    disabled={!noteContent.trim() || noteSending}
-                    className="px-3 py-1.5 font-ui text-xs font-semibold rounded-full bg-ns-accent text-white hover:bg-ns-accent-hover disabled:opacity-40 transition-colors"
-                  >
-                    {noteSending ? "Sending…" : "Send"}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="flex-none w-[132px] flex flex-col gap-2">
@@ -182,17 +118,8 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, viewerFollowers }) => {
             {isFollowing ? "✓ Following" : "Follow"}
           </button>
         )}
-        {user && user.uid !== member.uid && (
-          <button
-            type="button"
-            onClick={() => setNoteOpen((prev) => !prev)}
-            className="text-center font-ui text-[13px] font-semibold py-2 rounded-full text-ns-ink-secondary border border-ns-border bg-ns-bg hover:border-ns-border-strong hover:text-ns-accent transition-colors"
-          >
-            {noteOpen ? "Cancel" : "Leave a note"}
-          </button>
-        )}
         <Link
-          to={`/profile/${member.uid}`}
+          to={`/guestbook/${member.uid}`}
           className="text-center font-ui text-[12.5px] text-ns-ink-muted no-underline hover:text-ns-accent transition-colors"
         >
           View page

@@ -172,7 +172,7 @@ const PeopleDirectory: React.FC = () => {
             People
           </h1>
           <div className="mt-3.5">
-            <GuestbookTabs active="people" wallUserId={user.uid} />
+            <GuestbookTabs active="people" />
           </div>
         </header>
 

@@ -53,7 +53,7 @@ const GuestbookSettings: React.FC = () => {
           Guestbook settings
         </h1>
 
-        <GuestbookTabs active="settings" wallUserId={user.uid} />
+        <GuestbookTabs active="settings" />
 
         <WallPolicySelect userId={user.uid} current={guestbookPolicy} />
       </div>

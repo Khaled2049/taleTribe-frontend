@@ -9,7 +9,7 @@ import WallComposer from "@/components/guestbook/WallComposer";
 import WallFilters from "@/components/guestbook/WallFilters";
 import WallPostCard from "@/components/guestbook/WallPostCard";
 import GuestbookAccessCard from "@/components/guestbook/GuestbookAccessCard";
-import WriterSuggestions from "@/components/guestbook/WriterSuggestions";
+import NewMembers from "@/components/guestbook/NewMembers";
 import FollowingSidebar, {
   FollowingStrip,
 } from "@/components/guestbook/FollowingSidebar";
@@ -135,7 +135,7 @@ const WallPage: React.FC = () => {
             Your guestbook
           </h1>
           <div className="mt-3.5">
-            <GuestbookTabs active="wall" wallUserId={user.uid} />
+            <GuestbookTabs active="wall" />
           </div>
         </header>
 
@@ -236,7 +236,10 @@ const WallPage: React.FC = () => {
               isLoading={policyLoading}
             />
             <div className="hidden lg:block">
-              <WriterSuggestions />
+              <NewMembers
+                viewerId={user.uid}
+                following={user.following ?? []}
+              />
             </div>
           </div>
         </div>

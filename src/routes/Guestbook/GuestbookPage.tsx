@@ -91,11 +91,7 @@ const GuestbookPage: React.FC = () => {
             </h1>
           </div>
           <div className="mt-4">
-            <GuestbookTabs
-              active="wall"
-              wallUserId={userId}
-              trailingCount={entryCount}
-            />
+            <GuestbookTabs active="wall" trailingCount={entryCount} />
           </div>
         </header>
 

@@ -12,8 +12,6 @@ interface WallComposerProps {
   isLoading?: boolean;
 }
 
-/** Note is the only post kind with a backend behind it this pass. */
-const POST_KINDS = ["Note", "Share a story", "Ask the tribe", "Reading now"];
 const MAX_CHARACTERS = 280;
 
 /**
@@ -73,38 +71,17 @@ const WallComposer: React.FC<WallComposerProps> = ({
             className="w-full resize-none bg-transparent border-0 outline-none font-body text-[19px] text-ns-ink placeholder:text-ns-ink-muted py-1.5 leading-relaxed disabled:opacity-50"
           />
 
-          <div className="flex items-center gap-2 flex-wrap border-t border-ns-border pt-3 mt-1">
-            {POST_KINDS.map((kind, i) => {
-              const active = i === 0;
-              return (
-                <button
-                  key={kind}
-                  type="button"
-                  disabled={!active}
-                  title={active ? undefined : "Coming soon"}
-                  className={`font-ui text-[12.5px] font-semibold px-[13px] py-[6px] rounded-full border transition-colors ${
-                    active
-                      ? "border-ns-border bg-ns-surface text-ns-ink-secondary hover:border-ns-accent hover:text-ns-accent"
-                      : "border-ns-border bg-ns-surface text-ns-ink-muted opacity-60 cursor-default"
-                  }`}
-                >
-                  {kind}
-                </button>
-              );
-            })}
-
-            <div className="ml-auto flex items-center gap-3">
-              <span className="font-ui text-[12.5px] text-ns-ink-muted">
-                Visible to {audienceLabel.toLowerCase()}
-              </span>
-              <button
-                type="submit"
-                disabled={!content.trim() || isLoading}
-                className="bg-ns-accent text-white font-ui text-sm font-bold px-[22px] py-[9px] rounded-full hover:bg-ns-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {isLoading ? "Posting…" : "Post"}
-              </button>
-            </div>
+          <div className="flex items-center gap-3 justify-end border-t border-ns-border pt-3 mt-1">
+            <span className="font-ui text-[12.5px] text-ns-ink-muted">
+              Visible to {audienceLabel.toLowerCase()}
+            </span>
+            <button
+              type="submit"
+              disabled={!content.trim() || isLoading}
+              className="bg-ns-accent text-white font-ui text-sm font-bold px-[22px] py-[9px] rounded-full hover:bg-ns-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isLoading ? "Posting…" : "Post"}
+            </button>
           </div>
         </div>
       </div>
