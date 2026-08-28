@@ -9,9 +9,10 @@ import WallComposer from "@/components/guestbook/WallComposer";
 import WallFilters from "@/components/guestbook/WallFilters";
 import WallPostCard from "@/components/guestbook/WallPostCard";
 import GuestbookAccessCard from "@/components/guestbook/GuestbookAccessCard";
+import GuestbookAccessMenu from "@/components/guestbook/GuestbookAccessMenu";
 import NewMembers from "@/components/guestbook/NewMembers";
 import FollowingSidebar, {
-  FollowingStrip,
+  FollowingDrawer,
 } from "@/components/guestbook/FollowingSidebar";
 import { normalizePolicy } from "@/lib/guestbookPolicy";
 import { groupByDay } from "@/lib/guestbookWall";
@@ -139,14 +140,25 @@ const WallPage: React.FC = () => {
           </div>
         </header>
 
-        <FollowingStrip following={user.following ?? []} />
+        {/* Mobile toolbar: the people list on the left as a drawer trigger, the
+            one setting on the right as a menu. Together they stand in for both
+            desktop sidebars, which is what lets the feed start at the top. */}
+        <div className="lg:hidden mb-5 flex items-center gap-3">
+          <FollowingDrawer following={user.following ?? []} />
+          <GuestbookAccessMenu
+            userId={user.uid}
+            current={guestbookPolicy}
+            isLoading={policyLoading}
+            className="ml-auto"
+          />
+        </div>
 
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[248px_minmax(0,1fr)_268px] lg:gap-10">
           <div className="hidden lg:sticky lg:top-6 lg:col-start-1 lg:row-start-1 lg:block">
             <FollowingSidebar following={user.following ?? []} />
           </div>
 
-          <div className="order-2 flex min-w-0 flex-col gap-[22px] lg:order-none lg:col-start-2 lg:row-start-1">
+          <div className="flex min-w-0 flex-col gap-[22px] lg:col-start-2 lg:row-start-1">
             <WallComposer
               currentUser={user}
               policy={normalizePolicy(guestbookPolicy)}
@@ -229,18 +241,15 @@ const WallPage: React.FC = () => {
             )}
           </div>
 
-          <div className="order-1 flex flex-col gap-5 lg:order-none lg:sticky lg:top-6 lg:col-start-3 lg:row-start-1">
+          {/* Desktop only — on mobile this column's one interactive element is
+              the toolbar menu above, so the card would just repeat it. */}
+          <div className="hidden lg:sticky lg:top-6 lg:col-start-3 lg:row-start-1 lg:flex lg:flex-col lg:gap-5">
             <GuestbookAccessCard
               userId={user.uid}
               current={guestbookPolicy}
               isLoading={policyLoading}
             />
-            <div className="hidden lg:block">
-              <NewMembers
-                viewerId={user.uid}
-                following={user.following ?? []}
-              />
-            </div>
+            <NewMembers viewerId={user.uid} following={user.following ?? []} />
           </div>
         </div>
       </div>

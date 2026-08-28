@@ -21,27 +21,34 @@ export const GUESTBOOK_POLICIES: readonly GuestbookPolicy[] = [
 
 export const GUESTBOOK_POLICY_LABELS: Record<
   GuestbookPolicy,
-  { label: string; description: string }
+  { label: string; description: string; audience: string }
 > = {
   everyone: {
     label: "Everyone",
     description: "Any signed-in member can leave a note.",
+    audience: "everyone",
   },
   followers: {
     label: "People who follow me",
     description: "Only members who follow you can leave a note.",
+    audience: "people who follow me",
   },
   mutuals: {
     label: "Mutual follows",
     description: "Only members you follow who also follow you back.",
+    audience: "mutual follows",
   },
   following: {
     label: "People I follow",
     description: "Only members you follow can leave a note.",
+    // Authored rather than derived: lowercasing the label gives "people i
+    // follow", and the standalone pronoun has to stay capitalised.
+    audience: "people I follow",
   },
   nobody: {
     label: "Nobody",
     description: "Your guestbook is closed. Only you can post on it.",
+    audience: "nobody",
   },
 };
 

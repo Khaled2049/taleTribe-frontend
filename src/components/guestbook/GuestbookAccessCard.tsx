@@ -1,14 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import { Loader2, LockKeyhole } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { profileRepo } from "@novelsync/story-data-client";
 import {
   GUESTBOOK_POLICIES,
   GUESTBOOK_POLICY_LABELS,
-  GuestbookPolicy,
-  normalizePolicy,
 } from "@/lib/guestbookPolicy";
-import { queryKeys } from "@/hooks/queries/queryKeys";
 import {
   Select,
   SelectContent,
@@ -16,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useGuestbookAccess } from "./useGuestbookAccess";
 
 interface GuestbookAccessCardProps {
   userId: string;
@@ -29,30 +25,8 @@ const GuestbookAccessCard: React.FC<GuestbookAccessCardProps> = ({
   current,
   isLoading = false,
 }) => {
-  const queryClient = useQueryClient();
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const policy = normalizePolicy(current);
+  const { policy, saving, error, choose } = useGuestbookAccess(userId, current);
   const { label, description } = GUESTBOOK_POLICY_LABELS[policy];
-
-  const choose = async (nextPolicy: string) => {
-    const next = nextPolicy as GuestbookPolicy;
-    if (next === policy || saving) return;
-
-    setSaving(true);
-    setError(null);
-    try {
-      await profileRepo.updateMe({ guestbookPolicy: next });
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.user.publicProfile(userId),
-      });
-    } catch (err) {
-      console.error("Error saving guestbook policy:", err);
-      setError("Could not save that setting. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <section
@@ -89,7 +63,7 @@ const GuestbookAccessCard: React.FC<GuestbookAccessCardProps> = ({
         ) : (
           <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center lg:grid-cols-1">
             <div>
-              <p className="font-heading text-[20px] leading-tight text-ns-ink">
+              <p className="font-heading text-[17px] sm:text-[20px] leading-tight text-ns-ink">
                 Who can leave a note?
               </p>
               <p className="mt-1 font-body text-[12.5px] leading-relaxed text-ns-ink-secondary">

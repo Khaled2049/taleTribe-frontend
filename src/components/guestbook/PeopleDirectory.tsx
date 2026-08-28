@@ -22,7 +22,7 @@ import PeopleSegments, {
 import YourCircle from "./YourCircle";
 import RecentFollowers from "./RecentFollowers";
 import GuestbookTabs from "./GuestbookTabs";
-import FollowingSidebar, { FollowingStrip } from "./FollowingSidebar";
+import FollowingSidebar, { FollowingDrawer } from "./FollowingSidebar";
 
 const NEW_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 const isNew = (p: PublicProfile) =>
@@ -176,7 +176,9 @@ const PeopleDirectory: React.FC = () => {
           </div>
         </header>
 
-        <FollowingStrip following={user.following ?? []} />
+        <div className="lg:hidden mb-5 flex items-center gap-3 empty:hidden">
+          <FollowingDrawer following={user.following ?? []} />
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_268px] gap-8 lg:gap-10 items-start">
           <div className="hidden lg:block lg:sticky lg:top-6">

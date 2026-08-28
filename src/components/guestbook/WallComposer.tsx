@@ -27,7 +27,7 @@ const WallComposer: React.FC<WallComposerProps> = ({
 }) => {
   const [content, setContent] = useState("");
   const initial = (currentUser.username || "?").charAt(0).toUpperCase();
-  const audienceLabel = GUESTBOOK_POLICY_LABELS[policy].label;
+  const audienceLabel = GUESTBOOK_POLICY_LABELS[policy].audience;
 
   const submit = async () => {
     if (!content.trim() || isLoading || content.length > MAX_CHARACTERS) return;
@@ -52,10 +52,12 @@ const WallComposer: React.FC<WallComposerProps> = ({
         e.preventDefault();
         submit();
       }}
-      className="border border-ns-border rounded-ns-lg bg-ns-elevated px-[18px] py-4"
+      className="border border-ns-border rounded-ns-lg bg-ns-elevated px-4 py-4 sm:px-[18px]"
     >
       <div className="flex gap-3">
-        <div className="w-[38px] h-[38px] flex-shrink-0 rounded-full bg-ns-ink text-white flex items-center justify-center font-ui font-bold text-[15px]">
+        {/* Your own avatar is decoration on a composer that only ever posts as
+            you — below sm it costs ~50px of a ~340px line, so it steps out. */}
+        <div className="hidden sm:flex w-[38px] h-[38px] flex-shrink-0 rounded-full bg-ns-ink text-white items-center justify-center font-ui font-bold text-[15px]">
           {initial}
         </div>
         <div className="flex-1 min-w-0">
@@ -68,17 +70,19 @@ const WallComposer: React.FC<WallComposerProps> = ({
             maxLength={MAX_CHARACTERS}
             disabled={isLoading}
             aria-label="Post to your wall"
-            className="w-full resize-none bg-transparent border-0 outline-none font-body text-[19px] text-ns-ink placeholder:text-ns-ink-muted py-1.5 leading-relaxed disabled:opacity-50"
+            className="w-full resize-none bg-transparent border-0 outline-none font-body text-[17px] sm:text-[19px] text-ns-ink placeholder:text-ns-ink-muted py-1.5 leading-relaxed disabled:opacity-50"
           />
 
-          <div className="flex items-center gap-3 justify-end border-t border-ns-border pt-3 mt-1">
-            <span className="font-ui text-[12.5px] text-ns-ink-muted">
-              Visible to {audienceLabel.toLowerCase()}
+          <div className="flex items-center gap-3 justify-between sm:justify-end border-t border-ns-border pt-3 mt-1">
+            {/* min-w-0 + truncate: the longest audience phrase would otherwise
+                push the button off a narrow row rather than give way to it. */}
+            <span className="min-w-0 truncate font-ui text-[12px] sm:text-[12.5px] text-ns-ink-muted">
+              Visible to {audienceLabel}
             </span>
             <button
               type="submit"
               disabled={!content.trim() || isLoading}
-              className="bg-ns-accent text-white font-ui text-sm font-bold px-[22px] py-[9px] rounded-full hover:bg-ns-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="shrink-0 bg-ns-accent text-white font-ui text-sm font-bold px-5 py-[9px] sm:px-[22px] rounded-full hover:bg-ns-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isLoading ? "Posting…" : "Post"}
             </button>

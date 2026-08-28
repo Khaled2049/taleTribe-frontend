@@ -12,7 +12,7 @@ import GuestbookTabs from "@/components/guestbook/GuestbookTabs";
 import AboutOwner from "@/components/guestbook/AboutOwner";
 import GuestbookSigners from "@/components/guestbook/GuestbookSigners";
 import FollowingSidebar, {
-  FollowingStrip,
+  FollowingDrawer,
 } from "@/components/guestbook/FollowingSidebar";
 import { normalizePolicy } from "@/lib/guestbookPolicy";
 
@@ -95,10 +95,14 @@ const GuestbookPage: React.FC = () => {
           </div>
         </header>
 
-        <FollowingStrip
-          following={user?.following ?? []}
-          activeUserId={userId}
-        />
+        {/* empty:hidden — FollowingDrawer renders nothing when you follow
+            nobody, and a bare row would still contribute its margin. */}
+        <div className="lg:hidden mb-5 flex items-center gap-3 empty:hidden">
+          <FollowingDrawer
+            following={user?.following ?? []}
+            activeUserId={userId}
+          />
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_268px] gap-8 lg:gap-10 items-start">
           <div className="hidden lg:block lg:sticky lg:top-6">
