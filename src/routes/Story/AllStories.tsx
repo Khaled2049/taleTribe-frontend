@@ -1,15 +1,15 @@
 import { useAuthContext } from "../../contexts/AuthContext";
 import { FaEye, FaThumbsUp, FaBook } from "react-icons/fa";
-import { ChevronRight, ChevronDown, Check } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, Search, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { APP_NAME } from "@/config/seo";
 import StoriesHeader from "@/components/story/StoriesHeader";
-import FeaturedStoryBanner from "@/components/story/FeaturedStoryBanner";
 import { AuthorName } from "@/components/common";
 import { StoryMetadata } from "@novelsync/story-data-client";
 import { usePublishedStories } from "@/hooks/queries/useStoryQueries";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 const CATEGORIES = [
   { id: "all", name: "All", value: "all", symbol: "◆" },
@@ -39,6 +39,10 @@ const CATEGORIES = [
   },
   { id: "young-adult", name: "Young Adult", value: "young-adult", symbol: "✶" },
 ] as const;
+
+// Below this a trigram index cannot serve the ILIKE, so a one-character term
+// would cost a sequential scan to return most of the table anyway.
+const MIN_SEARCH_LENGTH = 2;
 
 const StoryCover: React.FC<{ src?: string; alt: string }> = ({ src, alt }) => {
   const [loaded, setLoaded] = useState(false);
@@ -73,11 +77,19 @@ const AllStories: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [searchInput, setSearchInput] = useState("");
   const [genreMenuOpen, setGenreMenuOpen] = useState(false);
   const genreMenuRef = useRef<HTMLDivElement | null>(null);
 
   const activeCategory =
     CATEGORIES.find((c) => c.value === selectedCategory) ?? CATEGORIES[0];
+
+  // One request per pause in typing, and only once the term is long enough to
+  // be worth a round trip. React Query caches per term, so backspacing to a
+  // term already typed this session re-renders without touching the network.
+  const debouncedSearch = useDebouncedValue(searchInput.trim(), 300);
+  const search =
+    debouncedSearch.length >= MIN_SEARCH_LENGTH ? debouncedSearch : "";
 
   const {
     data,
@@ -87,7 +99,7 @@ const AllStories: React.FC = () => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = usePublishedStories(selectedCategory);
+  } = usePublishedStories(selectedCategory, search);
 
   const stories = useMemo(
     () => data?.pages.flatMap((page) => page.stories) ?? [],
@@ -175,7 +187,33 @@ const AllStories: React.FC = () => {
               onCloseModal={() => setIsModalOpen(false)}
             />
 
-            <FeaturedStoryBanner />
+            {/* Search — matches title and author server-side, so it reaches
+                stories the infinite-scroll grid has not loaded yet. */}
+            <div className="relative mb-6">
+              <Search
+                size={16}
+                className="absolute left-0 top-1/2 -translate-y-1/2 text-ns-ink-muted pointer-events-none"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search stories by title or author…"
+                aria-label="Search stories by title or author"
+                className="w-full pl-6 pr-8 py-2.5 font-ui text-sm bg-transparent border-0 border-b border-ns-border text-ns-ink placeholder:text-ns-ink-muted focus:outline-none focus:border-ns-accent transition-colors [&::-webkit-search-cancel-button]:hidden"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => setSearchInput("")}
+                  aria-label="Clear search"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 p-1 text-ns-ink-muted hover:text-ns-accent transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
 
             {/* Mobile genre selector (Libby-style dropdown) */}
             <div className="lg:hidden mb-6" ref={genreMenuRef}>
@@ -272,9 +310,13 @@ const AllStories: React.FC = () => {
                   No stories found
                 </h3>
                 <p className="text-ns-ink-secondary font-ui text-sm">
-                  {selectedCategory === "all"
-                    ? "No stories have been published yet."
-                    : "No stories found in this category yet."}
+                  {search
+                    ? `Nothing matches “${search}”${
+                        selectedCategory === "all" ? "" : " in this genre"
+                      }.`
+                    : selectedCategory === "all"
+                      ? "No stories have been published yet."
+                      : "No stories found in this category yet."}
                 </p>
               </div>
             ) : (

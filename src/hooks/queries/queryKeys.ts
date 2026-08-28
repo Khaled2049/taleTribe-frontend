@@ -3,8 +3,8 @@ export const queryKeys = {
     all: () => ["stories"] as const,
     // Reserved for future non-category published list use-cases.
     published: () => ["stories", "published"] as const,
-    byCategory: (category: string) =>
-      ["stories", "published", category] as const,
+    byCategory: (category: string, search = "") =>
+      ["stories", "published", category, search] as const,
     // Reserved for route-level detail migration.
     detail: (storyId: string) => ["stories", "detail", storyId] as const,
     chapters: (storyId: string) => ["stories", storyId, "chapters"] as const,
