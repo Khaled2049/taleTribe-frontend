@@ -1,9 +1,10 @@
 import {
-  keepPreviousData,
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
+    keepPreviousData,
+    useInfiniteQuery,
+    useMutation,
+    useQueries,
+    useQuery,
+    useQueryClient,
 } from "@tanstack/react-query";
 import { usePublicClient } from "wagmi";
 import { formatEther, formatUnits } from "viem";
@@ -11,63 +12,63 @@ import { queryKeys } from "./queryKeys";
 import { publicStoryRepo } from "@novelsync/story-data-client";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import {
-  tippingPlatformConfig,
-  ZERO_ADDRESS,
+    tippingPlatformConfig,
+    ZERO_ADDRESS,
 } from "@/blockchain/tippingPlatform";
 import { USDC_ADDRESS } from "@/blockchain/tokens";
 import { auth } from "@novelsync/platform-auth";
 import { storageService } from "@/services/StorageService";
 
 async function updateStoryCover(
-  storyId: string,
-  imageFile: File | null,
-  previewUrl: string | null,
+    storyId: string,
+    imageFile: File | null,
+    previewUrl: string | null,
 ) {
-  const user = auth.currentUser;
-  if (!user)
-    throw new Error("You must be signed in to update the cover image.");
-  const story = await storyWorkspaceRepo.getStory(storyId);
-  if (!story) throw new Error("Story not found");
-  if (story.userId !== user.uid)
-    throw new Error("You do not have permission to update this cover.");
-  if (story.coverImageUrl)
-    await storageService.deleteCoverImage(story.coverImageUrl);
-  if (story.thumbnailUrl && story.thumbnailUrl !== story.coverImageUrl)
-    await storageService.deleteCoverImage(story.thumbnailUrl);
-  let coverImageUrl = "";
-  let thumbnailUrl = "";
-  if (imageFile) {
-    ({ coverImageUrl, thumbnailUrl } = await storageService.uploadCoverImage(
-      imageFile,
-      user.uid,
-      storyId,
-    ));
-  } else if (previewUrl?.startsWith("data:")) {
-    ({ coverImageUrl, thumbnailUrl } = await storageService.uploadCoverImage(
-      storageService.dataUrlToFile(previewUrl),
-      user.uid,
-      storyId,
-    ));
-  }
-  return storyWorkspaceRepo.updateStory({
-    ...story,
-    coverImageUrl,
-    thumbnailUrl,
-  });
+    const user = auth.currentUser;
+    if (!user)
+        throw new Error("You must be signed in to update the cover image.");
+    const story = await storyWorkspaceRepo.getStory(storyId);
+    if (!story) throw new Error("Story not found");
+    if (story.userId !== user.uid)
+        throw new Error("You do not have permission to update this cover.");
+    if (story.coverImageUrl)
+        await storageService.deleteCoverImage(story.coverImageUrl);
+    if (story.thumbnailUrl && story.thumbnailUrl !== story.coverImageUrl)
+        await storageService.deleteCoverImage(story.thumbnailUrl);
+    let coverImageUrl = "";
+    let thumbnailUrl = "";
+    if (imageFile) {
+        ({ coverImageUrl, thumbnailUrl } = await storageService.uploadCoverImage(
+            imageFile,
+            user.uid,
+            storyId,
+        ));
+    } else if (previewUrl?.startsWith("data:")) {
+        ({ coverImageUrl, thumbnailUrl } = await storageService.uploadCoverImage(
+            storageService.dataUrlToFile(previewUrl),
+            user.uid,
+            storyId,
+        ));
+    }
+    return storyWorkspaceRepo.updateStory({
+        ...story,
+        coverImageUrl,
+        thumbnailUrl,
+    });
 }
 
 const toBigInt = (value: unknown): bigint => {
-  if (typeof value === "bigint") return value;
-  return 0n;
+    if (typeof value === "bigint") return value;
+    return 0n;
 };
 
 export type StoryWithEarnings = Awaited<
-  ReturnType<typeof storyWorkspaceRepo.getUserStories>
+    ReturnType<typeof storyWorkspaceRepo.getUserStories>
 >[number] & {
-  earnings: {
-    eth: string;
-    usdc: string;
-  };
+    earnings: {
+        eth: string;
+        usdc: string;
+    };
 };
 
 /**
@@ -84,21 +85,40 @@ export type StoryWithEarnings = Awaited<
  * distinct term it is handed.
  */
 export function usePublishedStories(category: string, search = "") {
-  return useInfiniteQuery({
-    queryKey: queryKeys.stories.byCategory(category, search),
-    queryFn: ({ pageParam }) =>
-      publicStoryRepo.getPublishedStories(
-        pageParam,
-        category === "all" ? undefined : category,
-        search || undefined,
-      ),
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.cursor ?? undefined,
-    staleTime: 1000 * 60 * 5, // 5 min — story lists are low-churn
-    // Keep the previous term's results on screen while the next one loads, so
-    // typing refines the grid instead of collapsing it to a spinner each time.
-    placeholderData: keepPreviousData,
-  });
+    return useInfiniteQuery({
+        queryKey: queryKeys.stories.byCategory(category, search),
+        queryFn: ({ pageParam }) =>
+            publicStoryRepo.getPublishedStories(
+                pageParam,
+                category === "all" ? undefined : category,
+                search || undefined,
+            ),
+        initialPageParam: null as string | null,
+        getNextPageParam: (lastPage) => lastPage.cursor ?? undefined,
+        staleTime: 1000 * 60 * 5, // 5 min — story lists are low-churn
+        // Keep the previous term's results on screen while the next one loads, so
+        // typing refines the grid instead of collapsing it to a spinner each time.
+        placeholderData: keepPreviousData,
+    });
+}
+
+export function useStoryCovers(storyIds: readonly string[]) {
+    const results = useQueries({
+        queries: storyIds.map((storyId) => ({
+            queryKey: queryKeys.stories.detail(storyId),
+            queryFn: () => publicStoryRepo.getStoryDetail(storyId),
+            staleTime: 1000 * 60 * 10,
+            retry: false,
+        })),
+    });
+
+    const covers: Record<string, string> = {};
+    results.forEach((result, index) => {
+        const story = result.data?.story;
+        const url = story?.thumbnailUrl || story?.coverImageUrl;
+        if (url) covers[storyIds[index]] = url;
+    });
+    return covers;
 }
 
 const NO_EARNINGS = { eth: "0", usdc: "0" } as const;
@@ -112,133 +132,133 @@ const NO_EARNINGS = { eth: "0", usdc: "0" } as const;
  * wagmi settles; a story with no reachable chain simply reports zero earnings.
  */
 export function useUserStoriesWithEarnings(userId: string | undefined) {
-  const publicClient = usePublicClient();
-  const chainId = publicClient?.chain?.id;
+    const publicClient = usePublicClient();
+    const chainId = publicClient?.chain?.id;
 
-  return useQuery<StoryWithEarnings[]>({
-    // Include chainId so a network switch invalidates stale earnings data.
-    queryKey: [...queryKeys.user.stories(userId!), chainId] as const,
-    queryFn: async () => {
-      const storyList = await storyWorkspaceRepo.getUserStories();
-      if (!publicClient) {
-        return storyList.map((story) => ({ ...story, earnings: NO_EARNINGS }));
-      }
-      return Promise.all(
-        storyList.map(async (story) => {
-          const [ethRaw, usdcRaw] = await Promise.all([
-            publicClient
-              .readContract({
-                ...tippingPlatformConfig,
-                functionName: "storyEarnings",
-                args: [story.id, ZERO_ADDRESS],
-              })
-              .catch(() => 0n),
-            publicClient
-              .readContract({
-                ...tippingPlatformConfig,
-                functionName: "storyEarnings",
-                args: [story.id, USDC_ADDRESS as `0x${string}`],
-              })
-              .catch(() => 0n),
-          ]);
+    return useQuery<StoryWithEarnings[]>({
+        // Include chainId so a network switch invalidates stale earnings data.
+        queryKey: [...queryKeys.user.stories(userId!), chainId] as const,
+        queryFn: async () => {
+            const storyList = await storyWorkspaceRepo.getUserStories();
+            if (!publicClient) {
+                return storyList.map((story) => ({ ...story, earnings: NO_EARNINGS }));
+            }
+            return Promise.all(
+                storyList.map(async (story) => {
+                    const [ethRaw, usdcRaw] = await Promise.all([
+                        publicClient
+                            .readContract({
+                                ...tippingPlatformConfig,
+                                functionName: "storyEarnings",
+                                args: [story.id, ZERO_ADDRESS],
+                            })
+                            .catch(() => 0n),
+                        publicClient
+                            .readContract({
+                                ...tippingPlatformConfig,
+                                functionName: "storyEarnings",
+                                args: [story.id, USDC_ADDRESS as `0x${string}`],
+                            })
+                            .catch(() => 0n),
+                    ]);
 
-          return {
-            ...story,
-            earnings: {
-              eth: formatEther(toBigInt(ethRaw)),
-              usdc: formatUnits(toBigInt(usdcRaw), 6),
-            },
-          };
-        }),
-      );
-    },
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 5,
-  });
+                    return {
+                        ...story,
+                        earnings: {
+                            eth: formatEther(toBigInt(ethRaw)),
+                            usdc: formatUnits(toBigInt(usdcRaw), 6),
+                        },
+                    };
+                }),
+            );
+        },
+        enabled: !!userId,
+        staleTime: 1000 * 60 * 5,
+    });
 }
 
 // ─── Mutations ───────────────────────────────────────────────────────────────
 
 export function useDeleteStory(userId: string | undefined) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (storyId: string) =>
-      storyWorkspaceRepo.deleteStoryByID(storyId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.user.stories(userId!),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.stories.all(),
-      });
-    },
-  });
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (storyId: string) =>
+            storyWorkspaceRepo.deleteStoryByID(storyId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.user.stories(userId!),
+            });
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.stories.all(),
+            });
+        },
+    });
 }
 
 export function useTogglePublishStory(userId: string | undefined) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (storyId: string) => {
-      const story = await storyWorkspaceRepo.getStory(storyId);
-      if (!story) throw new Error("Story not found");
-      return storyWorkspaceRepo.updateStory({
-        ...story,
-        isPublished: !story.isPublished,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.user.stories(userId!),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.stories.all(),
-      });
-    },
-  });
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (storyId: string) => {
+            const story = await storyWorkspaceRepo.getStory(storyId);
+            if (!story) throw new Error("Story not found");
+            return storyWorkspaceRepo.updateStory({
+                ...story,
+                isPublished: !story.isPublished,
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.user.stories(userId!),
+            });
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.stories.all(),
+            });
+        },
+    });
 }
 
 export function useUpdateStoryMetadata(userId: string | undefined) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      storyId,
-      data,
-    }: {
-      storyId: string;
-      data: {
-        title: string;
-        description: string;
-        category?: string;
-        tags?: string[];
-        targetAudience?: string;
-        language?: string;
-        copyright?: string;
-      };
-    }) => storyWorkspaceRepo.updateStoryByID(storyId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.user.stories(userId!),
-      });
-    },
-  });
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({
+            storyId,
+            data,
+        }: {
+            storyId: string;
+            data: {
+                title: string;
+                description: string;
+                category?: string;
+                tags?: string[];
+                targetAudience?: string;
+                language?: string;
+                copyright?: string;
+            };
+        }) => storyWorkspaceRepo.updateStoryByID(storyId, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.user.stories(userId!),
+            });
+        },
+    });
 }
 
 export function useUpdateStoryCover(userId: string | undefined) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      storyId,
-      imageFile,
-      previewUrl,
-    }: {
-      storyId: string;
-      imageFile: File | null;
-      previewUrl: string | null;
-    }) => updateStoryCover(storyId, imageFile, previewUrl),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.user.stories(userId!),
-      });
-    },
-  });
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({
+            storyId,
+            imageFile,
+            previewUrl,
+        }: {
+            storyId: string;
+            imageFile: File | null;
+            previewUrl: string | null;
+        }) => updateStoryCover(storyId, imageFile, previewUrl),
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.user.stories(userId!),
+            });
+        },
+    });
 }

@@ -317,6 +317,23 @@ Most folders have an `index.ts` barrel; `AppBootstrap/`, `chat/`, `explore/`,
 
 ## Environment Variables
 
+### `functions/.env.local` — required, and gitignored
+
+Every `defineString` param in `functions/src/` **must** have a value here.
+A param with a `default` still prompts if the emulator cannot resolve it from a
+file, and that prompt blocks startup *before any trigger is registered* — so
+every function 404s, not just the one that owns the param, and the only
+symptom is `Function us-central1-x does not exist, valid functions are:` with
+an empty list.
+
+`.env.local` is covered by `*.local` in `functions/.gitignore`, so a fresh
+clone has none of this and hits the prompt. Current params:
+
+```
+AGENT_SERVICE_URL=http://localhost:8000
+RECOMMENDATION_SERVICE_URL=http://localhost:8100
+```
+
 Frontend (`src/`, `packages/`). Verified against actual `import.meta.env` reads:
 
 ```
