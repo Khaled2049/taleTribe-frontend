@@ -26,6 +26,7 @@ jobs:
       id-token: write
     outputs:
       backend_url: ${{ steps.terraform.outputs.backend_url }}
+      recommendation_url: ${{ steps.terraform.outputs.recommendation_url }}
 
     steps:
       - name: Checkout code
@@ -110,7 +111,9 @@ jobs:
         working-directory: ./terraform
         run: |
           BACKEND_URL=$(terraform output -raw backend_service_url)
+          RECOMMENDATION_URL=$(terraform output -raw recommendation_service_url)
           echo "backend_url=$BACKEND_URL" >> $GITHUB_OUTPUT
+          echo "recommendation_url=$RECOMMENDATION_URL" >> $GITHUB_OUTPUT
 
   build:
     name: Build Frontend
@@ -210,10 +213,12 @@ jobs:
       - name: Create functions .env
         env:
           AGENT_SERVICE_URL: ${{ needs.terraform-apply.outputs.backend_url }}
+          RECOMMENDATION_SERVICE_URL: ${{ needs.terraform-apply.outputs.recommendation_url }}
           STORY_DATA_URL: ${{ secrets.VITE_STORY_DATA_URL }}
         run: |
           {
             echo "AGENT_SERVICE_URL=$AGENT_SERVICE_URL"
+            echo "RECOMMENDATION_SERVICE_URL=$RECOMMENDATION_SERVICE_URL"
             echo "STORY_DATA_URL=$STORY_DATA_URL"
           } > functions/.env
 
@@ -247,6 +252,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Backend" >> $GITHUB_STEP_SUMMARY
           echo "- **Service URL:** [${{ needs.terraform-apply.outputs.backend_url }}](${{ needs.terraform-apply.outputs.backend_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **Recommendation URL:** [${{ needs.terraform-apply.outputs.recommendation_url }}](${{ needs.terraform-apply.outputs.recommendation_url }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Infrastructure" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit:** [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})" >> $GITHUB_STEP_SUMMARY

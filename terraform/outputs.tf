@@ -3,6 +3,11 @@ output "backend_service_url" {
   value       = data.google_cloud_run_v2_service.backend.uri
 }
 
+output "recommendation_service_url" {
+  description = "URL and OIDC audience injected into Firebase Functions for server-to-server recommendation calls"
+  value       = local.recommendation_service_url
+}
+
 output "firebase_hosting_site" {
   description = "Firebase Hosting site ID"
   value       = var.firebase_hosting_site_id
