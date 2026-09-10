@@ -64,6 +64,10 @@ export const queryKeys = {
   token: {
     balance: (userId: string) => ["token", "balance", userId] as const,
   },
+  recommendations: {
+    behavioral: (userId: string, topK: number, filters?: unknown) =>
+      ["recommendations", "behavioral", userId, topK, filters ?? null] as const,
+  },
   competitions: {
     all: () => ["competitions"] as const,
     list: (userId: string) => ["competitions", "list", userId] as const,

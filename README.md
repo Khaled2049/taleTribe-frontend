@@ -12,6 +12,7 @@ NovelSync is an AI-assisted fiction writing platform. It gives writers a focused
 - **Chapter generation** — draft full chapters with your existing story as context
 - **Prose enhancement** — rewrite, expand, or rework selected text in one click
 - **AI chat** — ask questions about your own story; the AI reads your full context before answering
+- **AI story discovery** — search by mood or theme, get personalized shelves, find similar stories, and ask why a story matches
 - **Bring Your Own Key** — connect your own Gemini, Claude, or OpenAI API key to bypass platform quotas
 - **On-chain tipping** — readers can tip authors directly in ETH or any ERC20 token
 

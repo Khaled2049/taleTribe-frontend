@@ -22,6 +22,12 @@ variable "backend_service_name" {
   default     = "novelsync-agents"
 }
 
+variable "recommendation_service_name" {
+  description = "Cloud Run recommendation service name, owned by taleTribe-recs"
+  type        = string
+  default     = "novelsync-recs"
+}
+
 variable "terraform_state_bucket" {
   description = "GCS bucket for Terraform state"
   type        = string

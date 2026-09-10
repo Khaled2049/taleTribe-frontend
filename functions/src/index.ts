@@ -28,3 +28,7 @@ export {
 } from "./endpoints/aiSettingsEndpoints";
 export { reserveStorageUpload } from "./endpoints/storageUploadEndpoints";
 export { getCreditBalance, purchaseCredits } from "./endpoints/creditEndpoints";
+export {
+  recommendStories,
+  explainRecommendations,
+} from "./endpoints/recommendations";
