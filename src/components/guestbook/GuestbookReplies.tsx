@@ -45,7 +45,7 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
     } finally {
       setIsLoadingReplies(false);
     }
-  }, [ownerId, entryId, currentUser, onReplyCountChange]);
+  }, [ownerId, entryId, onReplyCountChange]);
 
   useEffect(() => {
     loadReplies();
@@ -115,9 +115,9 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
           <button
             type="button"
             onClick={onHide}
-            className="flex items-center gap-1 font-ui text-xs text-ns-ink-muted hover:text-ns-ink transition-colors"
+            className="flex items-center gap-1 font-ui text-[13.5px] text-ns-ink-muted hover:text-ns-ink transition-colors"
           >
-            <ChevronUp size={14} />
+            <ChevronUp size={16} />
             Hide replies
           </button>
         </div>
@@ -126,7 +126,7 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
       {currentUser && canPost && (
         <form onSubmit={handleSubmit} className="mb-4">
           {replyError && (
-            <p className="mb-2 text-xs font-ui text-ns-destructive">
+            <p className="mb-2 text-[13px] font-ui text-ns-destructive">
               {replyError}
             </p>
           )}
@@ -141,14 +141,14 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
               placeholder="Write a reply…"
               rows={2}
               disabled={isLoading}
-              className="flex-1 resize-none px-3 py-2 rounded-ns bg-ns-elevated border border-ns-border text-ns-ink placeholder:text-ns-ink-muted font-body text-xs leading-relaxed focus:outline-none focus:border-ns-border-strong transition-colors disabled:opacity-50"
+              className="flex-1 resize-none px-3 py-2 rounded-ns bg-ns-elevated border border-ns-border text-ns-ink placeholder:text-ns-ink-muted font-body text-[14.5px] leading-relaxed focus:outline-none focus:border-ns-border-strong transition-colors disabled:opacity-50"
             />
             <button
               type="submit"
               disabled={!newReply.trim() || isLoading}
-              className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-2 bg-ns-accent text-white rounded-ns font-ui text-xs font-medium hover:bg-ns-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-2 bg-ns-accent text-white rounded-ns font-ui text-[13.5px] font-medium hover:bg-ns-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <Send size={11} />
+              <Send size={13} />
               {isLoading ? "…" : "Reply"}
             </button>
           </div>
@@ -156,7 +156,9 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
       )}
 
       {isLoadingReplies ? (
-        <p className="font-ui text-xs text-ns-ink-muted">Loading replies…</p>
+        <p className="font-ui text-[13px] text-ns-ink-muted">
+          Loading replies…
+        </p>
       ) : topLevelReplies.length > 0 ? (
         <div className="space-y-1">
           {topLevelReplies.map((reply) => (
@@ -175,7 +177,7 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
           ))}
         </div>
       ) : (
-        <p className="font-ui text-xs text-ns-ink-muted text-center py-2">
+        <p className="font-ui text-[13px] text-ns-ink-muted text-center py-2">
           No replies yet.
         </p>
       )}

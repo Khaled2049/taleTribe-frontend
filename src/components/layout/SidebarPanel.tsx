@@ -1,28 +1,15 @@
-import React, { useRef, useEffect, ChangeEvent, useState } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import {
   BookOpen,
-  Book,
   Trash2,
-  FileText,
-  Users,
-  MapPin,
-  Layers,
+  Pencil,
   Plus,
+  Heading,
+  SplitSquareVertical,
 } from "lucide-react";
 import { Chapter } from "@novelsync/story-data-client";
-
-type LocalTab = "chapters" | "plot" | "characters" | "places";
-
-const TABS: {
-  id: LocalTab;
-  label: string;
-  Icon: React.FC<{ className?: string }>;
-}[] = [
-  { id: "chapters", label: "Chapters", Icon: BookOpen },
-  // { id: "plot",       label: "Plot",       Icon: Layers   },
-  // { id: "characters", label: "People",     Icon: Users    },
-  // { id: "places",     label: "Places",     Icon: MapPin   },
-];
+import type { OutlineEntry } from "@/utils/documentOutline";
+import { STORY_CHAPTER_LIMIT } from "@/utils/chapterWordLimit";
 
 interface SidebarPanelProps {
   chapters: Chapter[];
@@ -36,8 +23,11 @@ interface SidebarPanelProps {
   onStoryTitleChange: (title: string) => void;
   onChapterTitleChange: (title: string) => void;
   onMetadataChange: () => void;
-  activeTab?: "chapters" | "ai";
-  onTabChange?: (tab: "chapters" | "ai") => void;
+  singleDocument?: boolean;
+  outline?: OutlineEntry[];
+  onOutlineSelect?: (entry: OutlineEntry) => void;
+  canSplitIntoChapters?: boolean;
+  onSplitIntoChapters?: () => void;
 }
 
 export const SidebarPanel: React.FC<SidebarPanelProps> = ({
@@ -48,25 +38,36 @@ export const SidebarPanel: React.FC<SidebarPanelProps> = ({
   onChapterSelect,
   onChapterDelete,
   onChapterAdd,
-  chapterLimit = 50,
+  chapterLimit = STORY_CHAPTER_LIMIT,
   onStoryTitleChange,
   onChapterTitleChange,
   onMetadataChange,
-  onTabChange = () => {},
+  singleDocument = false,
+  outline = [],
+  onOutlineSelect,
+  canSplitIntoChapters = false,
+  onSplitIntoChapters,
 }) => {
-  const [localTab, setLocalTab] = useState<LocalTab>("chapters");
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleInputChange = (
-    e: ChangeEvent<HTMLInputElement>,
-    setter: (value: string) => void,
-  ) => {
-    setter(e.target.value);
+  const scheduleSave = () => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
       onMetadataChange();
       debounceTimerRef.current = null;
     }, 1000);
+  };
+
+  const clearScheduledSave = () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+  };
+
+  const flushSave = () => {
+    clearScheduledSave();
+    onMetadataChange();
   };
 
   useEffect(() => {
@@ -75,235 +76,331 @@ export const SidebarPanel: React.FC<SidebarPanelProps> = ({
     };
   }, []);
 
-  const handleTabChange = (tab: LocalTab) => {
-    setLocalTab(tab);
-    if (tab === "chapters") onTabChange("chapters");
-  };
+  const hasChapter = Boolean(currentChapterId);
 
   return (
     <div className="h-full flex flex-col bg-ns-surface">
-      {/* ── Metadata Header ── */}
-      <div className="px-4 pt-5 pb-4 space-y-3 border-b border-ns-border">
-        {/* Story Title */}
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 font-ui text-[10px] font-semibold text-ns-ink-muted uppercase tracking-widest">
-            <FileText className="w-3 h-3" />
-            Story
-          </label>
-          <input
-            type="text"
-            value={storyTitle}
-            onChange={(e) => handleInputChange(e, onStoryTitleChange)}
-            placeholder="Story title…"
-            className="w-full font-ui text-sm font-medium px-3 py-2 bg-ns-elevated border border-ns-border rounded-ns text-ns-ink placeholder:text-ns-ink-muted focus:outline-none focus:ring-1 focus:ring-ns-accent focus:border-ns-accent transition-all duration-150"
-            maxLength={80}
-          />
-        </div>
-
-        {/* Chapter Title */}
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 font-ui text-[10px] font-semibold text-ns-ink-muted uppercase tracking-widest">
-            <Book className="w-3 h-3" />
-            Chapter
-          </label>
-          <input
-            type="text"
+      <div className="flex-shrink-0 px-4 pt-5 pb-4 space-y-1 border-b border-ns-border">
+        <InlineTitle
+          value={storyTitle}
+          placeholder="Untitled story"
+          ariaLabel="Story title"
+          onChange={onStoryTitleChange}
+          onType={scheduleSave}
+          onCommit={flushSave}
+          onCancel={clearScheduledSave}
+          className="font-heading text-xl font-bold text-ns-ink"
+        />
+        {hasChapter && !singleDocument && (
+          <InlineTitle
             value={chapterTitle}
-            onChange={(e) => handleInputChange(e, onChapterTitleChange)}
-            placeholder="Chapter title…"
-            className="w-full font-ui text-sm px-3 py-2 bg-ns-elevated border border-ns-border rounded-ns text-ns-ink placeholder:text-ns-ink-muted focus:outline-none focus:ring-1 focus:ring-ns-accent focus:border-ns-accent transition-all duration-150"
-            maxLength={80}
+            placeholder="Untitled chapter"
+            ariaLabel="Chapter title"
+            onChange={onChapterTitleChange}
+            onType={scheduleSave}
+            onCommit={flushSave}
+            onCancel={clearScheduledSave}
+            className="font-ui text-sm text-ns-ink-secondary"
+            iconSize="w-3.5 h-3.5"
           />
-        </div>
+        )}
       </div>
 
-      {/* ── Tab Navigation ── */}
-      <div className="flex flex-shrink-0 border-b border-ns-border">
-        {TABS.map(({ id, label, Icon }) => {
-          const isActive = localTab === id;
-          return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between flex-shrink-0 px-4 pt-4 pb-2">
+          <span className="font-ui text-[10px] font-semibold text-ns-ink-muted uppercase tracking-widest">
+            {singleDocument
+              ? `Outline — ${outline.length}`
+              : `Chapters — ${chapters.length}`}
+          </span>
+          {onChapterAdd && (
             <button
-              key={id}
-              onClick={() => handleTabChange(id)}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 font-ui text-[10px] font-medium tracking-wide transition-all duration-150 border-b-2 ${
-                isActive
-                  ? "border-ns-accent text-ns-accent bg-ns-accent-subtle"
-                  : "border-transparent text-ns-ink-muted hover:text-ns-ink-secondary hover:bg-ns-surface-hover"
-              }`}
+              onClick={onChapterAdd}
+              disabled={chapters.length >= chapterLimit}
+              title={
+                chapters.length >= chapterLimit
+                  ? `Chapter limit reached (${chapterLimit})`
+                  : singleDocument
+                    ? "Add a chapter"
+                    : "Add chapter"
+              }
+              aria-label="Add chapter"
+              className="inline-flex items-center justify-center w-6 h-6 rounded-ns text-ns-ink-muted hover:text-ns-accent hover:bg-ns-accent-subtle active:scale-95 transition-all duration-150 disabled:opacity-40 disabled:pointer-events-none"
             >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{label}</span>
+              <Plus className="w-4 h-4" />
             </button>
-          );
-        })}
-      </div>
+          )}
+        </div>
 
-      {/* ── Tab Content ── */}
-      <div className="flex-1 overflow-hidden">
-        {/* Chapters list */}
-        {localTab === "chapters" && (
-          <div className="h-full flex flex-col">
-            {/* Chapters header + add button */}
-            {onChapterAdd && (
-              <div className="flex items-center justify-between flex-shrink-0 px-4 pt-3 pb-2">
-                <span className="font-ui text-[10px] font-semibold text-ns-ink-muted uppercase tracking-widest">
-                  {chapters.length}{" "}
-                  {chapters.length === 1 ? "Chapter" : "Chapters"}
-                </span>
-                <button
-                  onClick={onChapterAdd}
-                  disabled={chapters.length >= chapterLimit}
-                  title={
-                    chapters.length >= chapterLimit
-                      ? `Chapter limit reached (${chapterLimit})`
-                      : "Add chapter"
-                  }
-                  aria-label="Add chapter"
-                  className="inline-flex items-center justify-center w-6 h-6 rounded-ns text-ns-ink-muted hover:text-ns-accent hover:bg-ns-accent-subtle active:scale-95 transition-all duration-150 disabled:opacity-40 disabled:pointer-events-none"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
+        {singleDocument ? (
+          <OutlinePane
+            outline={outline}
+            onOutlineSelect={onOutlineSelect}
+            canSplitIntoChapters={canSplitIntoChapters}
+            onSplitIntoChapters={onSplitIntoChapters}
+            onChapterAdd={onChapterAdd}
+          />
+        ) : (
+          <div className="flex-1 overflow-y-auto px-2 pb-3">
+            {chapters.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full gap-3 py-12">
+                <div className="w-12 h-12 rounded-full bg-ns-accent-subtle flex items-center justify-center">
+                  <BookOpen className="w-5 h-5 text-ns-accent opacity-60" />
+                </div>
+                <p className="font-ui text-xs text-ns-ink-muted text-center leading-relaxed">
+                  No chapters yet.
+                  <br />
+                  Create your first chapter.
+                </p>
+                {onChapterAdd && (
+                  <button
+                    onClick={onChapterAdd}
+                    className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns bg-ns-accent text-white font-ui text-xs font-medium hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150 shadow-ns-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    New Chapter
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-px">
+                {chapters.map((chapter) => {
+                  const isActive = currentChapterId === chapter.id;
+                  return (
+                    <div
+                      key={chapter.id}
+                      className={`group relative flex items-center rounded-ns transition-colors duration-150 ${
+                        isActive
+                          ? "bg-ns-accent-subtle"
+                          : "hover:bg-ns-surface-hover"
+                      }`}
+                    >
+                      <button
+                        onClick={() => onChapterSelect(chapter)}
+                        aria-current={isActive ? "true" : undefined}
+                        className="flex-1 flex items-center gap-2.5 text-left px-3 py-2 min-w-0"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors duration-150 ${
+                            isActive ? "bg-ns-accent" : "bg-ns-border-strong"
+                          }`}
+                        />
+                        <span
+                          className={`font-ui text-sm truncate transition-colors duration-150 ${
+                            isActive
+                              ? "font-semibold text-ns-ink"
+                              : "text-ns-ink-secondary group-hover:text-ns-ink"
+                          }`}
+                        >
+                          {chapter.title || "Untitled"}
+                        </span>
+                      </button>
+
+                      <span className="hidden lg:block pr-3 font-ui text-[10px] text-ns-ink-muted tabular-nums group-hover:invisible">
+                        {(chapter.wordCount || 0).toLocaleString()}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onChapterDelete(chapter.id);
+                        }}
+                        aria-label={`Delete ${chapter.title || "Untitled"}`}
+                        className="flex-shrink-0 p-2 text-ns-ink-muted hover:text-ns-destructive transition-colors duration-150 lg:absolute lg:right-1 lg:invisible lg:group-hover:visible lg:focus-visible:visible"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
-            <div className="flex-1 overflow-y-auto pb-3 px-3">
-              {chapters.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full gap-3 py-12">
-                  <div className="w-12 h-12 rounded-full bg-ns-accent-subtle flex items-center justify-center">
-                    <BookOpen className="w-5 h-5 text-ns-accent opacity-60" />
-                  </div>
-                  <p className="font-ui text-xs text-ns-ink-muted text-center leading-relaxed">
-                    No chapters yet.
-                    <br />
-                    Create your first chapter.
-                  </p>
-                  {onChapterAdd && (
-                    <button
-                      onClick={onChapterAdd}
-                      className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns bg-ns-accent text-white font-ui text-xs font-medium hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150 shadow-ns-sm"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      New Chapter
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-0.5">
-                  {chapters.map((chapter) => {
-                    const isActive = currentChapterId === chapter.id;
-                    return (
-                      <div
-                        key={chapter.id}
-                        className={`flex items-center rounded-ns transition-all duration-150 group ${
-                          isActive
-                            ? "bg-ns-accent-subtle"
-                            : "hover:bg-ns-surface-hover"
-                        }`}
-                      >
-                        <button
-                          onClick={() => onChapterSelect(chapter)}
-                          className="flex-1 text-left px-3 py-2.5 min-w-0"
-                        >
-                          <div className="flex items-start gap-2.5">
-                            <Book
-                              className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 transition-colors ${
-                                isActive
-                                  ? "text-ns-accent"
-                                  : "text-ns-ink-muted"
-                              }`}
-                            />
-                            <div className="min-w-0">
-                              <p
-                                className={`font-ui text-xs font-medium line-clamp-2 transition-colors ${
-                                  isActive
-                                    ? "text-ns-ink"
-                                    : "text-ns-ink-secondary"
-                                }`}
-                              >
-                                {chapter.title || "Untitled"}
-                              </p>
-                              <p className="font-ui text-[10px] text-ns-ink-muted mt-0.5 tabular-nums">
-                                {(chapter.wordCount || 0).toLocaleString()}{" "}
-                                words
-                              </p>
-                            </div>
-                          </div>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onChapterDelete(chapter.id);
-                          }}
-                          className="flex-shrink-0 p-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 text-ns-ink-muted hover:text-ns-destructive transition-all duration-150"
-                          aria-label="Delete chapter"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
           </div>
-        )}
-
-        {/* Plot placeholder */}
-        {localTab === "plot" && (
-          <PlaceholderPane
-            icon={<Layers className="w-5 h-5 text-ns-accent opacity-60" />}
-            title="Plot Outline"
-            subtitle="Map your story arcs and chapter beats"
-          />
-        )}
-
-        {/* Characters placeholder */}
-        {localTab === "characters" && (
-          <PlaceholderPane
-            icon={<Users className="w-5 h-5 text-ns-accent opacity-60" />}
-            title="Characters"
-            subtitle="Build and track your cast of characters"
-          />
-        )}
-
-        {/* Places placeholder */}
-        {localTab === "places" && (
-          <PlaceholderPane
-            icon={<MapPin className="w-5 h-5 text-ns-accent opacity-60" />}
-            title="Places"
-            subtitle="Document the worlds your story inhabits"
-          />
         )}
       </div>
     </div>
   );
 };
 
-/* ── Shared placeholder pane ── */
-function PlaceholderPane({
-  icon,
-  title,
-  subtitle,
+function OutlinePane({
+  outline,
+  onOutlineSelect,
+  canSplitIntoChapters,
+  onSplitIntoChapters,
+  onChapterAdd,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
+  outline: OutlineEntry[];
+  onOutlineSelect?: (entry: OutlineEntry) => void;
+  canSplitIntoChapters: boolean;
+  onSplitIntoChapters?: () => void;
+  onChapterAdd?: () => void;
 }) {
+  const topLevel = outline.length
+    ? Math.min(...outline.map((entry) => entry.level))
+    : 1;
+
   return (
-    <div className="h-full flex flex-col items-center justify-center gap-3 p-6 animate-ns-fade-in">
-      <div className="w-12 h-12 rounded-full bg-ns-accent-subtle flex items-center justify-center">
-        {icon}
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto px-2 pb-3">
+        {outline.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-3 py-12">
+            <div className="w-12 h-12 rounded-full bg-ns-accent-subtle flex items-center justify-center">
+              <Heading className="w-5 h-5 text-ns-accent opacity-60" />
+            </div>
+            <p className="font-ui text-xs text-ns-ink-muted text-center leading-relaxed px-4">
+              One document — add a heading to outline it.
+            </p>
+            {onChapterAdd && (
+              <button
+                onClick={onChapterAdd}
+                className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns bg-ns-accent text-white font-ui text-xs font-medium hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150 shadow-ns-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                New Chapter
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-px">
+            {outline.map((entry, index) => (
+              <button
+                key={`${entry.pos}-${index}`}
+                onClick={() => onOutlineSelect?.(entry)}
+                className="group w-full flex items-center gap-2.5 text-left rounded-ns px-3 py-2 min-w-0 hover:bg-ns-surface-hover transition-colors duration-150"
+                style={{
+                  paddingLeft: `${12 + (entry.level - topLevel) * 14}px`,
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-ns-border-strong group-hover:bg-ns-accent transition-colors duration-150"
+                />
+                <span className="font-ui text-sm truncate text-ns-ink-secondary group-hover:text-ns-ink transition-colors duration-150">
+                  {entry.text || "Untitled section"}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      <div className="text-center space-y-1.5">
-        <p className="font-heading italic text-sm text-ns-ink-secondary">
-          {title}
-        </p>
-        <p className="font-ui text-xs text-ns-ink-muted leading-relaxed">
-          {subtitle}
-        </p>
-        <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-ns-accent-subtle font-ui text-[10px] font-semibold text-ns-accent tracking-wide uppercase">
-          Coming soon
-        </span>
-      </div>
+
+      {onSplitIntoChapters && canSplitIntoChapters && (
+        <div className="flex-shrink-0 border-t border-ns-border px-3 py-2.5">
+          <button
+            onClick={onSplitIntoChapters}
+            className="w-full inline-flex items-center justify-center gap-1.5 rounded-ns border border-ns-border px-3 py-1.5 font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink hover:border-ns-border-strong transition-colors duration-150"
+          >
+            <SplitSquareVertical className="w-3.5 h-3.5 flex-shrink-0" />
+            Split into chapters
+          </button>
+        </div>
+      )}
     </div>
+  );
+}
+
+function InlineTitle({
+  value,
+  placeholder,
+  ariaLabel,
+  onChange,
+  onType,
+  onCommit,
+  onCancel,
+  className,
+  iconSize = "w-4 h-4",
+  maxLength = 80,
+}: {
+  value: string;
+  placeholder: string;
+  ariaLabel: string;
+  onChange: (value: string) => void;
+  onType: () => void;
+  onCommit: () => void;
+  onCancel: () => void;
+  className: string;
+  iconSize?: string;
+  maxLength?: number;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const valueAtEditStart = useRef(value);
+  const isFinishing = useRef(false);
+
+  useEffect(() => {
+    if (isEditing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  const startEditing = () => {
+    isFinishing.current = false;
+    valueAtEditStart.current = value;
+    setIsEditing(true);
+  };
+
+  const commit = () => {
+    if (isFinishing.current) return;
+    isFinishing.current = true;
+    setIsEditing(false);
+    onCommit();
+  };
+
+  const cancel = () => {
+    if (isFinishing.current) return;
+    isFinishing.current = true;
+    onCancel();
+    onChange(valueAtEditStart.current);
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        aria-label={ariaLabel}
+        maxLength={maxLength}
+        placeholder={placeholder}
+        onChange={(e) => {
+          onChange(e.target.value);
+          onType();
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            cancel();
+          }
+        }}
+        className={`w-full bg-transparent border-b border-ns-accent px-0 py-0.5 text-ns-ink placeholder:text-ns-ink-muted focus:outline-none ${className}`}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={startEditing}
+      title={`Rename — ${ariaLabel.toLowerCase()}`}
+      className="group/title w-full flex items-center gap-2 py-0.5 text-left rounded-ns focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ns-accent"
+    >
+      <span
+        className={`truncate ${className} ${
+          value ? "" : "text-ns-ink-muted italic"
+        }`}
+      >
+        {value || placeholder}
+      </span>
+      <Pencil
+        aria-hidden="true"
+        className={`${iconSize} flex-shrink-0 ml-auto text-ns-ink-muted opacity-0 group-hover/title:opacity-100 group-focus-visible/title:opacity-100 transition-opacity duration-150`}
+      />
+    </button>
   );
 }

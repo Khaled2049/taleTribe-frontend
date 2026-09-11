@@ -1,3 +1,8 @@
+import {
+  CHAPTER_WORD_LIMIT,
+  STORY_CHAPTER_LIMIT,
+} from "@/utils/chapterWordLimit";
+
 export interface ParsedChapter {
   title: string;
   content: string;
@@ -10,8 +15,6 @@ export interface ParseResult {
 }
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
-const WORD_LIMIT = 5000;
-const CHAPTER_LIMIT = 50;
 
 // Patterns that identify a line as a chapter heading.
 // Each pattern must match from the start of the (trimmed) line.
@@ -123,7 +126,7 @@ export function validateTextFile(file: File): string | null {
  * - Detects chapter headings using common patterns.
  * - Falls back to a single "Chapter 1" if no headings are found.
  * - Truncates chapters that exceed the word limit.
- * - Caps the total number of chapters at CHAPTER_LIMIT.
+ * - Caps the total number of chapters.
  * - All content is HTML-escaped before wrapping in <p> tags.
  */
 export function parseTextFile(fileContent: string): ParseResult {
@@ -160,11 +163,11 @@ export function parseTextFile(fileContent: string): ParseResult {
   }
 
   // Enforce chapter limit
-  if (rawChapters.length > CHAPTER_LIMIT) {
+  if (rawChapters.length > STORY_CHAPTER_LIMIT) {
     warnings.push(
-      `File contains ${rawChapters.length} chapters. Only the first ${CHAPTER_LIMIT} will be imported.`,
+      `File contains ${rawChapters.length} chapters. Only the first ${STORY_CHAPTER_LIMIT} will be imported.`,
     );
-    rawChapters = rawChapters.slice(0, CHAPTER_LIMIT);
+    rawChapters = rawChapters.slice(0, STORY_CHAPTER_LIMIT);
   }
 
   // Convert each chapter to HTML and apply word limit
@@ -172,18 +175,18 @@ export function parseTextFile(fileContent: string): ParseResult {
     const rawWordCount = countWordsInText(raw.text);
     let text = raw.text;
 
-    if (rawWordCount > WORD_LIMIT) {
+    if (rawWordCount > CHAPTER_WORD_LIMIT) {
       const words = raw.text.trim().split(/\s+/);
-      text = words.slice(0, WORD_LIMIT).join(" ");
+      text = words.slice(0, CHAPTER_WORD_LIMIT).join(" ");
       warnings.push(
-        `"${raw.title}" exceeded the ${WORD_LIMIT.toLocaleString()}-word limit and was truncated (${rawWordCount.toLocaleString()} → ${WORD_LIMIT.toLocaleString()} words).`,
+        `"${raw.title}" exceeded the ${CHAPTER_WORD_LIMIT.toLocaleString()}-word limit and was truncated (${rawWordCount.toLocaleString()} → ${CHAPTER_WORD_LIMIT.toLocaleString()} words).`,
       );
     }
 
     return {
       title: raw.title,
       content: textToHtml(text),
-      wordCount: Math.min(rawWordCount, WORD_LIMIT),
+      wordCount: Math.min(rawWordCount, CHAPTER_WORD_LIMIT),
     };
   });
 

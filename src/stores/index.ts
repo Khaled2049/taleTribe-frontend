@@ -8,5 +8,6 @@
 export * from "./authStore";
 export * from "./chatStore";
 export * from "./demoStore";
+export * from "./focusModeStore";
 export * from "./readerSettingsStore";
 export * from "./themeStore";

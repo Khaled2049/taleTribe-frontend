@@ -132,19 +132,19 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
               aria-label={isCollapsed ? "Expand" : "Collapse"}
             >
               {isCollapsed ? (
-                <ChevronRight size={11} />
+                <ChevronRight size={14} />
               ) : (
-                <ChevronDown size={11} />
+                <ChevronDown size={14} />
               )}
             </button>
           ) : (
-            <div className="w-[11px]" />
+            <div className="w-[14px]" />
           )}
 
           <div className="flex-1 min-w-0">
             <div className="py-1">
               {error && (
-                <p className="mb-1 text-[10px] font-ui text-ns-destructive">
+                <p className="mb-1 text-[12.5px] font-ui text-ns-destructive">
                   {error}
                 </p>
               )}
@@ -153,11 +153,11 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                 <Link
                   to={`/profile/${reply.authorId}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="font-ui font-semibold text-ns-ink text-xs no-underline hover:text-ns-accent hover:underline transition-colors"
+                  className="font-ui font-semibold text-ns-ink text-[13.5px] no-underline hover:text-ns-accent hover:underline transition-colors"
                 >
                   @{authorUsername}
                 </Link>
-                <span className="font-ui text-[10px] text-ns-ink-muted">
+                <span className="font-ui text-[12.5px] text-ns-ink-muted">
                   {formatRelativeTime(reply.createdAt)}
                 </span>
               </div>
@@ -174,7 +174,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                         className="
                           w-full px-2 py-1.5 rounded-ns
                           bg-ns-elevated border border-ns-border
-                          text-ns-ink font-body text-xs leading-relaxed
+                          text-ns-ink font-body text-[14.5px] leading-relaxed
                           focus:outline-none focus:border-ns-accent/50
                           transition-colors disabled:opacity-50 resize-none
                         "
@@ -183,21 +183,21 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                         <button
                           onClick={handleEdit}
                           disabled={isLoading}
-                          className="px-2.5 py-0.5 text-[10px] font-ui font-medium rounded-full bg-ns-accent text-white hover:bg-ns-accent-hover disabled:opacity-40 transition-colors"
+                          className="px-3 py-1 text-[12.5px] font-ui font-medium rounded-full bg-ns-accent text-white hover:bg-ns-accent-hover disabled:opacity-40 transition-colors"
                         >
                           {isLoading ? "Saving…" : "Save"}
                         </button>
                         <button
                           onClick={() => setIsEditing(false)}
                           disabled={isLoading}
-                          className="px-2.5 py-0.5 text-[10px] font-ui font-medium rounded-full bg-ns-surface-hover text-ns-ink-secondary hover:text-ns-ink disabled:opacity-40 transition-colors"
+                          className="px-3 py-1 text-[12.5px] font-ui font-medium rounded-full bg-ns-surface-hover text-ns-ink-secondary hover:text-ns-ink disabled:opacity-40 transition-colors"
                         >
                           Cancel
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <p className="font-body text-xs text-ns-ink leading-relaxed whitespace-pre-wrap break-words">
+                    <p className="font-body text-[15.5px] leading-[1.55] text-ns-ink whitespace-pre-wrap break-words [text-wrap:pretty]">
                       {reply.content}
                     </p>
                   )}
@@ -206,22 +206,22 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                     <button
                       onClick={handleUpvote}
                       disabled={!currentUser || isVoting}
-                      className={`flex items-center gap-1 font-ui text-[10px] font-semibold transition-colors disabled:opacity-50 ${
+                      className={`flex items-center gap-1 font-ui text-[12.5px] font-semibold transition-colors disabled:opacity-50 ${
                         hasUpvoted
                           ? "text-ns-accent"
                           : "text-ns-ink-muted hover:text-ns-ink"
                       }`}
                     >
-                      <ChevronUp size={12} />
+                      <ChevronUp size={14} />
                       {upvoteCount}
                     </button>
                     {depth < MAX_DEPTH && currentUser && canPost && (
                       <button
                         onClick={() => setIsReplying(!isReplying)}
                         disabled={isLoading}
-                        className="flex items-center gap-1 font-ui text-[10px] text-ns-ink-muted hover:text-ns-accent transition-colors"
+                        className="flex items-center gap-1 font-ui text-[12.5px] text-ns-ink-muted hover:text-ns-accent transition-colors"
                       >
-                        <MessageCircle size={10} />
+                        <MessageCircle size={13} />
                         Reply
                       </button>
                     )}
@@ -233,18 +233,18 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                           <button
                             onClick={() => setIsEditing(true)}
                             disabled={isLoading}
-                            className="flex items-center gap-1 font-ui text-[10px] text-ns-ink-muted hover:text-ns-ink transition-colors"
+                            className="flex items-center gap-1 font-ui text-[12.5px] text-ns-ink-muted hover:text-ns-ink transition-colors"
                           >
-                            <Edit2 size={10} />
+                            <Edit2 size={13} />
                             Edit
                           </button>
                         )}
                         <button
                           onClick={() => onDelete(reply.id)}
                           disabled={isLoading}
-                          className="flex items-center gap-1 font-ui text-[10px] text-ns-ink-muted hover:text-ns-destructive transition-colors"
+                          className="flex items-center gap-1 font-ui text-[12.5px] text-ns-ink-muted hover:text-ns-destructive transition-colors"
                         >
-                          <Trash2 size={10} />
+                          <Trash2 size={13} />
                           Delete
                         </button>
                       </>
@@ -269,7 +269,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                           w-full px-2 py-1.5 rounded-ns
                           bg-ns-elevated border border-ns-border
                           text-ns-ink placeholder:text-ns-ink-muted
-                          font-body text-xs leading-relaxed
+                          font-body text-[14.5px] leading-relaxed
                           focus:outline-none focus:border-ns-accent/50
                           transition-colors disabled:opacity-50 resize-none
                         "
@@ -278,14 +278,14 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                         <button
                           onClick={handleReply}
                           disabled={isLoading}
-                          className="px-2.5 py-0.5 text-[10px] font-ui font-medium rounded-full bg-ns-accent text-white hover:bg-ns-accent-hover disabled:opacity-40 transition-colors"
+                          className="px-3 py-1 text-[12.5px] font-ui font-medium rounded-full bg-ns-accent text-white hover:bg-ns-accent-hover disabled:opacity-40 transition-colors"
                         >
                           {isLoading ? "Posting…" : "Reply"}
                         </button>
                         <button
                           onClick={() => setIsReplying(false)}
                           disabled={isLoading}
-                          className="px-2.5 py-0.5 text-[10px] font-ui font-medium rounded-full bg-ns-surface-hover text-ns-ink-secondary hover:text-ns-ink disabled:opacity-40 transition-colors"
+                          className="px-3 py-1 text-[12.5px] font-ui font-medium rounded-full bg-ns-surface-hover text-ns-ink-secondary hover:text-ns-ink disabled:opacity-40 transition-colors"
                         >
                           Cancel
                         </button>
@@ -296,7 +296,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
               )}
 
               {isCollapsed && (
-                <div className="flex items-center gap-1.5 font-ui text-xs text-ns-ink-muted">
+                <div className="flex items-center gap-1.5 font-ui text-[13.5px] text-ns-ink-muted">
                   <Link
                     to={`/profile/${reply.authorId}`}
                     onClick={(e) => e.stopPropagation()}
@@ -304,11 +304,11 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                   >
                     @{authorUsername}
                   </Link>
-                  <span className="text-[10px]">
+                  <span className="text-[12.5px]">
                     {formatRelativeTime(reply.createdAt)}
                   </span>
                   {hasChildren && (
-                    <span className="text-[10px]">
+                    <span className="text-[12.5px]">
                       · {children.length}{" "}
                       {children.length === 1 ? "reply" : "replies"}
                     </span>

@@ -17,6 +17,7 @@ import Italic from "@tiptap/extension-italic";
 import Strike from "@tiptap/extension-strike";
 import { ImageNode } from "@/components/editor/ImageNode";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
+import type { Node as PMNode, Schema } from "@tiptap/pm/model";
 import { storageService } from "@/services/StorageService";
 import CharacterCount from "@tiptap/extension-character-count";
 import Heading from "@tiptap/extension-heading";
@@ -36,9 +37,10 @@ import HorizontalRule from "@tiptap/extension-horizontal-rule";
 import Link from "@tiptap/extension-link";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
-import { Extension } from "@tiptap/core";
+import { Extension, getHTMLFromFragment } from "@tiptap/core";
 import Suggestion from "@tiptap/suggestion";
 import { slashCommandSuggestion } from "./SlashCommandExtension";
+import { CHAPTER_WORD_LIMIT, chapterWordCount } from "@/utils/chapterWordLimit";
 import { SuggestionMenu } from "./SuggestionMenu";
 import {
   ImageIcon,
@@ -70,7 +72,33 @@ import {
   TaskItemExtension,
 } from "@/components/editor/TaskListExtensions";
 
-const limit = 50000;
+const CHARACTER_LIMIT = 50000;
+const wordCountCache = new WeakMap<PMNode, number>();
+
+const countDoc = (doc: PMNode, schema: Schema): number => {
+  const cached = wordCountCache.get(doc);
+  if (cached !== undefined) return cached;
+  const count = chapterWordCount(getHTMLFromFragment(doc.content, schema));
+  wordCountCache.set(doc, count);
+  return count;
+};
+
+const ChapterWordCeiling = Extension.create({
+  name: "chapterWordCeiling",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("chapterWordCeiling"),
+        filterTransaction: (tr, state) => {
+          if (!tr.docChanged) return true;
+          const next = countDoc(tr.doc, state.schema);
+          if (next <= CHAPTER_WORD_LIMIT) return true;
+          return next <= countDoc(state.doc, state.schema);
+        },
+      }),
+    ];
+  },
+});
 const HeadingWithoutInputRules = Heading.extend({
   addInputRules() {
     return [];
@@ -231,7 +259,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         ];
       },
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const SlashCommandsExtension = useMemo(() => {
     return Extension.create({
@@ -284,7 +312,8 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       TextAlignExtension,
       ParagraphStyleExtension,
       SlashCommandsExtension,
-      CharacterCount.configure({ limit }),
+      CharacterCount.configure({ limit: CHARACTER_LIMIT }),
+      ChapterWordCeiling,
       HeadingWithoutInputRules.configure({
         levels: [1, 2, 3],
         HTMLAttributes: {

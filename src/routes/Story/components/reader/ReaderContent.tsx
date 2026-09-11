@@ -46,10 +46,11 @@ const ReaderContentBase: React.FC<ReaderContentProps> = ({
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-32">
       <div className="py-8">
-        {/* Chapter Title */}
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-8 text-center">
-          {title}
-        </h1>
+        {title && (
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-8 text-center">
+            {title}
+          </h1>
+        )}
 
         {/* Chapter Content (selection offsets are measured against this div) */}
         <div ref={containerRef} style={contentStyle}>

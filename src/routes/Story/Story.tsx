@@ -2,6 +2,7 @@ import { Outlet, NavLink, Link } from "react-router-dom";
 import { BookOpen, Layers, Users, MapPin, ArrowLeft } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { StoryWorkspaceTabs } from "./components/StoryWorkspaceTabs";
+import { useFocusModeStore } from "@/stores/focusModeStore";
 
 const NAV_ITEMS = [
   { label: "Editor", path: "", icon: BookOpen, end: true },
@@ -12,10 +13,15 @@ const NAV_ITEMS = [
 
 const Story = () => {
   const { storyId } = useParams<{ storyId: string }>();
+  const focusMode = useFocusModeStore((s) => s.focusMode);
 
   return (
     <div className="flex h-full bg-ns-bg overflow-hidden">
-      <nav className="hidden lg:flex flex-shrink-0 w-44 bg-ns-surface border-r border-ns-border flex-col pt-4 pb-4 px-2 gap-0.5">
+      <nav
+        className={`${
+          focusMode ? "hidden" : "hidden lg:flex"
+        }  flex-shrink-0 w-44 bg-ns-surface border-r border-ns-border flex-col pt-4 pb-4 px-2 gap-0.5`}
+      >
         <Link
           to="/user-stories"
           className="flex items-center gap-2.5 px-3 py-2.5 rounded-ns font-ui text-sm text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-all duration-150"
@@ -44,11 +50,13 @@ const Story = () => {
       </nav>
 
       <div className="flex-1 overflow-hidden min-w-0 flex flex-col">
-        <StoryWorkspaceTabs
-          basePath="/create"
-          storyId={storyId}
-          className="lg:hidden"
-        />
+        {!focusMode && (
+          <StoryWorkspaceTabs
+            basePath="/create"
+            storyId={storyId}
+            className="lg:hidden"
+          />
+        )}
         <main className="h-full overflow-hidden min-h-0">
           <Outlet />
         </main>

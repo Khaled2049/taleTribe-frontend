@@ -39,43 +39,52 @@ export const ReaderBottomBar: React.FC<ReaderBottomBarProps> = ({
       : 0;
   const isFirst = currentChapterIndex === 0;
   const isLast = currentChapterIndex === totalChapters - 1;
+  const hasChapterNav = totalChapters > 1;
 
   return (
     <div
       className={`fixed bottom-0 left-0 w-full ${theme.bg} border-t ${theme.border} shadow-lg transition-colors duration-300`}
     >
       <div className="max-w-4xl mx-auto px-4 py-3">
-        <div className="flex items-center justify-between gap-4">
-          <button
-            onClick={onPrevChapter}
-            disabled={isFirst}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${theme.hover} ${theme.text} disabled:opacity-30 disabled:cursor-not-allowed`}
-            aria-label="Previous chapter"
-          >
-            <ChevronLeft size={16} />
-            Prev
-          </button>
+        <div className="flex items-center justify-center gap-4">
+          {hasChapterNav && (
+            <button
+              onClick={onPrevChapter}
+              disabled={isFirst}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${theme.hover} ${theme.text} disabled:opacity-30 disabled:cursor-not-allowed`}
+              aria-label="Previous chapter"
+            >
+              <ChevronLeft size={16} />
+              Prev
+            </button>
+          )}
 
           <div className="flex flex-col items-center leading-tight">
-            <span className={`text-sm font-medium ${theme.text} tabular-nums`}>
-              {currentChapterIndex + 1} / {totalChapters}
-            </span>
+            {hasChapterNav && (
+              <span
+                className={`text-sm font-medium ${theme.text} tabular-nums`}
+              >
+                {currentChapterIndex + 1} / {totalChapters}
+              </span>
+            )}
             {minutesRemaining > 0 && (
               <span className={`text-xs ${theme.text} opacity-50 tabular-nums`}>
-                ~{minutesRemaining} min left in chapter
+                ~{minutesRemaining} min left{hasChapterNav ? " in chapter" : ""}
               </span>
             )}
           </div>
 
-          <button
-            onClick={onNextChapter}
-            disabled={isLast}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${theme.hover} ${theme.text} disabled:opacity-30 disabled:cursor-not-allowed`}
-            aria-label="Next chapter"
-          >
-            Next
-            <ChevronRight size={16} />
-          </button>
+          {hasChapterNav && (
+            <button
+              onClick={onNextChapter}
+              disabled={isLast}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${theme.hover} ${theme.text} disabled:opacity-30 disabled:cursor-not-allowed`}
+              aria-label="Next chapter"
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          )}
         </div>
 
         {/* Progress Bar */}

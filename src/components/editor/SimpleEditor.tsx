@@ -1,5 +1,5 @@
 import "../style.css";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlignCenter,
   AlignJustify,
@@ -18,6 +18,8 @@ import {
   List,
   ListOrdered,
   Loader,
+  Maximize2,
+  Minimize2,
   PenLine,
   Pilcrow,
   Quote,
@@ -51,11 +53,29 @@ import { Editor } from "@tiptap/react";
 import { useEditorState } from "@/hooks/useEditorState";
 import { useAutosave } from "@/hooks/useAutosave";
 import { SaveStatusIndicator } from "@/components/editor/SaveStatusIndicator";
+import { WritingStats } from "@/components/editor/WritingStats";
+import {
+  canSplitDocument,
+  getDocumentOutline,
+  jumpToOutlineEntry,
+  splitDocumentAtHeadings,
+  type DocumentSection,
+  type OutlineEntry,
+} from "@/utils/documentOutline";
+import {
+  CHAPTER_TITLE_LIMIT,
+  CHAPTER_WORD_LIMIT,
+  STORY_CHAPTER_LIMIT,
+  chapterWordCount,
+} from "@/utils/chapterWordLimit";
+import { nextChapterPosition } from "@/utils/chapterPosition";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { InteractiveStoryPanel } from "@/components/editor/InteractiveStoryPanel";
 import { FloatingChatButton } from "../chat/FloatingChatButton";
 import { useCoWrite } from "@/hooks/useCoWrite";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useFullscreen } from "@/hooks/useFullscreen";
+import { useFocusModeStore } from "@/stores/focusModeStore";
 import { toast } from "sonner";
 import { summarizeChapter } from "@/cloudFunctions/ai";
 import { useQueryClient } from "@tanstack/react-query";
@@ -83,6 +103,28 @@ const DEMO_CHAPTER: Chapter = {
   wordCount: 0,
   userId: "",
 };
+
+function splitValidationError(sections: DocumentSection[]): string | null {
+  if (sections.length < 2) {
+    return "Add another top-level heading before splitting.";
+  }
+  if (sections.length > STORY_CHAPTER_LIMIT) {
+    return `A story can have at most ${STORY_CHAPTER_LIMIT} chapters. Remove some headings first.`;
+  }
+  if (
+    sections.some(
+      (section) => chapterWordCount(section.html) > CHAPTER_WORD_LIMIT,
+    )
+  ) {
+    return `Each section must be under ${CHAPTER_WORD_LIMIT.toLocaleString()} words before splitting.`;
+  }
+  if (
+    sections.some((section) => [...section.title].length > CHAPTER_TITLE_LIMIT)
+  ) {
+    return `Chapter headings must be ${CHAPTER_TITLE_LIMIT} characters or fewer.`;
+  }
+  return null;
+}
 
 export function SimpleEditor() {
   const { isDemo, requireAuth } = useDemoMode();
@@ -121,6 +163,8 @@ export function SimpleEditor() {
   const [pendingChapter, setPendingChapter] = useState<Chapter | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryResult, setSummaryResult] = useState<string | null>(null);
+  const [splitDialogOpen, setSplitDialogOpen] = useState(false);
+  const [isSplitting, setIsSplitting] = useState(false);
   const [fontSize, setFontSize] = useState("16px");
   const [fontColor, setFontColor] = useState("#1f2937");
   const [highlightColor, setHighlightColor] = useState("#fef3c7");
@@ -136,6 +180,85 @@ export function SimpleEditor() {
   const fontSizes = ["12px", "14px", "16px", "18px", "20px", "24px", "28px"];
   const lineHeights = ["1.2", "1.4", "1.6", "1.8", "2"];
   const paragraphSpacings = ["0", "0.5rem", "0.75rem", "1rem", "1.25rem"];
+
+  const focusMode = useFocusModeStore((s) => s.focusMode);
+  const setFocusMode = useFocusModeStore((s) => s.setFocusMode);
+  const sidebarsBeforeFocus = useRef<{ left: boolean; right: boolean } | null>(
+    null,
+  );
+  const {
+    isFullscreen,
+    isSupported: isFullscreenSupported,
+    enter: enterFullscreen,
+    exit: exitFullscreen,
+  } = useFullscreen();
+
+  const enterFocusMode = useCallback(() => {
+    sidebarsBeforeFocus.current = {
+      left: state.leftSidebarOpen,
+      right: state.rightSidebarOpen,
+    };
+    actions.setLeftSidebarOpen(false);
+    actions.setRightSidebarOpen(false);
+    setFocusMode(true);
+    void enterFullscreen();
+  }, [
+    state.leftSidebarOpen,
+    state.rightSidebarOpen,
+    actions,
+    enterFullscreen,
+    setFocusMode,
+  ]);
+
+  const exitFocusMode = useCallback(() => {
+    const previous = sidebarsBeforeFocus.current;
+    sidebarsBeforeFocus.current = null;
+    setFocusMode(false);
+    if (previous) {
+      actions.setLeftSidebarOpen(previous.left);
+      actions.setRightSidebarOpen(previous.right);
+    }
+    void exitFullscreen();
+  }, [actions, exitFullscreen, setFocusMode]);
+
+  const wasFullscreen = useRef(false);
+  useEffect(() => {
+    const left = wasFullscreen.current && !isFullscreen;
+    wasFullscreen.current = isFullscreen;
+    if (left && focusMode) exitFocusMode();
+  }, [isFullscreen, focusMode, exitFocusMode]);
+
+  useEffect(() => {
+    return () => {
+      setFocusMode(false);
+      void exitFullscreen();
+    };
+  }, [setFocusMode, exitFullscreen]);
+
+  useEffect(() => {
+    if (!focusMode) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (
+        deleteDialogOpen ||
+        publishDialogOpen ||
+        unsavedChangesDialogOpen ||
+        summaryResult
+      ) {
+        return;
+      }
+      exitFocusMode();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    focusMode,
+    deleteDialogOpen,
+    publishDialogOpen,
+    unsavedChangesDialogOpen,
+    summaryResult,
+    exitFocusMode,
+  ]);
 
   useEffect(() => {
     if (isLgUp) {
@@ -190,6 +313,7 @@ export function SimpleEditor() {
       state.storyDescription,
       state.metadataChanged,
       actions,
+      isDemo,
     ],
   );
 
@@ -236,7 +360,7 @@ export function SimpleEditor() {
     if (storyId) {
       loadStory(storyId);
     }
-  }, [storyId, user, loadStory, isDemo, actions]);
+  }, [storyId, user, loadStory, isDemo, actions, isLgUp]);
 
   // The shelf renders a chapter count derived server-side, so adding or
   // removing a chapter here makes its cached list wrong. The query is not
@@ -254,8 +378,7 @@ export function SimpleEditor() {
     if (!requireAuth()) return;
     if (!state.story) return;
 
-    // Save current content first if dirty
-    if (isDirty && state.currentChapter?.content) {
+    if (isDirty) {
       await forceSave();
     }
 
@@ -263,7 +386,7 @@ export function SimpleEditor() {
       const newChapter = await storyWorkspaceRepo.createChapter(
         state.story,
         "New Chapter",
-        state.chapters.length,
+        nextChapterPosition(state.chapters),
       );
       actions.addChapter(newChapter);
       resetSaveState();
@@ -275,13 +398,112 @@ export function SimpleEditor() {
     }
   };
 
+  const isSingleDocument = state.chapters.length === 1;
+  const outline: OutlineEntry[] = isSingleDocument
+    ? getDocumentOutline(editor)
+    : [];
+  const canSplitIntoChapters = isSingleDocument && canSplitDocument(editor);
+
+  const handleOutlineSelect = (entry: OutlineEntry) => {
+    if (editor) jumpToOutlineEntry(editor, entry.pos);
+  };
+
+  const splitChapterCount = splitDialogOpen
+    ? splitDocumentAtHeadings(editor).length
+    : 0;
+  const splitPreview = `This creates ${splitChapterCount} chapters from your top-level headings. Each heading becomes a chapter title.`;
+
+  const performSplit = async () => {
+    if (!state.story || !state.currentChapter || !editor) return;
+    const sections = splitDocumentAtHeadings(editor);
+    const validationError = splitValidationError(sections);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    setIsSplitting(true);
+    try {
+      const [first, ...rest] = sections;
+      const firstTitle =
+        first.title || state.currentChapter.title || "Chapter 1";
+      const basePosition = nextChapterPosition(state.chapters);
+      const createdChapters: Chapter[] = [];
+
+      for (let i = 0; i < rest.length; i++) {
+        const section = rest[i];
+        const created = await storyWorkspaceRepo.createChapter(
+          state.story,
+          section.title || `Chapter ${i + 2}`,
+          basePosition + i,
+        );
+        const saved = await storyWorkspaceRepo.updateChapter(
+          state.story,
+          created,
+          section.title || `Chapter ${i + 2}`,
+          section.html,
+        );
+        createdChapters.push(saved);
+      }
+
+      const savedFirst = await storyWorkspaceRepo.updateChapter(
+        state.story,
+        state.currentChapter,
+        firstTitle,
+        first.html,
+      );
+
+      actions.updateChapterInList(savedFirst.id, savedFirst);
+      createdChapters.forEach(actions.addChapter);
+      actions.selectChapter(savedFirst);
+      editor.commands.setContent(first.html, { emitUpdate: false });
+      resetSaveState();
+      invalidateShelf();
+      toast.success(`Split into ${sections.length} chapters.`);
+    } catch (error) {
+      try {
+        const chapters = await storyWorkspaceRepo.getChapters(state.story);
+        const current =
+          chapters.find((chapter) => chapter.id === state.currentChapter?.id) ??
+          chapters[0] ??
+          null;
+        actions.loadStory(state.story, chapters, current, {
+          leftSidebarOpen: state.leftSidebarOpen,
+        });
+      } catch (refreshError) {
+        console.error("Failed to refresh chapters after split:", refreshError);
+      }
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to split into chapters.",
+      );
+    } finally {
+      setIsSplitting(false);
+    }
+  };
+
+  const handleSplitRequest = async () => {
+    if (!requireAuth()) return;
+    if (isDirty) {
+      await forceSave();
+    }
+    const validationError = splitValidationError(
+      splitDocumentAtHeadings(editor),
+    );
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+    setSplitDialogOpen(true);
+  };
+
   // Summarize the current chapter and persist the summary.
   const handleSummarizeChapter = async () => {
     if (!requireAuth()) return;
     if (!state.story || !state.currentChapter) return;
 
-    // Save any pending edits first so PostgreSQL has the latest chapter text.
-    if (isDirty && state.currentChapter?.content) {
+    if (isDirty) {
       await forceSave();
     }
 
@@ -317,8 +539,7 @@ export function SimpleEditor() {
     if (!requireAuth()) return;
     if (!state.story) return;
 
-    // Save before publishing if dirty
-    if (isDirty && state.currentChapter?.content) {
+    if (isDirty) {
       await forceSave();
     }
 
@@ -361,9 +582,8 @@ export function SimpleEditor() {
     }
   };
 
-  // Handle save and continue for unsaved changes dialog
   const handleSaveAndContinue = async () => {
-    if (state.currentChapter?.content) {
+    if (state.currentChapter) {
       await forceSave();
     }
     if (pendingChapter) {
@@ -388,9 +608,8 @@ export function SimpleEditor() {
     setPendingChapter(null);
   };
 
-  // Handle metadata changes - trigger save
   const handleMetadataChange = () => {
-    if (state.currentChapter && state.currentChapter.content) {
+    if (state.currentChapter) {
       triggerSave(state.currentChapter.content);
     }
   };
@@ -425,7 +644,9 @@ export function SimpleEditor() {
       resetSaveState();
       invalidateShelf();
     } catch (error) {
-      console.error("Error deleting chapter:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete chapter.",
+      );
     }
     setChapterToDelete(null);
   };
@@ -812,26 +1033,14 @@ export function SimpleEditor() {
 
         {state.rightTab === "document" && (
           <div className="space-y-4">
-            <div className="rounded-ns border border-ns-border bg-white p-3 space-y-1.5">
-              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-muted font-ui mb-1">
-                Details
-              </p>
-              <p className="text-xs font-ui text-ns-ink-secondary">
-                Words:{" "}
-                <span className="text-ns-ink">
-                  {editor?.storage.characterCount?.words?.() || 0}
-                </span>
-              </p>
-              <p className="text-xs font-ui text-ns-ink-secondary">
-                Characters:{" "}
-                <span className="text-ns-ink">
-                  {editor?.storage.characterCount?.characters?.() || 0}
-                </span>
-              </p>
-              <p className="text-xs font-ui text-ns-ink-secondary">
-                Chapters:{" "}
-                <span className="text-ns-ink">{state.chapters.length}</span>
-              </p>
+            <div className="rounded-ns border border-ns-border bg-white p-3">
+              <WritingStats
+                currentChapter={state.currentChapter}
+                chaptersCount={state.chapters.length}
+                singleDocument={isSingleDocument}
+                textCharacterCount={editor?.storage.characterCount?.characters?.()}
+                textWordCount={editor?.storage.characterCount?.words?.()}
+              />
             </div>
             <div className="rounded-ns border border-ns-border bg-white p-3">
               <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-muted font-ui mb-2">
@@ -869,6 +1078,23 @@ export function SimpleEditor() {
   );
 
   const isPublished = !!state.story?.isPublished;
+  const sidebarPanelProps = {
+    chapters: state.chapters,
+    currentChapterId: state.currentChapter?.id || "",
+    chapterTitle: state.chapterTitle,
+    storyTitle: state.storyTitle,
+    onChapterSelect: handleChapterSelect,
+    onChapterDelete: handleChapterDeleteRequest,
+    onChapterAdd: handleNewChapter,
+    onStoryTitleChange: actions.updateStoryTitle,
+    onChapterTitleChange: actions.updateChapterTitle,
+    onMetadataChange: handleMetadataChange,
+    singleDocument: isSingleDocument,
+    outline,
+    onOutlineSelect: handleOutlineSelect,
+    canSplitIntoChapters,
+    onSplitIntoChapters: handleSplitRequest,
+  };
 
   return (
     <div className="relative w-full h-full bg-ns-bg flex overflow-hidden">
@@ -900,20 +1126,7 @@ export function SimpleEditor() {
               <X className="w-4 h-4" />
             </button>
             <div className="w-80 h-full">
-              <SidebarPanel
-                chapters={state.chapters}
-                currentChapterId={state.currentChapter?.id || ""}
-                chapterTitle={state.chapterTitle}
-                storyTitle={state.storyTitle}
-                onChapterSelect={handleChapterSelect}
-                onChapterDelete={handleChapterDeleteRequest}
-                onChapterAdd={handleNewChapter}
-                onStoryTitleChange={actions.updateStoryTitle}
-                onChapterTitleChange={actions.updateChapterTitle}
-                onMetadataChange={handleMetadataChange}
-                activeTab={state.activeTab}
-                onTabChange={actions.setActiveTab}
-              />
+              <SidebarPanel {...sidebarPanelProps} />
             </div>
           </div>
 
@@ -925,7 +1138,9 @@ export function SimpleEditor() {
                 ? "Collapse chapters panel"
                 : "Expand chapters panel"
             }
-            className="hidden lg:flex absolute top-1/2 -translate-y-1/2 z-20 bg-ns-elevated border border-ns-border rounded-r-ns py-4 w-5 items-center justify-center shadow-ns-sm hover:bg-ns-surface-hover hover:shadow-ns transition-all duration-200 group"
+            className={`${
+              focusMode ? "hidden" : "hidden lg:flex"
+            } absolute top-1/2 -translate-y-1/2 z-20 bg-ns-elevated border border-ns-border rounded-r-ns py-4 w-5 items-center justify-center shadow-ns-sm hover:bg-ns-surface-hover hover:shadow-ns transition-all duration-200 group`}
             style={{ left: state.leftSidebarOpen ? "320px" : "0px" }}
           >
             {state.leftSidebarOpen ? (
@@ -937,7 +1152,11 @@ export function SimpleEditor() {
 
           {/* ── Main Editor Area ── */}
           <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-            <div className="lg:hidden flex items-center justify-between border-b border-ns-border bg-ns-surface px-3 py-2 gap-2">
+            <div
+              className={`${
+                focusMode ? "hidden" : "lg:hidden flex"
+              } items-center justify-between border-b border-ns-border bg-ns-surface px-3 py-2 gap-2`}
+            >
               <p className="font-ui text-xs text-ns-ink-secondary truncate">
                 {state.currentChapter?.title || "No chapter selected"}
               </p>
@@ -1004,8 +1223,7 @@ export function SimpleEditor() {
               </div>
             )}
 
-            {/* ── Status Bar ── */}
-            {state.currentChapter && (
+            {state.currentChapter && (!focusMode || isInteractivePanelOpen) && (
               <div className="flex-shrink-0 border-t border-ns-border bg-ns-surface">
                 {isInteractivePanelOpen && editor && (
                   <div className="border-b border-ns-border bg-transparent px-3 py-3 sm:px-4 sm:py-4">
@@ -1030,8 +1248,24 @@ export function SimpleEditor() {
                   </div>
                 )}
 
-                <div className="hidden sm:flex items-center gap-3 px-4 py-2">
+                <div
+                  className={`${
+                    focusMode ? "hidden" : "hidden sm:flex"
+                  } items-center gap-3 px-4 py-2`}
+                >
                   <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={enterFocusMode}
+                      title={
+                        isFullscreenSupported
+                          ? "Focus mode — hide everything but the page"
+                          : "Focus mode — hide every panel"
+                      }
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink hover:border-ns-border-strong active:scale-[0.97] transition-all duration-150 whitespace-nowrap"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="hidden lg:inline">Focus</span>
+                    </button>
                     <button
                       onClick={() => {
                         if (requireAuth()) openCoWrite();
@@ -1044,17 +1278,8 @@ export function SimpleEditor() {
                       <span className="lg:hidden">AI</span>
                     </button>
                     <button
-                      onClick={handleNewChapter}
-                      title="New chapter"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink hover:border-ns-border-strong active:scale-[0.97] transition-all duration-150 whitespace-nowrap"
-                    >
-                      <BookPlus className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span className="hidden lg:inline">New Chapter</span>
-                      <span className="lg:hidden">New</span>
-                    </button>
-                    <button
                       onClick={() => {
-                        if (state.currentChapter?.content) {
+                        if (state.currentChapter) {
                           forceSave();
                         }
                       }}
@@ -1119,7 +1344,11 @@ export function SimpleEditor() {
                   </div>
                 </div>
 
-                <div className="sm:hidden border-t border-ns-border px-3 py-2 space-y-2">
+                <div
+                  className={`${
+                    focusMode ? "hidden" : "sm:hidden"
+                  } border-t border-ns-border px-3 py-2 space-y-2`}
+                >
                   <div className="flex items-center justify-center">
                     <SaveStatusIndicator
                       status={saveState.status}
@@ -1130,6 +1359,13 @@ export function SimpleEditor() {
                   </div>
                   <div className="grid grid-cols-5 gap-2">
                     <button
+                      onClick={enterFocusMode}
+                      className="inline-flex justify-center rounded-ns border border-ns-border px-2 py-1.5 text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
+                      aria-label="Enter focus mode"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       onClick={() => {
                         if (requireAuth()) openCoWrite();
                       }}
@@ -1139,15 +1375,8 @@ export function SimpleEditor() {
                       <Sparkles className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={handleNewChapter}
-                      className="inline-flex justify-center rounded-ns border border-ns-border px-2 py-1.5 text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
-                      aria-label="Create new chapter"
-                    >
-                      <BookPlus className="w-3.5 h-3.5" />
-                    </button>
-                    <button
                       onClick={() => {
-                        if (state.currentChapter?.content) {
+                        if (state.currentChapter) {
                           forceSave();
                         }
                       }}
@@ -1204,7 +1433,9 @@ export function SimpleEditor() {
                 ? "Collapse inspector panel"
                 : "Expand inspector panel"
             }
-            className="hidden lg:flex absolute top-1/2 -translate-y-1/2 z-20 bg-ns-elevated border border-ns-border rounded-l-ns py-4 w-5 items-center justify-center shadow-ns-sm hover:bg-ns-surface-hover hover:shadow-ns transition-all duration-200 group"
+            className={`${
+              focusMode ? "hidden" : "hidden lg:flex"
+            } absolute top-1/2 -translate-y-1/2 z-20 bg-ns-elevated border border-ns-border rounded-l-ns py-4 w-5 items-center justify-center shadow-ns-sm hover:bg-ns-surface-hover hover:shadow-ns transition-all duration-200 group`}
             style={{ right: state.rightSidebarOpen ? "320px" : "0px" }}
           >
             {state.rightSidebarOpen ? (
@@ -1236,25 +1467,36 @@ export function SimpleEditor() {
             </div>
           </div>
 
+          {focusMode && (
+            <div className="absolute top-3 right-3 z-40 flex items-center gap-2 rounded-ns border border-ns-border bg-ns-surface/85 px-2 py-1 shadow-ns-sm backdrop-blur opacity-40 hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300">
+              <SaveStatusIndicator
+                status={saveState.status}
+                lastSaved={saveState.lastSaved}
+                errorMessage={saveState.errorMessage}
+                isOnline={isOnline}
+                className="!text-[11px] hidden md:flex"
+              />
+              <button
+                onClick={exitFocusMode}
+                aria-label="Exit focus mode"
+                className="inline-flex items-center gap-1.5 rounded-ns px-2 py-1 font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
+              >
+                <Minimize2 className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="hidden sm:inline">Exit focus</span>
+                <kbd className="hidden sm:inline rounded border border-ns-border bg-ns-elevated px-1 font-ui text-[10px] text-ns-ink-muted">
+                  Esc
+                </kbd>
+              </button>
+            </div>
+          )}
+
           <SlideOverPanel
             open={!isLgUp && state.leftSidebarOpen}
             onClose={closeChaptersPanel}
             side="left"
-            title="Chapters"
+            title={isSingleDocument ? "Outline" : "Chapters"}
           >
-            <SidebarPanel
-              chapters={state.chapters}
-              currentChapterId={state.currentChapter?.id || ""}
-              chapterTitle={state.chapterTitle}
-              storyTitle={state.storyTitle}
-              onChapterSelect={handleChapterSelect}
-              onChapterDelete={handleChapterDeleteRequest}
-              onStoryTitleChange={actions.updateStoryTitle}
-              onChapterTitleChange={actions.updateChapterTitle}
-              onMetadataChange={handleMetadataChange}
-              activeTab={state.activeTab}
-              onTabChange={actions.setActiveTab}
-            />
+            <SidebarPanel {...sidebarPanelProps} />
           </SlideOverPanel>
 
           <SlideOverPanel
@@ -1268,7 +1510,19 @@ export function SimpleEditor() {
             </div>
           </SlideOverPanel>
 
-          {!isDemo && <FloatingChatButton storyId={state.story?.id} />}
+          {!isDemo && !focusMode && (
+            <FloatingChatButton storyId={state.story?.id} />
+          )}
+
+          <ConfirmDialog
+            open={splitDialogOpen}
+            onOpenChange={setSplitDialogOpen}
+            title="Split into chapters?"
+            description={splitPreview}
+            confirmLabel="Split"
+            isLoading={isSplitting}
+            onConfirm={performSplit}
+          />
 
           {/* ── Delete Chapter Dialog ── */}
           <ConfirmDialog

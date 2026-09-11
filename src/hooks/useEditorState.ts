@@ -11,7 +11,6 @@ export interface EditorState {
   chapterTitle: string;
   isLoading: boolean;
   metadataChanged: boolean;
-  activeTab: "chapters" | "ai";
   leftSidebarOpen: boolean;
   rightSidebarOpen: boolean;
   rightTab: "format" | "document";
@@ -42,7 +41,6 @@ type EditorAction =
       payload: { id: string; updates: Partial<Chapter> };
     }
   | { type: "CLEAR_METADATA_CHANGED" }
-  | { type: "SET_ACTIVE_TAB"; payload: "chapters" | "ai" }
   | { type: "TOGGLE_LEFT_SIDEBAR" }
   | { type: "TOGGLE_RIGHT_SIDEBAR" }
   | { type: "SET_LEFT_SIDEBAR"; payload: boolean }
@@ -61,7 +59,6 @@ const initialState: EditorState = {
   chapterTitle: "",
   isLoading: true,
   metadataChanged: false,
-  activeTab: "chapters",
   leftSidebarOpen: true,
   rightSidebarOpen: false,
   rightTab: "format",
@@ -172,9 +169,6 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     case "CLEAR_METADATA_CHANGED":
       return { ...state, metadataChanged: false };
 
-    case "SET_ACTIVE_TAB":
-      return { ...state, activeTab: action.payload };
-
     case "TOGGLE_LEFT_SIDEBAR":
       return { ...state, leftSidebarOpen: !state.leftSidebarOpen };
 
@@ -259,9 +253,6 @@ export function useEditorState() {
         dispatch({ type: "UPDATE_CHAPTER_IN_LIST", payload: { id, updates } }),
 
       clearMetadataChanged: () => dispatch({ type: "CLEAR_METADATA_CHANGED" }),
-
-      setActiveTab: (tab: "chapters" | "ai") =>
-        dispatch({ type: "SET_ACTIVE_TAB", payload: tab }),
 
       toggleLeftSidebar: () => dispatch({ type: "TOGGLE_LEFT_SIDEBAR" }),
 

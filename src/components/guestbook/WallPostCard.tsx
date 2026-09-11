@@ -220,14 +220,6 @@ const WallPostCard: React.FC<WallPostCardProps> = ({
         >
           {replyLabel}
         </button>
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="px-3 py-[7px] rounded-full font-ui text-[13.5px] font-semibold text-ns-ink-secondary opacity-60 cursor-default"
-        >
-          Save
-        </button>
       </div>
 
       {repliesExpanded && (

@@ -1,6 +1,7 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -9,7 +10,7 @@ interface ConfirmDialogProps {
   description: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   variant?: "danger" | "default";
   isLoading?: boolean;
   /** Single-button mode for notices that aren't really a confirm/cancel choice. */
@@ -28,13 +29,26 @@ export function ConfirmDialog({
   isLoading = false,
   hideCancel = false,
 }: ConfirmDialogProps) {
-  const handleConfirm = () => {
-    onConfirm();
-    onOpenChange(false);
+  const [isPending, setIsPending] = useState(false);
+  const loading = isLoading || isPending;
+
+  const handleConfirm = async () => {
+    if (loading) return;
+    setIsPending(true);
+    try {
+      await onConfirm();
+      onOpenChange(false);
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!loading) onOpenChange(nextOpen);
   };
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+    <DialogPrimitive.Root open={open} onOpenChange={handleOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
           className={cn(
@@ -79,7 +93,7 @@ export function ConfirmDialog({
             {!hideCancel && (
               <button
                 onClick={() => onOpenChange(false)}
-                disabled={isLoading}
+                disabled={loading}
                 className={cn(
                   "px-4 py-2 text-sm font-medium rounded-lg",
                   "border border-gray-300 dark:border-gray-600",
@@ -96,7 +110,7 @@ export function ConfirmDialog({
             )}
             <button
               onClick={handleConfirm}
-              disabled={isLoading}
+              disabled={loading}
               className={cn(
                 "px-4 py-2 text-sm font-medium rounded-lg text-white",
                 "focus:outline-none focus:ring-2 focus:ring-offset-2",
@@ -107,12 +121,13 @@ export function ConfirmDialog({
                   : "bg-dark-green dark:bg-light-green hover:bg-light-green dark:hover:bg-dark-green focus:ring-dark-green dark:focus:ring-light-green",
               )}
             >
-              {isLoading ? "..." : confirmLabel}
+              {loading ? "..." : confirmLabel}
             </button>
           </div>
 
           {/* Close button */}
           <DialogPrimitive.Close
+            disabled={loading}
             className={cn(
               "absolute right-4 top-4 rounded-sm opacity-70",
               "transition-opacity hover:opacity-100",

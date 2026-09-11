@@ -400,7 +400,7 @@ export const ChapterReader: React.FC<ChapterReaderProps> = ({
 
       {/* Main Reading Content */}
       <ReaderContent
-        title={currentChapter.title}
+        title={totalChapters > 1 ? currentChapter.title : ""}
         model={model}
         marks={marks}
         activeMarkRef={activeMarkRef}
