@@ -79,6 +79,48 @@ describe("AI chat", () => {
     cy.get('[data-cy="chat-message-assistant"]').should("not.exist");
   });
 
+  it("reloads persisted history and clears the thread", () => {
+    cy.intercept("POST", "**/sendChatMessage").as("sendChat");
+    cy.intercept("POST", "**/clearChatSession").as("clearChat");
+    cy.get('[data-cy="open-chat"]').click();
+    cy.pollDocs(`stories/${storyId}/chats`, (chats) => chats.length >= 1);
+    cy.get('[data-cy="chat-input"]').type("Remember this fixture question");
+    cy.get('[data-cy="chat-send"]').click({ force: true });
+    cy.wait("@sendChat").its("response.statusCode").should("eq", 200);
+    cy.get('[data-cy="chat-message-assistant"]').should("exist");
+    cy.get('[aria-label="Close chat"]').click();
+    cy.get('[data-cy="open-chat"]').click();
+    cy.get('[data-cy="chat-message-user"]').should(
+      "contain.text",
+      "Remember this fixture question",
+    );
+    cy.get('[data-cy="chat-message-assistant"]').should(
+      "contain.text",
+      "Mock response to:",
+    );
+    cy.get('[aria-label="Clear chat"]').click();
+    cy.get('[aria-label="Confirm clear"]').click();
+    cy.wait("@clearChat").its("response.statusCode").should("eq", 200);
+    cy.get('[data-cy="chat-message-user"]').should("not.exist");
+    cy.get('[data-cy="chat-message-assistant"]').should("not.exist");
+  });
+
+  it("shows a provider failure without keeping the optimistic message", () => {
+    // Only this failure is injected; auth, session initialization and UI are real.
+    cy.intercept("POST", "**/sendChatMessage", {
+      statusCode: 500,
+      body: { error: "AI backend is unreachable. Please try again later." },
+    }).as("failedChat");
+    cy.get('[data-cy="open-chat"]').click();
+    cy.pollDocs(`stories/${storyId}/chats`, (chats) => chats.length >= 1);
+    cy.get('[data-cy="chat-input"]').type("Provider failure fixture");
+    cy.get('[data-cy="chat-send"]').click({ force: true });
+    cy.wait("@failedChat");
+    cy.contains("AI backend is unreachable").should("be.visible");
+    cy.get('[data-cy="chat-message-user"]').should("not.exist");
+    cy.get('[data-cy="chat-message-assistant"]').should("not.exist");
+  });
+
   // BYOK bypass (flow.md §5): a BYOK user's chat must succeed without
   // decrementing platform aiUsage. This cannot be exercised against the mock
   // creditProxy: BYOK instantiates the user's *real* provider with their

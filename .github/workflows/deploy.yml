@@ -134,6 +134,9 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Assistant contract drift check
+        run: yarn assistant:contracts:check
+
       - name: Test
         run: yarn test
 

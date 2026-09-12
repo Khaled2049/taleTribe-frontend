@@ -1,0 +1,14 @@
+/** Server-owned switches. Frontend flags never authorize a capability. */
+export function assistantFlags(env: NodeJS.ProcessEnv = process.env) {
+  const api = env.ASSISTANT_API_ENABLED === "true";
+  return {
+    api,
+    edits: api && env.ASSISTANT_EDIT_PROPOSALS_ENABLED === "true",
+    research: api && env.ASSISTANT_RESEARCH_ENABLED === "true",
+    legacy: env.ASSISTANT_LEGACY_FALLBACK_ENABLED !== "false",
+    spike:
+      api &&
+      env.FUNCTIONS_EMULATOR === "true" &&
+      env.ASSISTANT_STREAM_SPIKE_ENABLED === "true",
+  };
+}

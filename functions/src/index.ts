@@ -17,6 +17,7 @@ export { generateStoryChoices } from "./endpoints/generateStoryChoices";
 export { searchBooks } from "./endpoints/searchBooks";
 export { generateCoverImage } from "./endpoints/generateCoverImage";
 export { sendChatMessage } from "./endpoints/sendChatMessage";
+export { assistantStreamSpike } from "./endpoints/assistantStreamSpike";
 export { clearChatSession } from "./endpoints/clearChatSession";
 export { enhanceText } from "./endpoints/enhanceText";
 export { enhanceWizardInput } from "./endpoints/enhanceWizardInput";

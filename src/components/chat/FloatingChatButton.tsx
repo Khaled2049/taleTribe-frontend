@@ -1,7 +1,13 @@
-import React, { useState } from "react";
+import React, { lazy, Suspense, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { Chatbot } from "./Chatbot";
 import { useParams } from "react-router-dom";
+import {
+  ASSISTANT_UI_ENABLED,
+  ASSISTANT_LEGACY_FALLBACK_ENABLED,
+} from "@/config/featureFlags";
+
+const AssistantStreamSpike = lazy(() => import("./AssistantStreamSpike"));
 
 interface FloatingChatButtonProps {
   storyId?: string;
@@ -18,6 +24,7 @@ export const FloatingChatButton: React.FC<FloatingChatButtonProps> = ({
 
   // Don't show if no story context
   if (!currentStoryId) return null;
+  if (!ASSISTANT_UI_ENABLED && !ASSISTANT_LEGACY_FALLBACK_ENABLED) return null;
 
   return (
     <>
@@ -47,11 +54,25 @@ export const FloatingChatButton: React.FC<FloatingChatButtonProps> = ({
 
           {/* Chat Panel */}
           <div className="fixed right-0 top-0 bottom-0 w-full md:w-96 z-50 shadow-ns-xl animate-ns-slide-up">
-            <Chatbot
-              storyId={currentStoryId}
-              onClose={() => setIsOpen(false)}
-              mode="floating"
-            />
+            {ASSISTANT_UI_ENABLED ? (
+              <Suspense
+                fallback={
+                  <div className="h-full bg-ns-bg p-4">Loading assistant…</div>
+                }
+              >
+                <AssistantStreamSpike
+                  key={currentStoryId}
+                  storyId={currentStoryId}
+                  onClose={() => setIsOpen(false)}
+                />
+              </Suspense>
+            ) : (
+              <Chatbot
+                storyId={currentStoryId}
+                onClose={() => setIsOpen(false)}
+                mode="floating"
+              />
+            )}
           </div>
         </>
       )}

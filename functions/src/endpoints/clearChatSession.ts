@@ -5,6 +5,7 @@ import * as logger from "firebase-functions/logger";
 import { requireStoryOwnership } from "../infra/authService";
 import { deleteChatSession } from "../domain/chatFirestore";
 import { corsOptions } from "../infra/corsConfig";
+import { assistantFlags } from "../domain/assistantFlags";
 
 /**
  * POST /clearChatSession
@@ -17,6 +18,10 @@ import { corsOptions } from "../infra/corsConfig";
 export const clearChatSession = onRequest(
   corsOptions,
   requireStoryOwnership(async (request, response, userId, storyId, idToken) => {
+    if (!assistantFlags().legacy) {
+      response.status(404).json({ error: "Legacy assistant is disabled" });
+      return;
+    }
     try {
       const { chatId } = request.body;
 

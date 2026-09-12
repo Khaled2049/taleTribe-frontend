@@ -5,6 +5,7 @@ import * as logger from "firebase-functions/logger";
 import { requireStoryOwnership } from "../infra/authService";
 import { callAgentWithRetry } from "../agent/retry";
 import { checkAiAccess, corsWithEncryption } from "../domain/aiSettings";
+import { assistantFlags } from "../domain/assistantFlags";
 import {
   getChatHistory,
   saveChatMessages,
@@ -33,6 +34,10 @@ const MAX_CHAT_MESSAGE_LENGTH = 5000;
 export const sendChatMessage = onRequest(
   corsWithEncryption,
   requireStoryOwnership(async (request, response, userId, storyId, idToken) => {
+    if (!assistantFlags().legacy) {
+      response.status(404).json({ error: "Legacy assistant is disabled" });
+      return;
+    }
     try {
       const access = await checkAiAccess(userId);
       if (!access.allowed) {
