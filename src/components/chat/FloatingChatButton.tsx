@@ -7,14 +7,16 @@ import {
   ASSISTANT_LEGACY_FALLBACK_ENABLED,
 } from "@/config/featureFlags";
 
-const AssistantStreamSpike = lazy(() => import("./AssistantStreamSpike"));
+const AssistantPanel = lazy(() => import("./AssistantPanel"));
 
 interface FloatingChatButtonProps {
   storyId?: string;
+  scope?: "editor" | "workspace";
 }
 
 export const FloatingChatButton: React.FC<FloatingChatButtonProps> = ({
   storyId: propStoryId,
+  scope = "editor",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const { storyId, id } = useParams<{ storyId?: string; id?: string }>();
@@ -25,6 +27,24 @@ export const FloatingChatButton: React.FC<FloatingChatButtonProps> = ({
   // Don't show if no story context
   if (!currentStoryId) return null;
   if (!ASSISTANT_UI_ENABLED && !ASSISTANT_LEGACY_FALLBACK_ENABLED) return null;
+
+  // The product runtime belongs to the mounted story workspace so closing the
+  // dialog or changing tabs preserves settled local messages. The legacy
+  // fallback remains editor-scoped exactly as before.
+  if (scope === "workspace") {
+    if (!ASSISTANT_UI_ENABLED) return null;
+    return (
+      <Suspense
+        fallback={
+          <div className="fixed bottom-24 right-4 z-30 h-11 w-11 animate-pulse rounded-full bg-ns-surface motion-reduce:animate-none md:right-6" />
+        }
+      >
+        <AssistantPanel key={currentStoryId} storyId={currentStoryId} />
+      </Suspense>
+    );
+  }
+
+  if (ASSISTANT_UI_ENABLED || !ASSISTANT_LEGACY_FALLBACK_ENABLED) return null;
 
   return (
     <>
@@ -52,27 +72,13 @@ export const FloatingChatButton: React.FC<FloatingChatButtonProps> = ({
             onClick={() => setIsOpen(false)}
           />
 
-          {/* Chat Panel */}
+          {/* Legacy Chat Panel */}
           <div className="fixed right-0 top-0 bottom-0 w-full md:w-96 z-50 shadow-ns-xl animate-ns-slide-up">
-            {ASSISTANT_UI_ENABLED ? (
-              <Suspense
-                fallback={
-                  <div className="h-full bg-ns-bg p-4">Loading assistant…</div>
-                }
-              >
-                <AssistantStreamSpike
-                  key={currentStoryId}
-                  storyId={currentStoryId}
-                  onClose={() => setIsOpen(false)}
-                />
-              </Suspense>
-            ) : (
-              <Chatbot
-                storyId={currentStoryId}
-                onClose={() => setIsOpen(false)}
-                mode="floating"
-              />
-            )}
+            <Chatbot
+              storyId={currentStoryId}
+              onClose={() => setIsOpen(false)}
+              mode="floating"
+            />
           </div>
         </>
       )}

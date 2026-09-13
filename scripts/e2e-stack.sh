@@ -13,6 +13,7 @@
 #   ./scripts/e2e-stack.sh                 # run all specs headless
 #   ./scripts/e2e-stack.sh --open          # leave stack up + open Cypress UI
 #   CYPRESS_SPEC=cypress/e2e/ai_chat.cy.ts ./scripts/e2e-stack.sh
+#   ASSISTANT_UI_E2E=true CYPRESS_SPEC=cypress/e2e/assistant_panel.cy.ts ./scripts/e2e-stack.sh
 set -euo pipefail
 
 FRONTEND_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -23,6 +24,7 @@ CREDIT_DIR="$REPOS_DIR/creditProxy"
 
 CREDIT_PROXY_PORT="${CREDIT_PROXY_PORT:-8090}"
 STORY_DATA_URL="${STORY_DATA_URL:-http://127.0.0.1:8084}"
+ASSISTANT_UI_E2E="${ASSISTANT_UI_E2E:-false}"
 OPEN_MODE="false"
 [ "${1:-}" = "--open" ] && OPEN_MODE="true"
 
@@ -67,6 +69,18 @@ wait_for() {
   echo "$label ready."
 }
 
+assistant_route_status() {
+  curl -sS -o /dev/null -w '%{http_code}' \
+    -X POST -H 'Content-Type: application/json' \
+    -d '{"v":1,"story_id":"e2e-probe","client_message_id":"e2e-probe","message":{"role":"user","parts":[{"type":"text","text":"probe"}]},"user_id":"e2e-probe"}' \
+    "$1/assistant/run"
+}
+
+vite_has_assistant_ui() {
+  curl -sf "$1/src/config/featureFlags.ts" | \
+    grep -q '"VITE_ASSISTANT_UI_ENABLED": "true"'
+}
+
 # 1. story-data — PostgreSQL/pgvector on :5433, API on :8084. The API migrates
 #    at startup, so a fresh volume is ready as soon as /health answers.
 if is_up "$STORY_DATA_URL/health"; then
@@ -102,6 +116,34 @@ else
   wait_for "http://localhost:4000" "Firebase emulators"
 fi
 
+# The product assistant uses a small first-party development relay because the
+# Firebase emulator proxy does not reliably propagate browser disconnects.
+if [ "$ASSISTANT_UI_E2E" = "true" ]; then
+  ASSISTANT_AGENT_PORT=8000
+  if is_up "http://127.0.0.1:8000/health" && \
+    [ "$(assistant_route_status http://127.0.0.1:8000)" = "404" ]; then
+    ASSISTANT_AGENT_PORT=8001
+  fi
+  if is_up "http://127.0.0.1:5002/health"; then
+    echo "Assistant run gateway already up on :5002 — reusing it."
+  else
+    echo "Starting assistant run gateway on :5002..."
+    npm run build --prefix "$FRONTEND_DIR/functions"
+    (
+      cd "$FRONTEND_DIR/functions"
+      exec env FUNCTIONS_EMULATOR=true \
+        FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+        GOOGLE_CLOUD_PROJECT=story-6f89f \
+        STORY_DATA_URL="$STORY_DATA_URL" \
+        AGENT_SERVICE_URL="http://localhost:$ASSISTANT_AGENT_PORT" \
+        ASSISTANT_API_ENABLED=true \
+        node lib/assistantGatewayDev.js
+    ) &
+    PIDS+=($!)
+    wait_for "http://127.0.0.1:5002/health" "assistant run gateway"
+  fi
+fi
+
 # 4. taleTribe-agents — USE_MOCK=true keeps embeddings deterministic/offline;
 #    AGENT_SERVICE_URL on the functions side defaults to localhost:8000.
 if is_up "http://localhost:8000/health"; then
@@ -115,38 +157,91 @@ else
     # breaks whenever the checkout moves.
     AGENT_PYTHON="python3"
     [ -x venv/bin/python ] && AGENT_PYTHON="$PWD/venv/bin/python"
-    CREDIT_PROXY_URL="http://localhost:$CREDIT_PROXY_PORT" \
-    GOOGLE_CLOUD_PROJECT=story-6f89f \
-    USE_MOCK=true \
-    FIRESTORE_EMULATOR_HOST=localhost:8080 \
-    STORY_DATA_DATABASE_URL='postgres://postgres:postgres@localhost:5433/story_data?sslmode=disable' \
-    INDEXING_WORKER_ENABLED=true \
-    CORS_ORIGINS='["http://localhost:5173"]' \
-    "$AGENT_PYTHON" server.py
+    exec env \
+      CREDIT_PROXY_URL="http://localhost:$CREDIT_PROXY_PORT" \
+      GOOGLE_CLOUD_PROJECT=story-6f89f \
+      USE_MOCK=true \
+      ASSISTANT_API_ENABLED="$ASSISTANT_UI_E2E" \
+      ENABLE_MCP_WRITES=false \
+      FIRESTORE_EMULATOR_HOST=localhost:8080 \
+      STORY_DATA_URL="$STORY_DATA_URL" \
+      STORY_DATA_DATABASE_URL='postgres://postgres:postgres@localhost:5433/story_data?sslmode=disable' \
+      INDEXING_WORKER_ENABLED=true \
+      CORS_ORIGINS='["http://localhost:5173"]' \
+      "$AGENT_PYTHON" server.py
   ) &
   PIDS+=($!)
   wait_for "http://localhost:8000/health" "taleTribe-agents"
 fi
 
+if [ "$ASSISTANT_UI_E2E" = "true" ] && [ "$ASSISTANT_AGENT_PORT" = "8001" ]; then
+  if is_up "http://localhost:8001/health"; then
+    echo "Assistant-enabled taleTribe-agents already up on :8001 — reusing it."
+  else
+    echo "Starting assistant-enabled taleTribe-agents on :8001..."
+    (
+      cd "$AGENTS_DIR"
+      AGENT_PYTHON="python3"
+      [ -x venv/bin/python ] && AGENT_PYTHON="$PWD/venv/bin/python"
+      exec env \
+        PORT=8001 \
+        CREDIT_PROXY_URL="http://localhost:$CREDIT_PROXY_PORT" \
+        GOOGLE_CLOUD_PROJECT=story-6f89f \
+        USE_MOCK=true \
+        ASSISTANT_API_ENABLED=true \
+        ENABLE_MCP_WRITES=false \
+        FIRESTORE_EMULATOR_HOST=localhost:8080 \
+        STORY_DATA_URL="$STORY_DATA_URL" \
+        STORY_DATA_DATABASE_URL='postgres://postgres:postgres@localhost:5433/story_data?sslmode=disable' \
+        INDEXING_WORKER_ENABLED=true \
+        CORS_ORIGINS='["http://localhost:5173"]' \
+        "$AGENT_PYTHON" server.py
+    ) &
+    PIDS+=($!)
+    wait_for "http://localhost:8001/health" "assistant-enabled taleTribe-agents"
+  fi
+fi
+
+if [ "$ASSISTANT_UI_E2E" = "true" ]; then
+  ASSISTANT_ROUTE_STATUS="$(assistant_route_status "http://127.0.0.1:$ASSISTANT_AGENT_PORT")"
+  if [ "$ASSISTANT_ROUTE_STATUS" = "404" ]; then
+    echo "Error: the agent on :$ASSISTANT_AGENT_PORT does not expose the assistant API." >&2
+    exit 1
+  fi
+fi
+
 # 5. Vite dev server (development mode => Firebase Web SDK wires to emulators).
-if is_up "http://localhost:5173"; then
-  echo "Vite dev server already up on :5173 — reusing it."
+E2E_VITE_PORT=5173
+if [ "$ASSISTANT_UI_E2E" = "true" ] && \
+  is_up "http://localhost:5173" && \
+  ! vite_has_assistant_ui "http://localhost:5173"; then
+  E2E_VITE_PORT=5174
+fi
+
+if is_up "http://localhost:$E2E_VITE_PORT"; then
+  echo "Vite dev server already up on :$E2E_VITE_PORT — reusing it."
 else
-  echo "Starting Vite dev server on :5173..."
-  (cd "$FRONTEND_DIR" && yarn dev) &
+  echo "Starting Vite dev server on :$E2E_VITE_PORT..."
+  (
+    cd "$FRONTEND_DIR"
+    exec env VITE_ASSISTANT_UI_ENABLED="$ASSISTANT_UI_E2E" \
+      "$FRONTEND_DIR/node_modules/.bin/vite" \
+      --host 127.0.0.1 --port "$E2E_VITE_PORT" --strictPort
+  ) &
   PIDS+=($!)
-  wait_for "http://localhost:5173" "Vite dev server"
+  wait_for "http://localhost:$E2E_VITE_PORT" "Vite dev server"
 fi
 
 # 6. Cypress.
 cd "$FRONTEND_DIR"
 if [ "$OPEN_MODE" = "true" ]; then
   echo "Stack is up. Opening Cypress UI (Ctrl+C to tear down)..."
-  yarn cy:open
+  CYPRESS_BASE_URL="http://localhost:$E2E_VITE_PORT" yarn cy:open
 else
   if [ -n "${CYPRESS_SPEC:-}" ]; then
-    yarn cy:run --spec "$CYPRESS_SPEC"
+    CYPRESS_BASE_URL="http://localhost:$E2E_VITE_PORT" \
+      yarn cy:run --spec "$CYPRESS_SPEC"
   else
-    yarn cy:run
+    CYPRESS_BASE_URL="http://localhost:$E2E_VITE_PORT" yarn cy:run
   fi
 fi

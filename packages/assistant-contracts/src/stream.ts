@@ -97,35 +97,210 @@ export async function* readAssistantStream(
   }
 }
 
+type TerminalEvent = Extract<
+  AssistantEvent,
+  { type: "run.completed" | "run.failed" | "run.cancelled" }
+>;
+type UsageEvent = Extract<AssistantEvent, { type: "usage" }>;
+
+export type ProjectedToolCall = {
+  toolCallId: string;
+  name: string;
+  argsText: string;
+  args?: Record<string, unknown>;
+  result?: unknown;
+  status: "running" | "completed" | "failed";
+  error?: {
+    code: Extract<AssistantEvent, { type: "tool.failed" }>["code"];
+    message: string;
+  };
+};
+
+export type RunUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  credits: number;
+  modelCalls: number;
+  provider: string | null;
+  model: string | null;
+  billing: UsageEvent["billing"] | null;
+  providers: string[];
+  models: string[];
+  billingModes: UsageEvent["billing"][];
+};
+
 /**
- * Accumulated view of a run, for a UI that renders text as it arrives.
+ * Framework-independent projection of a complete multi-step assistant run.
  *
- * `text.delta` is incremental, so the caller accumulates; `text.done` replaces
- * the accumulation with the settled part, which is what a reload would show.
- * Keeping that rule here rather than in a component means every consumer agrees
- * on what the displayed text is.
+ * A `text.done` frame settles only the current model-call segment. Earlier
+ * settled segments survive later tool rounds, while an unfinished delta remains
+ * visible as streaming text. Tool argument fragments are ordinary incomplete
+ * state until they form a JSON object.
  */
 export interface RunState {
+  runId: string | null;
   text: string;
+  settledText: string;
+  streamingText: string;
+  toolOrder: string[];
+  tools: Record<string, ProjectedToolCall>;
   references: Extract<AssistantEvent, { type: "reference.emitted" }>["part"][];
-  usage: Extract<AssistantEvent, { type: "usage" }> | null;
-  terminal: AssistantEvent | null;
+  usage: RunUsage;
+  provider: string | null;
+  model: string | null;
+  terminal: TerminalEvent | null;
+  unsupportedCapability: string | null;
 }
 
 export function emptyRunState(): RunState {
-  return { text: "", references: [], usage: null, terminal: null };
+  return {
+    runId: null,
+    text: "",
+    settledText: "",
+    streamingText: "",
+    toolOrder: [],
+    tools: {},
+    references: [],
+    usage: {
+      promptTokens: 0,
+      completionTokens: 0,
+      credits: 0,
+      modelCalls: 0,
+      provider: null,
+      model: null,
+      billing: null,
+      providers: [],
+      models: [],
+      billingModes: [],
+    },
+    provider: null,
+    model: null,
+    terminal: null,
+    unsupportedCapability: null,
+  };
+}
+
+function parseArgs(argsText: string): Record<string, unknown> | undefined {
+  if (!argsText) return undefined;
+  try {
+    const value: unknown = JSON.parse(argsText);
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+  } catch {
+    // A partial JSON fragment is expected while the stream is in progress.
+  }
+  return undefined;
+}
+
+function addUnique<T extends string>(values: T[], value: T): T[] {
+  return values.includes(value) ? values : [...values, value];
+}
+
+function upsertTool(
+  state: RunState,
+  toolCallId: string,
+  update: (current: ProjectedToolCall | undefined) => ProjectedToolCall,
+): Pick<RunState, "toolOrder" | "tools"> {
+  const exists = Boolean(state.tools[toolCallId]);
+  return {
+    toolOrder: exists ? state.toolOrder : [...state.toolOrder, toolCallId],
+    tools: { ...state.tools, [toolCallId]: update(state.tools[toolCallId]) },
+  };
 }
 
 export function applyEvent(state: RunState, event: AssistantEvent): RunState {
   switch (event.type) {
-    case "text.delta":
-      return { ...state, text: state.text + event.text };
-    case "text.done":
-      return { ...state, text: event.part.text };
+    case "run.started":
+      return {
+        ...state,
+        runId: event.runId,
+        provider: event.provider ?? null,
+        model: event.model ?? null,
+      };
+    case "text.delta": {
+      const streamingText = state.streamingText + event.text;
+      return {
+        ...state,
+        streamingText,
+        text: state.settledText + streamingText,
+      };
+    }
+    case "text.done": {
+      const settledText = state.settledText + event.part.text;
+      return { ...state, settledText, streamingText: "", text: settledText };
+    }
+    case "tool.started": {
+      const tool = upsertTool(state, event.toolCallId, () => ({
+        toolCallId: event.toolCallId,
+        name: event.name,
+        argsText: "",
+        status: "running",
+      }));
+      return { ...state, ...tool };
+    }
+    case "tool.args.delta": {
+      const tool = upsertTool(state, event.toolCallId, (current) => {
+        const argsText = (current?.argsText ?? "") + event.delta;
+        return {
+          toolCallId: event.toolCallId,
+          name: current?.name ?? "unknown_tool",
+          ...current,
+          argsText,
+          args: parseArgs(argsText),
+          status: current?.status ?? "running",
+        };
+      });
+      return { ...state, ...tool };
+    }
+    case "tool.completed": {
+      const tool = upsertTool(state, event.part.toolCallId, (current) => ({
+        toolCallId: event.part.toolCallId,
+        name: event.part.name,
+        argsText:
+          current?.argsText || JSON.stringify(event.part.arguments ?? {}),
+        args: event.part.arguments ?? {},
+        result: event.part.result,
+        status: "completed",
+      }));
+      return { ...state, ...tool };
+    }
+    case "tool.failed": {
+      const tool = upsertTool(state, event.toolCallId, (current) => ({
+        toolCallId: event.toolCallId,
+        name: current?.name ?? "unknown_tool",
+        argsText: current?.argsText ?? "",
+        args: current?.args,
+        status: "failed",
+        error: { code: event.code, message: event.message },
+      }));
+      return { ...state, ...tool };
+    }
     case "reference.emitted":
       return { ...state, references: [...state.references, event.part] };
     case "usage":
-      return { ...state, usage: event };
+      return {
+        ...state,
+        usage: {
+          promptTokens: state.usage.promptTokens + event.promptTokens,
+          completionTokens:
+            state.usage.completionTokens + event.completionTokens,
+          credits: state.usage.credits + event.credits,
+          modelCalls: state.usage.modelCalls + 1,
+          provider: event.provider,
+          model: event.model,
+          billing: event.billing,
+          providers: addUnique(state.usage.providers, event.provider),
+          models: addUnique(state.usage.models, event.model),
+          billingModes: addUnique(state.usage.billingModes, event.billing),
+        },
+      };
+    case "approval.requested":
+      return {
+        ...state,
+        unsupportedCapability:
+          "This assistant requested an unsupported capability. Nothing was changed.",
+      };
     case "run.completed":
     case "run.failed":
     case "run.cancelled":

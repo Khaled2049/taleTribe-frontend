@@ -3,6 +3,7 @@ import { BookOpen, Layers, Users, MapPin, ArrowLeft } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { StoryWorkspaceTabs } from "./components/StoryWorkspaceTabs";
 import { useFocusModeStore } from "@/stores/focusModeStore";
+import { FloatingChatButton } from "@/components/chat/FloatingChatButton";
 
 const NAV_ITEMS = [
   { label: "Editor", path: "", icon: BookOpen, end: true },
@@ -61,6 +62,7 @@ const Story = () => {
           <Outlet />
         </main>
       </div>
+      {storyId && <FloatingChatButton storyId={storyId} scope="workspace" />}
     </div>
   );
 };

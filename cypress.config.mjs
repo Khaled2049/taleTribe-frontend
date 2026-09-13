@@ -12,11 +12,15 @@ import { registerTasks } from "./cypress/support/tasks.mjs";
 // ("exports is not defined"). Browser-side support/specs stay TypeScript —
 // Cypress bundles those with its own preprocessor.
 const PROJECT_ID = "story-6f89f";
+const assistantUiE2E = process.env.ASSISTANT_UI_E2E === "true";
 
 export default defineConfig({
   e2e: {
     baseUrl: "http://localhost:5173",
     specPattern: "cypress/e2e/**/*.cy.ts",
+    excludeSpecPattern: assistantUiE2E
+      ? []
+      : ["cypress/e2e/assistant_panel.cy.ts"],
     supportFile: "cypress/support/e2e.ts",
     defaultCommandTimeout: 15000,
     requestTimeout: 15000,

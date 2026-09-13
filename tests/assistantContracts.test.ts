@@ -246,7 +246,7 @@ describe("run state accumulation", () => {
       state = applyEvent(state, event);
     }
     expect(state.text).toBe("The lighthouse had been dark for a year.");
-    expect(state.usage?.billing).toBe("mock");
+    expect(state.usage.billing).toBe("mock");
     expect(state.terminal?.type).toBe("run.completed");
   });
 
@@ -269,6 +269,136 @@ describe("run state accumulation", () => {
       type: "run.failed",
       code: "provider_unavailable",
     });
+  });
+
+  it("retains ordered parallel tools and tolerates split JSON arguments", () => {
+    const base = { v: 1 as const, runId: "parallel" };
+    const events = [
+      {
+        ...base,
+        seq: 0,
+        type: "tool.started" as const,
+        toolCallId: "call-a",
+        name: "list_story_entities",
+      },
+      {
+        ...base,
+        seq: 1,
+        type: "tool.started" as const,
+        toolCallId: "call-b",
+        name: "read_chapter",
+      },
+      {
+        ...base,
+        seq: 2,
+        type: "tool.args.delta" as const,
+        toolCallId: "call-a",
+        delta: '{"kind":',
+      },
+      {
+        ...base,
+        seq: 3,
+        type: "tool.args.delta" as const,
+        toolCallId: "call-b",
+        delta: '{"chapterId":"chapter-2"}',
+      },
+      {
+        ...base,
+        seq: 4,
+        type: "tool.args.delta" as const,
+        toolCallId: "call-a",
+        delta: '"character"}',
+      },
+    ].map((event) => assistantEventSchema.parse(event));
+
+    let state = emptyRunState();
+    state = applyEvent(state, events[0]);
+    state = applyEvent(state, events[1]);
+    state = applyEvent(state, events[2]);
+    expect(state.tools["call-a"].args).toBeUndefined();
+    state = applyEvent(state, events[3]);
+    state = applyEvent(state, events[4]);
+
+    expect(state.toolOrder).toEqual(["call-a", "call-b"]);
+    expect(state.tools["call-a"].args).toEqual({ kind: "character" });
+    expect(state.tools["call-b"].args).toEqual({ chapterId: "chapter-2" });
+  });
+
+  it("retains settled text and sums usage across model calls", () => {
+    const raw = [
+      { type: "run.started", provider: "mock", model: "mock-1" },
+      { type: "text.delta", text: "First thought. " },
+      { type: "text.done", part: { type: "text", text: "First thought. " } },
+      {
+        type: "usage",
+        provider: "mock",
+        model: "mock-1",
+        promptTokens: 10,
+        completionTokens: 2,
+        credits: 1,
+        billing: "mock",
+      },
+      { type: "text.delta", text: "Final answer." },
+      {
+        type: "text.done",
+        part: { type: "text", text: "Final answer." },
+      },
+      {
+        type: "usage",
+        provider: "mock",
+        model: "mock-2",
+        promptTokens: 20,
+        completionTokens: 4,
+        credits: 3,
+        billing: "platform",
+      },
+      { type: "run.completed", finishReason: "stop" },
+    ];
+    let state = emptyRunState();
+    raw.forEach((event, seq) => {
+      state = applyEvent(
+        state,
+        assistantEventSchema.parse({
+          v: 1,
+          runId: "multi-step",
+          seq,
+          ...event,
+        }),
+      );
+    });
+
+    expect(state.text).toBe("First thought. Final answer.");
+    expect(state.streamingText).toBe("");
+    expect(state.usage).toMatchObject({
+      promptTokens: 30,
+      completionTokens: 6,
+      credits: 4,
+      modelCalls: 2,
+      providers: ["mock"],
+      models: ["mock-1", "mock-2"],
+      billingModes: ["mock", "platform"],
+    });
+  });
+
+  it("retains partial text and records failed tools", () => {
+    const fixture = fixtures.find((f) => f.name === "stale-edit")!;
+    let state = emptyRunState();
+    for (const event of fixture.events) {
+      state = applyEvent(state, assistantEventSchema.parse(event));
+    }
+    expect(state.tools["call-1"]).toMatchObject({
+      status: "failed",
+      error: { code: "stale_proposal" },
+    });
+
+    const cancelled = fixtures.find((f) => f.name === "cancellation")!;
+    state = emptyRunState();
+    for (const event of cancelled.events) {
+      state = applyEvent(state, assistantEventSchema.parse(event));
+    }
+    expect(state.text).toBe("The lighthouse ");
+    expect(state.streamingText).toBe("The lighthouse ");
+    expect(state.terminal?.type).toBe("run.cancelled");
   });
 });
 

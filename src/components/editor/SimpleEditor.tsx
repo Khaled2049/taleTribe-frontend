@@ -33,7 +33,12 @@ import {
   X,
 } from "lucide-react";
 
-import { useParams, useSearchParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { useAuthContext } from "../../contexts/AuthContext";
 import { useDemoMode } from "@/contexts/DemoModeContext";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
@@ -130,6 +135,8 @@ export function SimpleEditor() {
   const { isDemo, requireAuth } = useDemoMode();
   const { storyId } = useParams<{ storyId: string }>();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const openInteractivePanelOnMount = searchParams.get("wizard") === "true";
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
@@ -569,18 +576,51 @@ export function SimpleEditor() {
   };
 
   // Handle chapter selection with unsaved changes check
-  const handleChapterSelect = (chapter: Chapter) => {
-    if (isDirty) {
-      setPendingChapter(chapter);
-      setUnsavedChangesDialogOpen(true);
-    } else {
-      actions.selectChapter(chapter);
-      if (!isLgUp) {
-        actions.setLeftSidebarOpen(false);
+  const handleChapterSelect = useCallback(
+    (chapter: Chapter) => {
+      if (isDirty) {
+        setPendingChapter(chapter);
+        setUnsavedChangesDialogOpen(true);
+      } else {
+        actions.selectChapter(chapter);
+        if (!isLgUp) {
+          actions.setLeftSidebarOpen(false);
+        }
+        resetSaveState();
       }
-      resetSaveState();
+    },
+    [actions, isDirty, isLgUp, resetSaveState],
+  );
+
+  // Assistant chapter navigation is an explicit route-state contract. Consume
+  // it only after chapters load, then clear it before selecting so refreshes do
+  // not repeat the action. The normal unsaved-changes guard still applies.
+  useEffect(() => {
+    const requestedChapterId = (
+      location.state as { assistantChapterId?: unknown } | null
+    )?.assistantChapterId;
+    if (typeof requestedChapterId !== "string" || state.isLoading) return;
+
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: null,
+    });
+    const chapter = state.chapters.find(
+      (candidate) => candidate.id === requestedChapterId,
+    );
+    if (chapter && chapter.id !== state.currentChapter?.id) {
+      handleChapterSelect(chapter);
     }
-  };
+  }, [
+    handleChapterSelect,
+    location.pathname,
+    location.search,
+    location.state,
+    navigate,
+    state.chapters,
+    state.currentChapter?.id,
+    state.isLoading,
+  ]);
 
   const handleSaveAndContinue = async () => {
     if (state.currentChapter) {
