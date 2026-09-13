@@ -125,7 +125,9 @@ export const assistantEventSchema = z.discriminatedUnion("type", [
   z.object({
     ...base,
     type: z.literal("run.completed"),
-    finishReason: z.enum(["stop", "length", "tool_calls"]).default("stop"),
+    finishReason: z
+      .enum(["stop", "length", "tool_calls", "max_steps"])
+      .default("stop"),
   }),
   z.object({
     ...base,

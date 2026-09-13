@@ -155,7 +155,7 @@ export namespace EventContract {
   export type Runid11 = string
   export type Seq11 = number
   export type Type14 = "run.completed"
-  export type Finishreason = ("stop" | "length" | "tool_calls")
+  export type Finishreason = ("stop" | "length" | "tool_calls" | "max_steps")
   export type V12 = 1
   export type Runid12 = string
   export type Seq12 = number
@@ -296,6 +296,16 @@ export namespace EventContract {
   credits: Credits
   billing: Billing
   }
+  /**
+   * Terminal success. ``finishReason`` says *why* the run stopped talking.
+   *
+   * ``max_steps`` is the orchestrator's own ceiling, and it is a success rather
+   * than a failure: the user has a real partial answer, so ``run.failed`` would
+   * both discard it and render a message about a daily allowance that was never
+   * reached. ``stop`` would be a lie in the other direction -- it claims the
+   * model was finished -- and Phase 4 needs to tell the two apart to offer
+   * "continue".
+   */
   export interface RunCompleted {
   v: V11
   runId: Runid11

@@ -79,6 +79,7 @@ describe("assistant protocol fixtures", () => {
     expect(fixtures.map((f) => f.name).sort()).toEqual([
       "approval-pause-resume",
       "cancellation",
+      "max-steps",
       "multi-tool",
       "provider-error",
       "research-citations",
