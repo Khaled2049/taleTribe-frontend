@@ -12,12 +12,21 @@ import {
 
 /** Relay one owner-authorized assistant run without buffering its SSE body. */
 export async function handleAssistantRun(request: Request, response: Response) {
-  if (!assistantFlags().api) {
+  const flags = assistantFlags();
+  if (!flags.api) {
     response.status(404).json({ error: "Assistant API is disabled" });
     return;
   }
   if (request.method !== "POST") {
     response.status(405).json({ error: "POST required" });
+    return;
+  }
+  const body =
+    request.body && typeof request.body === "object"
+      ? (request.body as Record<string, unknown>)
+      : null;
+  if (body?.continuation != null && !flags.edits) {
+    response.status(404).json({ error: "Assistant edits are disabled" });
     return;
   }
   await requireStoryOwnership(async (req, res, userId, storyId, idToken) => {

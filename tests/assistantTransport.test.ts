@@ -151,4 +151,104 @@ describe("assistant browser transport", () => {
       "client-2",
     ]);
   });
+
+  it("captures a fresh bounded editor snapshot for a normal send", async () => {
+    let body: Record<string, unknown> = {};
+    const prepareEditorContext = vi.fn(async () => ({
+      chapterId: "chapter-1",
+      persistedRevision: 3,
+      documentVersion: 7,
+      selection: { from: 1, to: 6, text: "Hello" },
+      buffer: { text: "Hello world", truncated: false },
+      dirty: false,
+    }));
+    await collect(
+      streamAssistantRun(
+        "story-1",
+        "Tighten it",
+        new AbortController().signal,
+        {
+          endpoint: "/assistant",
+          getIdToken: async () => "token",
+          prepareEditorContext,
+          fetcher: vi.fn(async (_url, init) => {
+            body = JSON.parse(String(init?.body));
+            return new Response(
+              streamOf(
+                'data: {"v":1,"runId":"r","seq":0,"type":"run.cancelled"}\n\n',
+              ),
+            );
+          }) as typeof fetch,
+        },
+      ),
+    );
+    expect(prepareEditorContext).toHaveBeenCalledWith("send");
+    expect(body.editorContext).toMatchObject({
+      chapterId: "chapter-1",
+      selection: { text: "Hello" },
+    });
+  });
+
+  it("sends a typed approval continuation and uses continuation snapshot mode", async () => {
+    let body: Record<string, unknown> = {};
+    const proposal = {
+      chapterId: "chapter-1",
+      baseRevision: 3,
+      baseDocumentVersion: 7,
+      summary: "Tighten it",
+      operations: [
+        {
+          type: "replace" as const,
+          from: 1,
+          to: 6,
+          originalText: "Hello",
+          replacementText: "Hi",
+        },
+      ],
+    };
+    const prepareEditorContext = vi.fn(async () => null);
+    await collect(
+      streamAssistantRun(
+        "story-1",
+        "Tighten it",
+        new AbortController().signal,
+        {
+          endpoint: "/assistant",
+          getIdToken: async () => "token",
+          prepareEditorContext,
+          fetcher: vi.fn(async (_url, init) => {
+            body = JSON.parse(String(init?.body));
+            return new Response(
+              streamOf(
+                'data: {"v":1,"runId":"r2","seq":0,"type":"run.cancelled"}\n\n',
+              ),
+            );
+          }) as typeof fetch,
+        },
+        {
+          continuation: {
+            kind: "editor_approval",
+            previousRunId: "r1",
+            approvalId: "approval-1",
+            toolCallId: "apply-1",
+            proposalId: "proposal-1",
+            decision: "applied",
+            proposal,
+            result: {
+              status: "saved",
+              chapterId: "chapter-1",
+              documentVersion: 8,
+              persistedRevision: 4,
+            },
+          },
+        },
+      ),
+    );
+    expect(prepareEditorContext).toHaveBeenCalledWith("continuation");
+    expect(body.continuation).toMatchObject({
+      previousRunId: "r1",
+      decision: "applied",
+      result: { status: "saved" },
+    });
+  });
 });

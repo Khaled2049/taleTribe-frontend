@@ -1,0 +1,17 @@
+{
+  "description": "Synthetic Phase 0 examples; no real user or story content.",
+  "sendChatMessage": {
+    "request": { "storyId": "fixture-story", "chatId": "fixture-chat", "message": "Who carries the lantern?" },
+    "response": { "response": "Mira carries the lantern.", "chatId": "fixture-chat", "contextUsed": { "chapters": 1, "characters": 1, "plots": 0, "places": 0 } }
+  },
+  "agentExecute": {
+    "request": { "action": "chatWithContext", "user_id": "fixture-user", "parameters": { "storyId": "fixture-story", "userId": "fixture-user", "message": "Who carries the lantern?", "chatHistory": [] } },
+    "response": { "success": true, "data": { "response": "Mira carries the lantern.", "contextUsed": { "chapters": 1, "characters": 1, "plots": 0, "places": 0 } }, "error": null }
+  },
+  "clearChatSession": {
+    "request": { "storyId": "fixture-story", "chatId": "fixture-chat" },
+    "response": { "success": true }
+  },
+  "quotaRefusal": { "status": 429, "body": { "error": "Daily AI quota exceeded" } },
+  "providerFailure": { "status": 500, "body": { "error": "AI backend is unreachable. Please try again later." } }
+}

@@ -77,7 +77,9 @@ async function collect(stream: ReadableStream<Uint8Array>) {
 describe("assistant protocol fixtures", () => {
   it("has the agreed fixture set", () => {
     expect(fixtures.map((f) => f.name).sort()).toEqual([
+      "approval-applied",
       "approval-pause-resume",
+      "approval-rejected",
       "cancellation",
       "max-steps",
       "multi-tool",

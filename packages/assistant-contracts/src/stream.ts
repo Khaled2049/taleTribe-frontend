@@ -116,6 +116,13 @@ export type ProjectedToolCall = {
   };
 };
 
+export type ProjectedApproval = {
+  approvalId: string;
+  toolCallId: string;
+  summary: string;
+  approved?: boolean;
+};
+
 export type RunUsage = {
   promptTokens: number;
   completionTokens: number;
@@ -144,6 +151,8 @@ export interface RunState {
   streamingText: string;
   toolOrder: string[];
   tools: Record<string, ProjectedToolCall>;
+  approvals: Record<string, ProjectedApproval>;
+  approvalByToolCallId: Record<string, string>;
   references: Extract<AssistantEvent, { type: "reference.emitted" }>["part"][];
   usage: RunUsage;
   provider: string | null;
@@ -160,6 +169,8 @@ export function emptyRunState(): RunState {
     streamingText: "",
     toolOrder: [],
     tools: {},
+    approvals: {},
+    approvalByToolCallId: {},
     references: [],
     usage: {
       promptTokens: 0,
@@ -296,11 +307,39 @@ export function applyEvent(state: RunState, event: AssistantEvent): RunState {
         },
       };
     case "approval.requested":
+      if (!state.tools[event.toolCallId]) {
+        return {
+          ...state,
+          unsupportedCapability:
+            "The assistant requested approval for an unknown action. Nothing was changed.",
+        };
+      }
       return {
         ...state,
-        unsupportedCapability:
-          "This assistant requested an unsupported capability. Nothing was changed.",
+        approvals: {
+          ...state.approvals,
+          [event.approvalId]: {
+            approvalId: event.approvalId,
+            toolCallId: event.toolCallId,
+            summary: event.summary,
+          },
+        },
+        approvalByToolCallId: {
+          ...state.approvalByToolCallId,
+          [event.toolCallId]: event.approvalId,
+        },
       };
+    case "approval.resolved": {
+      const approval = state.approvals[event.approvalId];
+      if (!approval) return state;
+      return {
+        ...state,
+        approvals: {
+          ...state.approvals,
+          [event.approvalId]: { ...approval, approved: event.approved },
+        },
+      };
+    }
     case "run.completed":
     case "run.failed":
     case "run.cancelled":

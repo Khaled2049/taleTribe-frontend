@@ -3,6 +3,8 @@ import {
   buildRunRequest,
   readAssistantStream,
   type AssistantEvent,
+  type EditorContext,
+  type EditorContinuation,
 } from "@novelsync/assistant-contracts";
 import {
   assistantFailureForStatus,
@@ -14,6 +16,13 @@ export type AssistantTransportDependencies = {
   getIdToken: () => Promise<string | null>;
   fetcher?: typeof fetch;
   createClientMessageId?: () => string;
+  prepareEditorContext?: (
+    mode: "send" | "continuation",
+  ) => Promise<EditorContext | null>;
+};
+
+export type AssistantRunOptions = {
+  continuation?: EditorContinuation;
 };
 
 export class AssistantRequestError extends Error {
@@ -74,6 +83,7 @@ export async function* streamAssistantRun(
   text: string,
   signal: AbortSignal,
   dependencies: AssistantTransportDependencies,
+  options: AssistantRunOptions = {},
 ): AsyncGenerator<AssistantEvent> {
   const token = await abortable(dependencies.getIdToken(), signal);
   if (!token) {
@@ -82,6 +92,14 @@ export async function* streamAssistantRun(
       message: "Sign in again to use the story assistant.",
     });
   }
+  const editorContext = dependencies.prepareEditorContext
+    ? await abortable(
+        dependencies.prepareEditorContext(
+          options.continuation ? "continuation" : "send",
+        ),
+        signal,
+      )
+    : null;
 
   const response = await (dependencies.fetcher ?? fetch)(
     dependencies.endpoint,
@@ -97,6 +115,8 @@ export async function* streamAssistantRun(
           text,
           clientMessageId:
             dependencies.createClientMessageId?.() ?? crypto.randomUUID(),
+          editorContext: editorContext ?? undefined,
+          continuation: options.continuation,
         }),
       ),
       signal,

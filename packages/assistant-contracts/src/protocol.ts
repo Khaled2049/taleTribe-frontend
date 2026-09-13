@@ -27,12 +27,90 @@ export const selectionSchema = z
   })
   .strict();
 
+export const editorTextWindowSchema = z
+  .object({
+    text: z.string().max(LIMITS.editorWindowChars),
+    truncated: z.boolean().default(false),
+  })
+  .strict();
+
+export const replaceOperationSchema = z
+  .object({
+    type: z.literal("replace").default("replace"),
+    from: z.number().int().nonnegative(),
+    to: z.number().int().nonnegative(),
+    originalText: z.string().min(1).max(LIMITS.selectionChars),
+    replacementText: z.string().max(LIMITS.selectionChars).default(""),
+  })
+  .strict();
+
+export const insertOperationSchema = z
+  .object({
+    type: z.literal("insert").default("insert"),
+    at: z.number().int().nonnegative(),
+    text: z.string().min(1).max(LIMITS.selectionChars),
+  })
+  .strict();
+
+export const proposeEditorEditSchema = z
+  .object({
+    chapterId: z.string().min(1).max(LIMITS.idChars),
+    baseRevision: z.number().int().nonnegative(),
+    baseDocumentVersion: z.number().int().nonnegative(),
+    summary: z.string().min(1).max(LIMITS.summaryChars),
+    operations: z
+      .array(
+        z.discriminatedUnion("type", [
+          replaceOperationSchema,
+          insertOperationSchema,
+        ]),
+      )
+      .min(1)
+      .max(LIMITS.editOperations),
+  })
+  .strict();
+
+export const editorApplyResultSchema = z
+  .object({
+    status: z.enum([
+      "saved",
+      "applied_local_save_failed",
+      "applied_local_save_conflict",
+      "stale",
+      "invalid",
+    ]),
+    chapterId: z.string().min(1).max(LIMITS.idChars),
+    documentVersion: z.number().int().nonnegative(),
+    persistedRevision: z.number().int().nonnegative().nullable().optional(),
+  })
+  .strict();
+
+export const editorContinuationSchema = z
+  .object({
+    kind: z.literal("editor_approval").default("editor_approval"),
+    previousRunId: z.string().min(1).max(LIMITS.idChars),
+    approvalId: z.string().min(1).max(LIMITS.idChars),
+    toolCallId: z.string().min(1).max(LIMITS.idChars),
+    proposalId: z.string().min(1).max(LIMITS.idChars),
+    decision: z.enum([
+      "applied",
+      "rejected",
+      "revision_requested",
+      "apply_failed",
+    ]),
+    proposal: proposeEditorEditSchema,
+    result: editorApplyResultSchema.nullable().optional(),
+    feedback: z.string().min(1).max(LIMITS.summaryChars).nullable().optional(),
+  })
+  .strict();
+
 export const editorContextSchema = z
   .object({
     chapterId: z.string().min(1).max(LIMITS.idChars).nullable().optional(),
     persistedRevision: z.number().int().nonnegative().nullable().optional(),
     documentVersion: z.number().int().nonnegative().nullable().optional(),
     selection: selectionSchema.nullable().optional(),
+    buffer: editorTextWindowSchema.nullable().optional(),
     dirty: z.boolean().default(false),
   })
   .strict();
@@ -62,11 +140,17 @@ export const runRequestSchema = z
     clientMessageId: z.string().min(1).max(LIMITS.idChars),
     message: userMessageSchema,
     editorContext: editorContextSchema.nullable().optional(),
+    continuation: editorContinuationSchema.nullable().optional(),
   })
   .strict();
 
-export type Selection = RunContract.Selection;
-export type EditorContext = RunContract.EditorContext;
+export type Selection = z.infer<typeof selectionSchema>;
+export type EditorContext = z.infer<typeof editorContextSchema>;
+export type EditorTextWindow = z.infer<typeof editorTextWindowSchema>;
+export type ReplaceOperation = z.infer<typeof replaceOperationSchema>;
+export type ProposeEditorEditArgs = z.infer<typeof proposeEditorEditSchema>;
+export type EditorApplyResult = z.infer<typeof editorApplyResultSchema>;
+export type EditorContinuation = z.infer<typeof editorContinuationSchema>;
 export type UserMessage = RunContract.UserMessage;
 export type RunRequest = GeneratedRunRequest;
 
@@ -77,6 +161,7 @@ export function buildRunRequest(input: {
   clientMessageId: string;
   threadId?: string;
   editorContext?: EditorContext;
+  continuation?: EditorContinuation;
 }): RunRequest {
   return runRequestSchema.parse({
     v: ASSISTANT_PROTOCOL_VERSION,
@@ -85,5 +170,6 @@ export function buildRunRequest(input: {
     clientMessageId: input.clientMessageId,
     message: { role: "user", parts: [{ type: "text", text: input.text }] },
     editorContext: input.editorContext,
+    continuation: input.continuation,
   }) as RunRequest;
 }

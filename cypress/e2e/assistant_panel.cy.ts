@@ -56,7 +56,7 @@ const textRun = (runId = "run-text") => [
   base(runId, 4, { type: "run.completed", finishReason: "stop" }),
 ];
 
-describe("Phase 4 read-only assistant panel", () => {
+describe("story assistant panel", () => {
   let storyId: string;
 
   beforeEach(() => {
@@ -65,6 +65,32 @@ describe("Phase 4 read-only assistant panel", () => {
     cy.createStory("Saltmarsh").then((id) => {
       storyId = id;
     });
+  });
+
+  const editIt = Cypress.env("ASSISTANT_EDIT_E2E") ? it : it.skip;
+
+  editIt("reviews, applies, and saves one selected-text revision", () => {
+    cy.get(".ProseMirror")
+      .click()
+      .type("Brass polish.", { force: true })
+      .type("{selectall}");
+    cy.get('[data-cy="open-chat"]').click();
+    cy.get('[data-cy="assistant-input"]').type(
+      "Tighten this selection. __script: editor-rewrite{enter}",
+    );
+
+    cy.get('[data-cy="assistant-edit-review"]', { timeout: 20000 })
+      .should("contain.text", "Manuscript suggestion")
+      .and("contain.text", "Brass polish.");
+    cy.get('[data-cy="assistant-edit-apply"]').click();
+    cy.get('[data-cy="assistant-edit-review"]')
+      .should("contain.text", "Applied and saved")
+      .and("contain.text", "Undo remains available");
+    cy.get(".ProseMirror").should("contain.text", "Tightened: Brass polish.");
+    cy.get('[data-cy="assistant-message"]').should(
+      "contain.text",
+      "Applied and saved in the current chapter.",
+    );
   });
 
   it("opens at a mobile width, answers, and preserves settled messages on reopen", () => {

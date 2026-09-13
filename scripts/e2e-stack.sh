@@ -14,6 +14,7 @@
 #   ./scripts/e2e-stack.sh --open          # leave stack up + open Cypress UI
 #   CYPRESS_SPEC=cypress/e2e/ai_chat.cy.ts ./scripts/e2e-stack.sh
 #   ASSISTANT_UI_E2E=true CYPRESS_SPEC=cypress/e2e/assistant_panel.cy.ts ./scripts/e2e-stack.sh
+#   ASSISTANT_UI_E2E=true ASSISTANT_EDIT_E2E=true CYPRESS_SPEC=cypress/e2e/assistant_panel.cy.ts ./scripts/e2e-stack.sh
 set -euo pipefail
 
 FRONTEND_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -25,6 +26,7 @@ CREDIT_DIR="$REPOS_DIR/creditProxy"
 CREDIT_PROXY_PORT="${CREDIT_PROXY_PORT:-8090}"
 STORY_DATA_URL="${STORY_DATA_URL:-http://127.0.0.1:8084}"
 ASSISTANT_UI_E2E="${ASSISTANT_UI_E2E:-false}"
+ASSISTANT_EDIT_E2E="${ASSISTANT_EDIT_E2E:-false}"
 OPEN_MODE="false"
 [ "${1:-}" = "--open" ] && OPEN_MODE="true"
 
@@ -120,9 +122,11 @@ fi
 # Firebase emulator proxy does not reliably propagate browser disconnects.
 if [ "$ASSISTANT_UI_E2E" = "true" ]; then
   ASSISTANT_AGENT_PORT=8000
-  if is_up "http://127.0.0.1:8000/health" && \
-    [ "$(assistant_route_status http://127.0.0.1:8000)" = "404" ]; then
-    ASSISTANT_AGENT_PORT=8001
+  if is_up "http://127.0.0.1:8000/health"; then
+    if [ "$(assistant_route_status http://127.0.0.1:8000)" = "404" ] || \
+      [ "$ASSISTANT_EDIT_E2E" = "true" ]; then
+      ASSISTANT_AGENT_PORT=8001
+    fi
   fi
   if is_up "http://127.0.0.1:5002/health"; then
     echo "Assistant run gateway already up on :5002 — reusing it."
@@ -137,6 +141,7 @@ if [ "$ASSISTANT_UI_E2E" = "true" ]; then
         STORY_DATA_URL="$STORY_DATA_URL" \
         AGENT_SERVICE_URL="http://localhost:$ASSISTANT_AGENT_PORT" \
         ASSISTANT_API_ENABLED=true \
+        ASSISTANT_EDIT_PROPOSALS_ENABLED="$ASSISTANT_EDIT_E2E" \
         node lib/assistantGatewayDev.js
     ) &
     PIDS+=($!)
@@ -162,6 +167,7 @@ else
       GOOGLE_CLOUD_PROJECT=story-6f89f \
       USE_MOCK=true \
       ASSISTANT_API_ENABLED="$ASSISTANT_UI_E2E" \
+      ASSISTANT_EDIT_PROPOSALS_ENABLED="$ASSISTANT_EDIT_E2E" \
       ENABLE_MCP_WRITES=false \
       FIRESTORE_EMULATOR_HOST=localhost:8080 \
       STORY_DATA_URL="$STORY_DATA_URL" \
@@ -189,6 +195,7 @@ if [ "$ASSISTANT_UI_E2E" = "true" ] && [ "$ASSISTANT_AGENT_PORT" = "8001" ]; the
         GOOGLE_CLOUD_PROJECT=story-6f89f \
         USE_MOCK=true \
         ASSISTANT_API_ENABLED=true \
+        ASSISTANT_EDIT_PROPOSALS_ENABLED="$ASSISTANT_EDIT_E2E" \
         ENABLE_MCP_WRITES=false \
         FIRESTORE_EMULATOR_HOST=localhost:8080 \
         STORY_DATA_URL="$STORY_DATA_URL" \
@@ -214,7 +221,8 @@ fi
 E2E_VITE_PORT=5173
 if [ "$ASSISTANT_UI_E2E" = "true" ] && \
   is_up "http://localhost:5173" && \
-  ! vite_has_assistant_ui "http://localhost:5173"; then
+  { ! vite_has_assistant_ui "http://localhost:5173" || \
+    [ "$ASSISTANT_EDIT_E2E" = "true" ]; }; then
   E2E_VITE_PORT=5174
 fi
 
@@ -225,6 +233,7 @@ else
   (
     cd "$FRONTEND_DIR"
     exec env VITE_ASSISTANT_UI_ENABLED="$ASSISTANT_UI_E2E" \
+      VITE_ASSISTANT_EDITOR_ACTIONS_ENABLED="$ASSISTANT_EDIT_E2E" \
       "$FRONTEND_DIR/node_modules/.bin/vite" \
       --host 127.0.0.1 --port "$E2E_VITE_PORT" --strictPort
   ) &
@@ -236,12 +245,15 @@ fi
 cd "$FRONTEND_DIR"
 if [ "$OPEN_MODE" = "true" ]; then
   echo "Stack is up. Opening Cypress UI (Ctrl+C to tear down)..."
-  CYPRESS_BASE_URL="http://localhost:$E2E_VITE_PORT" yarn cy:open
+  CYPRESS_BASE_URL="http://localhost:$E2E_VITE_PORT" \
+    CYPRESS_ASSISTANT_EDIT_E2E="$ASSISTANT_EDIT_E2E" yarn cy:open
 else
   if [ -n "${CYPRESS_SPEC:-}" ]; then
     CYPRESS_BASE_URL="http://localhost:$E2E_VITE_PORT" \
+      CYPRESS_ASSISTANT_EDIT_E2E="$ASSISTANT_EDIT_E2E" \
       yarn cy:run --spec "$CYPRESS_SPEC"
   else
-    CYPRESS_BASE_URL="http://localhost:$E2E_VITE_PORT" yarn cy:run
+    CYPRESS_BASE_URL="http://localhost:$E2E_VITE_PORT" \
+      CYPRESS_ASSISTANT_EDIT_E2E="$ASSISTANT_EDIT_E2E" yarn cy:run
   fi
 fi

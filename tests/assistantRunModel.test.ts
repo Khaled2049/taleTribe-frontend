@@ -132,18 +132,20 @@ describe("assistant-ui run conversion", () => {
     });
   });
 
-  it("fails closed when an approval capability appears", () => {
+  it("projects a valid editor approval as a required action", () => {
     const result = toAssistantRunResult(
       projectedFixture("approval-pause-resume"),
     );
-    expect(result.status).toMatchObject({
-      type: "incomplete",
-      reason: "error",
+    expect(result.status).toEqual({
+      type: "requires-action",
+      reason: "tool-calls",
     });
-    expect(result.metadata?.custom?.novelsync).toMatchObject({
-      failure: {
-        code: "unsupported_capability",
-        message: expect.stringContaining("Nothing was changed"),
+    expect(result.content?.at(-1)).toMatchObject({
+      type: "tool-call",
+      toolName: "apply_editor_edit",
+      approval: {
+        id: "approval-1",
+        prompt: expect.stringContaining("Apply"),
       },
     });
   });

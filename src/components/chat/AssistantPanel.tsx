@@ -30,6 +30,8 @@ import {
   Send,
   Sparkles,
   Square,
+  WandSparkles,
+  WifiOff,
   Users,
   X,
 } from "lucide-react";
@@ -41,6 +43,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ComponentType,
 } from "react";
 import { useNavigate } from "react-router-dom";
@@ -51,6 +54,21 @@ import {
 } from "./assistantNavigation";
 import { createAssistantAdapter } from "./assistantRuntime";
 import type { AssistantMessageMetadata } from "./assistantRunModel";
+import {
+  proposeEditorEditSchema,
+  type ProposeEditorEditArgs,
+} from "@novelsync/assistant-contracts";
+import {
+  useEditorBridge,
+  useEditorBridgeSnapshot,
+  type ProposalCheck,
+} from "@/components/editor/EditorBridge";
+import {
+  EditorActionLedger,
+  type EditorActionState,
+} from "./editorActionLedger";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { toast } from "sonner";
 
 const READ_TOOL_NAMES = [
   "get_story_overview",
@@ -60,11 +78,17 @@ const READ_TOOL_NAMES = [
   "read_chapter",
   "read_current_editor",
 ] as const;
+const EDITOR_ACTIONS_PRESENTED =
+  import.meta.env.VITE_ASSISTANT_EDITOR_ACTIONS_ENABLED === "true";
 
 const AssistantPanelContext = createContext<{
   storyId: string;
   navigateTo: (to: string, state?: { assistantChapterId: string }) => void;
+  actionLedger: EditorActionLedger;
 } | null>(null);
+
+const noopSubscribe = () => () => undefined;
+const zeroVersion = () => 0;
 
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -241,6 +265,339 @@ function ReadToolCard({
   );
 }
 
+const proposalProblem: Record<
+  Exclude<ProposalCheck, { ok: true }>["reason"],
+  string
+> = {
+  no_editor: "Open the matching chapter in the editor to review this change.",
+  wrong_story: "This suggestion belongs to another story.",
+  wrong_chapter:
+    "The active chapter changed. Return to the original chapter to review it.",
+  stale_revision:
+    "The saved chapter changed after this suggestion was drafted.",
+  stale_document: "The editor changed after this suggestion was drafted.",
+  unsupported_operation:
+    "This suggestion uses an edit shape the editor does not support.",
+  invalid_range: "The suggested text range is no longer valid.",
+  changed_text: "The selected words changed after this suggestion was drafted.",
+  unsupported_selection:
+    "This selection crosses a block or includes unsupported content.",
+  unsupported_replacement:
+    "This first edit release supports one plain-text paragraph at a time.",
+};
+
+function useEditorAction(
+  ledger: EditorActionLedger | undefined,
+  approvalId: string | undefined,
+): EditorActionState {
+  useSyncExternalStore(
+    ledger?.subscribe ?? noopSubscribe,
+    ledger?.getVersion ?? zeroVersion,
+    ledger?.getVersion ?? zeroVersion,
+  );
+  return ledger && approvalId ? ledger.get(approvalId) : { status: "idle" };
+}
+
+function ProposeEditorEditCard({ status }: ToolCallMessagePartProps) {
+  return (
+    <div className="my-2 flex items-center gap-2 rounded-ns border border-ns-gold/30 bg-amber-500/5 px-3 py-2 font-ui text-[11px] text-ns-ink-secondary">
+      {status.type === "running" ? (
+        <LoaderCircle className="h-3.5 w-3.5 animate-spin text-ns-gold" />
+      ) : (
+        <WandSparkles className="h-3.5 w-3.5 text-ns-gold" />
+      )}
+      {status.type === "running"
+        ? "Drafting a selection-only revision…"
+        : "Revision drafted for review"}
+    </div>
+  );
+}
+
+function ApplyEditorEditCard({
+  args,
+  approval,
+  respondToApproval,
+}: ToolCallMessagePartProps) {
+  const context = useContext(AssistantPanelContext);
+  const bridge = useEditorBridge();
+  const editorSnapshot = useEditorBridgeSnapshot();
+  const { isOnline } = useNetworkStatus();
+  const messageContent = useAuiState((state) => state.message.content);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const approvalId = approval?.id;
+  const action = useEditorAction(context?.actionLedger, approvalId);
+  const proposalId = objectValue(args)?.proposalId;
+  const proposalPart = [...messageContent].reverse().find((part) => {
+    if (part.type !== "tool-call" || part.toolName !== "propose_editor_edit") {
+      return false;
+    }
+    return objectValue(part.result)?.proposalId === proposalId;
+  });
+  const parsedProposal = proposeEditorEditSchema.safeParse(
+    proposalPart?.type === "tool-call" ? proposalPart.args : null,
+  );
+  const proposal: ProposeEditorEditArgs | null = parsedProposal.success
+    ? parsedProposal.data
+    : null;
+  const operation =
+    proposal?.operations.length === 1 &&
+    proposal.operations[0]?.type === "replace"
+      ? proposal.operations[0]
+      : null;
+  const proposalCheck = proposal
+    ? (bridge?.inspectProposal(proposal) ?? {
+        ok: false as const,
+        reason: "no_editor" as const,
+      })
+    : ({
+        ok: false as const,
+        reason: "unsupported_operation" as const,
+      } satisfies ProposalCheck);
+  const resolved =
+    approval?.approved !== undefined || action.status === "resolved";
+  const busy = action.status === "applying";
+  const canApply =
+    Boolean(approvalId && proposal && operation && proposalCheck.ok) &&
+    !resolved &&
+    !busy &&
+    isOnline;
+
+  const resolveDecision = async (
+    decision: "rejected" | "revision_requested",
+    revisionFeedback?: string,
+  ) => {
+    if (!context || !approvalId || resolved || busy) return;
+    context.actionLedger.resolve(approvalId, {
+      decision,
+      feedback: revisionFeedback,
+    });
+    try {
+      await respondToApproval({
+        approved: false,
+        reason: decision,
+      });
+    } catch {
+      context.actionLedger.reset(approvalId);
+      toast.error("The decision could not be recorded. Please try again.");
+    }
+  };
+
+  const apply = async () => {
+    if (!context || !bridge || !approvalId || !proposal || !canApply) return;
+    if (!context.actionLedger.beginApply(approvalId)) return;
+    const result = await bridge.applyProposal(proposal);
+    context.actionLedger.resolve(approvalId, {
+      decision: result.status === "saved" ? "applied" : "apply_failed",
+      result,
+    });
+    try {
+      await respondToApproval({ approved: true, reason: "editor_action" });
+    } catch {
+      context.actionLedger.reset(approvalId);
+      toast.error(
+        result.status === "saved"
+          ? "The edit was saved, but the assistant could not acknowledge it."
+          : "The assistant could not record the save result.",
+      );
+    }
+  };
+
+  const copyReplacement = async () => {
+    if (!operation) return;
+    try {
+      await navigator.clipboard.writeText(operation.replacementText);
+      toast.success("Replacement copied.");
+    } catch {
+      toast.error("Couldn't copy the replacement.");
+    }
+  };
+
+  const submitRevision = async () => {
+    const bounded = feedback.trim().slice(0, 500);
+    if (!bounded) return;
+    await resolveDecision("revision_requested", bounded);
+  };
+
+  const terminalMessage =
+    action.status !== "resolved"
+      ? null
+      : action.decision === "applied"
+        ? "Applied and saved. Undo remains available in the editor."
+        : action.decision === "apply_failed"
+          ? action.result?.status === "applied_local_save_conflict"
+            ? "Applied locally, but the saved chapter changed elsewhere. Your local edit was kept."
+            : action.result?.status === "stale" ||
+                action.result?.status === "invalid"
+              ? "The suggestion became stale before it could be applied."
+              : "Applied locally, but it could not be saved. Your local edit was kept."
+          : action.decision === "revision_requested"
+            ? "Revision notes sent."
+            : "Suggestion rejected. No text changed.";
+
+  return (
+    <section
+      className="my-3 overflow-hidden rounded-[0.9rem] border border-ns-gold/35 bg-ns-elevated shadow-ns"
+      data-cy="assistant-edit-review"
+      aria-label="Review editor suggestion"
+    >
+      <header className="border-b border-ns-gold/25 bg-[linear-gradient(120deg,var(--ns-accent-subtle),transparent_70%)] px-4 py-3">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ns-gold/30 bg-ns-bg text-ns-gold shadow-ns-sm">
+            <WandSparkles className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-ns-gold">
+              Manuscript suggestion
+            </p>
+            <h4 className="mt-0.5 font-heading text-base font-semibold leading-5 text-ns-ink">
+              {proposal?.summary ?? "Review unavailable"}
+            </h4>
+            <p className="mt-1 truncate font-ui text-[10px] text-ns-ink-muted">
+              {bridge?.getActiveChapterTitle() ?? "Current chapter"} · one
+              selection
+            </p>
+          </div>
+        </div>
+      </header>
+
+      {operation ? (
+        <div className="grid border-b border-ns-border sm:grid-cols-2">
+          <div className="border-b border-ns-border bg-red-500/[0.035] p-3 sm:border-b-0 sm:border-r">
+            <p className="font-ui text-[9px] font-bold uppercase tracking-[0.16em] text-red-700 dark:text-red-300">
+              Before · {operation.originalText.length} chars
+            </p>
+            <p className="mt-2 whitespace-pre-wrap font-heading text-sm leading-6 text-ns-ink-secondary line-through decoration-red-500/60">
+              {operation.originalText}
+            </p>
+          </div>
+          <div className="bg-emerald-500/[0.035] p-3">
+            <p className="font-ui text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">
+              After · {operation.replacementText.length} chars
+            </p>
+            <p className="mt-2 whitespace-pre-wrap font-heading text-sm leading-6 text-ns-ink">
+              {operation.replacementText || (
+                <span className="italic text-ns-ink-muted">
+                  Delete selection
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="border-b border-ns-border px-4 py-3 font-ui text-xs text-ns-destructive">
+          The proposal payload could not be matched safely.
+        </p>
+      )}
+
+      <div className="space-y-3 px-4 py-3">
+        {!proposalCheck.ok && !terminalMessage && (
+          <p
+            role="status"
+            className="font-ui text-xs leading-5 text-amber-700 dark:text-amber-300"
+          >
+            {proposalProblem[proposalCheck.reason]}
+          </p>
+        )}
+        {!isOnline && !terminalMessage && (
+          <p className="flex items-center gap-1.5 font-ui text-xs text-amber-700 dark:text-amber-300">
+            <WifiOff className="h-3.5 w-3.5" /> Reconnect before applying so the
+            edit can be saved.
+          </p>
+        )}
+        {terminalMessage && (
+          <p
+            role="status"
+            className="rounded-ns bg-ns-surface px-3 py-2 font-ui text-xs leading-5 text-ns-ink-secondary"
+          >
+            {terminalMessage}
+          </p>
+        )}
+
+        {showFeedback && !resolved && (
+          <div className="space-y-2">
+            <label className="block font-ui text-[10px] font-semibold uppercase tracking-wide text-ns-ink-secondary">
+              Revision note
+              <textarea
+                value={feedback}
+                maxLength={500}
+                autoFocus
+                onChange={(event) => setFeedback(event.target.value)}
+                placeholder="What should change in the next version?"
+                className="mt-1.5 min-h-20 w-full resize-y rounded-ns border border-ns-border-strong bg-ns-bg p-2.5 text-xs font-normal normal-case tracking-normal text-ns-ink outline-none focus:border-ns-accent focus:ring-2 focus:ring-[var(--ns-ring)]"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowFeedback(false)}
+                className="rounded-ns px-2.5 py-1.5 font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!feedback.trim()}
+                onClick={() => void submitRevision()}
+                className="rounded-ns bg-ns-ink px-2.5 py-1.5 font-ui text-xs font-semibold text-ns-bg disabled:opacity-40"
+              >
+                Send note
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!showFeedback && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              data-cy="assistant-edit-apply"
+              disabled={!canApply}
+              onClick={() => void apply()}
+              className="inline-flex items-center gap-1.5 rounded-ns bg-ns-accent px-3 py-2 font-ui text-xs font-semibold text-white shadow-ns-sm hover:bg-ns-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy ? (
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
+              {busy ? "Applying…" : "Apply & save"}
+            </button>
+            <button
+              type="button"
+              disabled={resolved || busy}
+              onClick={() => void resolveDecision("rejected")}
+              className="rounded-ns border border-ns-border-strong px-3 py-2 font-ui text-xs font-semibold text-ns-ink-secondary hover:bg-ns-surface-hover disabled:opacity-40"
+            >
+              Reject
+            </button>
+            <button
+              type="button"
+              disabled={resolved || busy}
+              onClick={() => setShowFeedback(true)}
+              className="rounded-ns px-2 py-2 font-ui text-xs text-ns-accent hover:bg-ns-accent-subtle disabled:opacity-40"
+            >
+              Ask for revision
+            </button>
+            <button
+              type="button"
+              disabled={!operation}
+              onClick={() => void copyReplacement()}
+              className="ml-auto inline-flex items-center gap-1 rounded-ns px-2 py-2 font-ui text-xs text-ns-ink-muted hover:bg-ns-surface-hover"
+              aria-label="Copy replacement text"
+            >
+              <Copy className="h-3.5 w-3.5" /> Copy
+            </button>
+          </div>
+        )}
+        <span className="sr-only" aria-live="polite">
+          {editorSnapshot?.chapterId ? terminalMessage : null}
+        </span>
+      </div>
+    </section>
+  );
+}
+
 function PlainTextPart({ text }: TextMessagePartProps) {
   const role = useAuiState((state) => state.message.role);
   return (
@@ -367,9 +724,13 @@ function AssistantMessage() {
             Text: PlainTextPart,
             Source: StorySource,
             tools: {
-              by_name: Object.fromEntries(
-                READ_TOOL_NAMES.map((name) => [name, ReadToolCard]),
-              ),
+              by_name: {
+                ...Object.fromEntries(
+                  READ_TOOL_NAMES.map((name) => [name, ReadToolCard]),
+                ),
+                propose_editor_edit: ProposeEditorEditCard,
+                apply_editor_edit: ApplyEditorEditCard,
+              },
               Fallback: ReadToolCard,
             },
           }}
@@ -408,13 +769,21 @@ function AssistantMessage() {
 }
 
 function EmptyAssistant() {
-  const suggestions = [
+  const suggestions: readonly (readonly [string, string])[] = [
     ["Outline check", "Give me an overview of this story and its chapters."],
     ["Cast list", "List the characters in this story."],
     [
       "Find a thread",
       "Search the story for the protagonist’s central conflict.",
     ],
+    ...(EDITOR_ACTIONS_PRESENTED
+      ? [
+          [
+            "Polish selection",
+            "Suggest a tighter revision for the text I selected in the editor.",
+          ] as const,
+        ]
+      : []),
   ] as const;
   return (
     <ThreadPrimitive.Empty>
@@ -427,7 +796,9 @@ function EmptyAssistant() {
         </h3>
         <p className="mt-2 text-sm leading-6 text-ns-ink-secondary">
           Ask about the story’s chapters, characters, places, plot, or passages.
-          This assistant can read, never edit.
+          {EDITOR_ACTIONS_PRESENTED
+            ? " Selected text can be revised only after you review and apply it."
+            : " This assistant can read, never edit."}
         </p>
         <div className="mt-7 grid gap-2 text-left">
           {suggestions.map(([label, prompt]) => (
@@ -499,6 +870,8 @@ function Composer() {
 export default function AssistantPanel({ storyId }: { storyId: string }) {
   const [open, setOpen] = useState(false);
   const activeRequest = useRef<AbortController | null>(null);
+  const editorBridge = useEditorBridge();
+  const [actionLedger] = useState(() => new EditorActionLedger());
   const navigate = useNavigate();
   const endpoint =
     import.meta.env.VITE_ASSISTANT_RUN_FIREBASE === "true"
@@ -509,12 +882,17 @@ export default function AssistantPanel({ storyId }: { storyId: string }) {
       createAssistantAdapter({
         storyId,
         activeRequest,
+        actionLedger,
         transport: {
           endpoint,
           getIdToken: async () => auth.currentUser?.getIdToken() ?? null,
+          prepareEditorContext: async (mode) =>
+            mode === "send"
+              ? (editorBridge?.prepareSnapshot() ?? null)
+              : (editorBridge?.getSnapshot() ?? null),
         },
       }),
-    [endpoint, storyId],
+    [actionLedger, editorBridge, endpoint, storyId],
   );
   const runtime = useLocalRuntime(adapter);
 
@@ -546,9 +924,10 @@ export default function AssistantPanel({ storyId }: { storyId: string }) {
         activeRequest.current?.abort();
         runtime.thread.cancelRun();
         runtime.thread.reset();
+        actionLedger.clear();
         setOpen(false);
       }),
-    [runtime],
+    [actionLedger, runtime],
   );
 
   const navigateTo = useCallback(
@@ -559,8 +938,8 @@ export default function AssistantPanel({ storyId }: { storyId: string }) {
     [changeOpen, navigate],
   );
   const panelContext = useMemo(
-    () => ({ storyId, navigateTo }),
-    [navigateTo, storyId],
+    () => ({ storyId, navigateTo, actionLedger }),
+    [actionLedger, navigateTo, storyId],
   );
 
   return (
@@ -601,7 +980,9 @@ export default function AssistantPanel({ storyId }: { storyId: string }) {
                       id="assistant-panel-description"
                       className="mt-1.5 font-ui text-[11px] leading-4 text-ns-ink-muted"
                     >
-                      A read-only companion for this story workspace
+                      {EDITOR_ACTIONS_PRESENTED
+                        ? "Reads your story · changes selected text only with approval"
+                        : "A read-only companion for this story workspace"}
                     </Dialog.Description>
                   </div>
                   <Dialog.Close asChild>

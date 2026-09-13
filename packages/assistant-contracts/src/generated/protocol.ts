@@ -19,7 +19,37 @@ export namespace RunContract {
   export type From = number
   export type To = number
   export type Text1 = string
+  export type Text2 = string
+  export type Truncated = boolean
   export type Dirty = boolean
+  export type Kind = "editor_approval"
+  export type Previousrunid = string
+  export type Approvalid = string
+  export type Toolcallid = string
+  export type Proposalid = string
+  export type Decision = ("applied" | "rejected" | "revision_requested" | "apply_failed")
+  export type Chapterid1 = string
+  export type Baserevision = number
+  export type Basedocumentversion = number
+  export type Summary = string
+  /**
+   * @minItems 1
+   * @maxItems 20
+   */
+  export type Operations = [(ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]|[(ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation), (ReplaceOperation | InsertOperation)]
+  export type Type1 = "replace"
+  export type From1 = number
+  export type To1 = number
+  export type Originaltext = string
+  export type Replacementtext = string
+  export type Type2 = "insert"
+  export type At = number
+  export type Text3 = string
+  export type Status = ("saved" | "applied_local_save_failed" | "applied_local_save_conflict" | "stale" | "invalid")
+  export type Chapterid2 = string
+  export type Documentversion1 = number
+  export type Persistedrevision1 = (number | null)
+  export type Feedback = (string | null)
 
   /**
    * What the browser sends. Carries no identity -- see the module docstring.
@@ -31,6 +61,7 @@ export namespace RunContract {
   clientMessageId: Clientmessageid
   message: UserMessage
   editorContext?: (EditorContext | null)
+  continuation?: (EditorContinuation | null)
   }
   /**
    * v1 user input is text-only; the list is for forward room, not features.
@@ -63,12 +94,68 @@ export namespace RunContract {
   persistedRevision?: Persistedrevision
   documentVersion?: Documentversion
   selection?: (Selection | null)
+  buffer?: (EditorTextWindow | null)
   dirty?: Dirty
   }
   export interface Selection {
   from: From
   to: To
   text: Text1
+  }
+  /**
+   * A bounded plain-text view of the live editor, never HTML or TipTap JSON.
+   */
+  export interface EditorTextWindow {
+  text: Text2
+  truncated?: Truncated
+  }
+  /**
+   * Stateless second request after a browser-owned approval decision.
+   */
+  export interface EditorContinuation {
+  kind?: Kind
+  previousRunId: Previousrunid
+  approvalId: Approvalid
+  toolCallId: Toolcallid
+  proposalId: Proposalid
+  decision: Decision
+  proposal: ProposeEditorEditArgs
+  result?: (EditorApplyResult | null)
+  feedback?: Feedback
+  }
+  export interface ProposeEditorEditArgs {
+  chapterId: Chapterid1
+  baseRevision: Baserevision
+  baseDocumentVersion: Basedocumentversion
+  summary: Summary
+  operations: Operations
+  }
+  /**
+   * The Phase 5 editor operation. An empty replacement is a deletion.
+   */
+  export interface ReplaceOperation {
+  type?: Type1
+  from: From1
+  to: To1
+  originalText: Originaltext
+  replacementText?: Replacementtext
+  }
+  /**
+   * Reserved for a later editor phase; Phase 5 rejects it at execution.
+   */
+  export interface InsertOperation {
+  type?: Type2
+  at: At
+  text: Text3
+  }
+  /**
+   * Bounded browser report. It never authorizes or performs a server write.
+   */
+  export interface EditorApplyResult {
+  status: Status
+  chapterId: Chapterid2
+  documentVersion: Documentversion1
+  persistedRevision?: Persistedrevision1
   }
 }
 export type RunRequest = RunContract.RunRequest;
@@ -340,6 +427,7 @@ export const LIMITS = {
   "messageChars": 10000,
   "partsPerMessage": 16,
   "selectionChars": 10000,
+  "editorWindowChars": 8000,
   "summaryChars": 500,
   "toolNameChars": 64,
   "urlChars": 2048,

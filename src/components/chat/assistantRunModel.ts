@@ -6,6 +6,7 @@ import type {
 } from "@assistant-ui/react";
 import type {
   ErrorCode,
+  ProjectedApproval,
   ProjectedToolCall,
   RunState,
   RunUsage,
@@ -39,7 +40,10 @@ export type AssistantRunOverride = {
   cancelled?: boolean;
 };
 
-function toolPart(tool: ProjectedToolCall): ThreadAssistantMessagePart {
+function toolPart(
+  tool: ProjectedToolCall,
+  approval?: ProjectedApproval,
+): ThreadAssistantMessagePart {
   const result =
     tool.status === "failed"
       ? {
@@ -58,6 +62,14 @@ function toolPart(tool: ProjectedToolCall): ThreadAssistantMessagePart {
     argsText: tool.argsText,
     result,
     isError: tool.status === "failed",
+    approval: approval
+      ? {
+          id: approval.approvalId,
+          prompt: approval.summary,
+          display: "decision",
+          approved: approval.approved,
+        }
+      : undefined,
   };
 }
 
@@ -103,6 +115,16 @@ function messageStatus(
   }
   if (failure) {
     return { type: "incomplete", reason: "error", error: failure };
+  }
+  const pendingApproval = Object.values(state.approvals).some(
+    (approval) => approval.approved === undefined,
+  );
+  if (
+    pendingApproval &&
+    state.terminal?.type === "run.completed" &&
+    state.terminal.finishReason === "tool_calls"
+  ) {
+    return { type: "requires-action", reason: "tool-calls" };
   }
   if (state.terminal?.type !== "run.completed") return { type: "running" };
 
@@ -154,6 +176,13 @@ function completionNotice(state: RunState, cancelled: boolean): string | null {
     return "The response reached its output limit. The partial result is shown above.";
   }
   if (state.terminal.finishReason === "tool_calls") {
+    if (
+      Object.values(state.approvals).some(
+        (approval) => approval.approved === undefined,
+      )
+    ) {
+      return null;
+    }
     return "The response stopped before the requested reading work was finished.";
   }
   return null;
@@ -167,9 +196,13 @@ export function toAssistantRunResult(
   const failure = override.failure ?? terminalFailure(state);
   const cancelled = override.cancelled ?? false;
   const status = messageStatus(state, failure, cancelled);
-  const content: ThreadAssistantMessagePart[] = state.toolOrder.map((id) =>
-    toolPart(state.tools[id]),
-  );
+  const content: ThreadAssistantMessagePart[] = state.toolOrder.map((id) => {
+    const approvalId = state.approvalByToolCallId[id];
+    return toolPart(
+      state.tools[id],
+      approvalId ? state.approvals[approvalId] : undefined,
+    );
+  });
 
   if (state.text) {
     content.push({
