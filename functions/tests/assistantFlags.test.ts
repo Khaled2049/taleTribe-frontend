@@ -8,7 +8,6 @@ test("new capabilities default off; legacy remains on", () => {
     edits: false,
     research: false,
     legacy: true,
-    spike: false,
   });
 });
 test("client flags cannot enable server capabilities", () => {
@@ -21,16 +20,7 @@ test("client flags cannot enable server capabilities", () => {
     false,
   );
 });
-test("spike is emulator-only and requires both server switches", () => {
-  const env = {
-    ASSISTANT_API_ENABLED: "true",
-    ASSISTANT_STREAM_SPIKE_ENABLED: "true",
-  };
-  assert.equal(assistantFlags(env).spike, false);
-  assert.equal(
-    assistantFlags({ ...env, FUNCTIONS_EMULATOR: "true" }).spike,
-    true,
-  );
+test("legacy can be disabled independently", () => {
   assert.equal(
     assistantFlags({ ASSISTANT_LEGACY_FALLBACK_ENABLED: "false" }).legacy,
     false,

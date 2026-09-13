@@ -6,9 +6,5 @@ export function assistantFlags(env: NodeJS.ProcessEnv = process.env) {
     edits: api && env.ASSISTANT_EDIT_PROPOSALS_ENABLED === "true",
     research: api && env.ASSISTANT_RESEARCH_ENABLED === "true",
     legacy: env.ASSISTANT_LEGACY_FALLBACK_ENABLED !== "false",
-    spike:
-      api &&
-      env.FUNCTIONS_EMULATOR === "true" &&
-      env.ASSISTANT_STREAM_SPIKE_ENABLED === "true",
   };
 }

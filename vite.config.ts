@@ -37,10 +37,10 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     proxy: {
-      "/assistant-spike": {
+      "/assistant-run": {
         target: "http://127.0.0.1:5002",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/assistant-spike/, ""),
+        rewrite: (path) => path.replace(/^\/assistant-run/, ""),
       },
       "/story-data": {
         target: "http://localhost:8084",

@@ -52,9 +52,9 @@ export default function AssistantStreamSpike({
           if (!mounted.current)
             throw new DOMException("Panel closed", "AbortError");
           const endpoint =
-            import.meta.env.VITE_ASSISTANT_SPIKE_FIREBASE === "true"
-              ? getFunctionUrl("assistantStreamSpike")
-              : "/assistant-spike/assistantStreamSpike";
+            import.meta.env.VITE_ASSISTANT_RUN_FIREBASE === "true"
+              ? getFunctionUrl("assistantRun")
+              : "/assistant-run/assistantRun";
           const last = messages[messages.length - 1];
           const prompt =
             last?.content
@@ -138,7 +138,7 @@ export default function AssistantStreamSpike({
           </button>
         </div>
         <p className="px-4 py-2 text-xs text-ns-ink-muted">
-          Development mock stream
+          Development assistant stream
         </p>
         <ThreadPrimitive.Root className="flex flex-col flex-1 min-h-0">
           <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto">
