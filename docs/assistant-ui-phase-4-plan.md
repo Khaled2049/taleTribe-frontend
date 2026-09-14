@@ -1,6 +1,6 @@
 # Assistant Phase 4 implementation plan: read-only product UI
 
-Date: 2026-09-12. Status: proposed. Scope: P4-T1 through P4-T5 of
+Date: 2026-09-12. Status: implemented on `feature/assistant-ui`. Scope: P4-T1 through P4-T5 of
 [the integration plan](assistant-ui-integration.md#phase-4--assistant-ui-frontend-foundation),
 plus one deterministic-mock preflight needed by the phase gate. Predecessor:
 [Phase 3](assistant-ui-phase-3-plan.md), implemented on

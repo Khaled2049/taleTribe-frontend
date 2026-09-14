@@ -260,7 +260,8 @@ export function assistantFailureForStatus(status: number): AssistantFailure {
     case 402:
       return {
         code: "quota_exceeded",
-        message: "There are not enough assistant credits for this response.",
+        message:
+          "You have used up your assistant allowance for now. Add your own API key in Settings to keep going.",
       };
     case 403:
       return {

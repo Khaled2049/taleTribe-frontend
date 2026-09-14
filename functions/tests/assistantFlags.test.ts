@@ -2,12 +2,11 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { assistantFlags } from "../src/domain/assistantFlags";
 
-test("new capabilities default off; legacy remains on", () => {
+test("every capability defaults off", () => {
   assert.deepEqual(assistantFlags({}), {
     api: false,
     edits: false,
     research: false,
-    legacy: true,
   });
 });
 test("client flags cannot enable server capabilities", () => {
@@ -20,9 +19,13 @@ test("client flags cannot enable server capabilities", () => {
     false,
   );
 });
-test("legacy can be disabled independently", () => {
-  assert.equal(
-    assistantFlags({ ASSISTANT_LEGACY_FALLBACK_ENABLED: "false" }).legacy,
-    false,
-  );
+test("edits and research cannot outlive the api flag", () => {
+  // There is no legacy chat to fall back to now, so a half-enabled assistant
+  // must not offer capabilities the run endpoint itself will refuse.
+  const flags = assistantFlags({
+    ASSISTANT_EDIT_PROPOSALS_ENABLED: "true",
+    ASSISTANT_RESEARCH_ENABLED: "true",
+  });
+  assert.equal(flags.edits, false);
+  assert.equal(flags.research, false);
 });

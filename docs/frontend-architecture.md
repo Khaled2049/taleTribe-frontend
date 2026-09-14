@@ -39,7 +39,7 @@ one is the most common way to make a mess.
 | Backend | Reach it via | Use it for |
 | --- | --- | --- |
 | **story-data** (PostgreSQL) | `@novelsync/story-data-client` | Stories, chapters, characters, places, plots, comments, profiles, guestbooks, reading history, book clubs, competitions |
-| **Firestore** | `firestore` from `@novelsync/platform-auth` | Realtime chat, and legacy data not yet migrated |
+| **Firestore** | `firestore` from `@novelsync/platform-auth` | Book club chat, and legacy data not yet migrated |
 | **Cloud Functions** | `@/cloudFunctions` | AI generation, credits, storage uploads, anything needing a server secret |
 
 **Default to story-data.** It owns most product domains. Do not add new Firestore
@@ -47,9 +47,11 @@ writes for a domain story-data already owns — that rule exists because the
 cutover is finished for those domains and a stray write splits the source of
 truth.
 
-Firestore is still correct for two things: realtime chat (`ChatService.ts`,
-book club messages), where a snapshot listener genuinely beats polling, and
-data that predates the cutover.
+Firestore is still correct for two things: book club messages
+(`bookClubs/{clubId}/messages`), where a snapshot listener genuinely beats
+polling, and data that predates the cutover. It is **not** where the story
+assistant keeps its transcript — that lives in the panel's local runtime and is
+not persisted anywhere; `stories/{storyId}/{document=**}` is denied outright.
 
 Cloud Functions are for work the browser must not do — anything holding an API
 key, spending credits, or moving money.
@@ -140,9 +142,10 @@ Server data goes through React Query. One hook file per domain
 `src/hooks/queries/queryKeys.ts`. Inventing a key inline is how invalidation
 silently stops working.
 
-Zustand holds the rest: `authStore` (the signed-in user's profile), `chatStore`,
-`themeStore`, `readerSettingsStore`, `demoStore`. Only preferences persist —
-never auth or chat.
+Zustand holds the rest: `authStore` (the signed-in user's profile),
+`themeStore`, `readerSettingsStore`, `focusModeStore`, `demoStore`. Only
+preferences persist — never auth. The assistant transcript is not in a store at
+all; `useLocalRuntime` owns it inside `AssistantPanel`.
 
 ---
 

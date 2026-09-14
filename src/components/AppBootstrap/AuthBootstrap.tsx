@@ -3,7 +3,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { configureStoryData } from "@novelsync/story-data-client";
 import { auth, getAuthContext, getCurrentUid } from "@novelsync/platform-auth";
 import { appQueryClient } from "@/lib/queryClient";
-import { useAuthStore, useChatStore } from "@/stores";
+import { useAuthStore } from "@/stores";
 
 // Runs at module load, not in an effect: a repo call can be issued by a route
 // loader before any component mounts, and an unconfigured client throws.
@@ -25,8 +25,9 @@ export const AuthBootstrap = () => {
         previousUidRef.current !== null &&
         previousUidRef.current !== nextUid
       ) {
+        // The assistant transcript lives in the panel's local runtime and is
+        // torn down with it on sign-out, so only cached queries need clearing.
         appQueryClient.clear();
-        useChatStore.getState().resetChatState();
       }
       previousUidRef.current = nextUid;
 

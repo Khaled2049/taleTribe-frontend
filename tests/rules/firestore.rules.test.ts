@@ -51,37 +51,27 @@ beforeEach(() => env.clearFirestore());
 const as = (uid: string | null) =>
   uid ? env.authenticatedContext(uid).firestore() : env.unauthenticatedContext().firestore();
 
-describe("AI chat sessions", () => {
-  it("lets a user create and read their own session", async () => {
+describe("the stories path", () => {
+  it("refuses a client reading or writing anything under a story", async () => {
+    // The assistant keeps no Firestore transcript. Every story-owned domain is
+    // in story-data, so the whole subtree is denied rather than scoped.
     const db = as(OWNER);
-    const ref = doc(db, "stories", STORY, "chats", CHAT);
-    await assertSucceeds(setDoc(ref, { userId: OWNER, storyId: STORY }));
-    await assertSucceeds(getDoc(ref));
-  });
-
-  it("refuses a session created in someone else's name", async () => {
+    await assertFails(setDoc(doc(db, "stories", STORY, "chats", CHAT), { userId: OWNER }));
+    await assertFails(getDoc(doc(db, "stories", STORY, "chats", CHAT)));
     await assertFails(
-      setDoc(doc(as(STRANGER), "stories", STORY, "chats", CHAT), { userId: OWNER }),
-    );
-  });
-
-  it("refuses a stranger reading a session", async () => {
-    await env.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), "stories", STORY, "chats", CHAT), { userId: OWNER });
-    });
-    await assertFails(getDoc(doc(as(STRANGER), "stories", STORY, "chats", CHAT)));
-  });
-
-  it("never lets a client write a message — only Cloud Functions do", async () => {
-    await env.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), "stories", STORY, "chats", CHAT), { userId: OWNER });
-    });
-    await assertFails(
-      setDoc(doc(as(OWNER), "stories", STORY, "chats", CHAT, "messages", "m1"), {
+      setDoc(doc(db, "stories", STORY, "chats", CHAT, "messages", "m1"), {
         role: "user",
         content: "hi",
       }),
     );
+  });
+
+  it("refuses even a pre-existing session seeded behind the rules", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "stories", STORY, "chats", CHAT), { userId: OWNER });
+    });
+    await assertFails(getDoc(doc(as(OWNER), "stories", STORY, "chats", CHAT)));
+    await assertFails(getDoc(doc(as(STRANGER), "stories", STORY, "chats", CHAT)));
   });
 });
 

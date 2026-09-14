@@ -152,6 +152,8 @@ jobs:
       - name: Build
         run: yarn build
         env:
+          # Repository variable override provides a no-revert rollback switch.
+          VITE_ASSISTANT_UI_ENABLED: ${{ vars.VITE_ASSISTANT_UI_ENABLED || 'true' }}
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
@@ -216,11 +218,15 @@ jobs:
       - name: Create functions .env
         env:
           AGENT_SERVICE_URL: ${{ needs.terraform-apply.outputs.backend_url }}
+          # Production defaults on; set the repository variable to false to
+          # refuse assistant runs on the next deploy without reverting code.
+          ASSISTANT_API_ENABLED: ${{ vars.ASSISTANT_API_ENABLED || 'true' }}
           RECOMMENDATION_SERVICE_URL: ${{ needs.terraform-apply.outputs.recommendation_url }}
           STORY_DATA_URL: ${{ secrets.VITE_STORY_DATA_URL }}
         run: |
           {
             echo "AGENT_SERVICE_URL=$AGENT_SERVICE_URL"
+            echo "ASSISTANT_API_ENABLED=$ASSISTANT_API_ENABLED"
             echo "RECOMMENDATION_SERVICE_URL=$RECOMMENDATION_SERVICE_URL"
             echo "STORY_DATA_URL=$STORY_DATA_URL"
           } > functions/.env

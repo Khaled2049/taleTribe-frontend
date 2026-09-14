@@ -294,7 +294,7 @@ describe("story assistant panel", () => {
     cy.get('[data-cy="open-chat"]').click();
     cy.get('[data-cy="assistant-input"]').type("Summarize the plot{enter}");
     cy.get('[data-cy="assistant-error-quota_exceeded"]')
-      .should("contain.text", "not enough assistant credits")
+      .should("contain.text", "used up your assistant allowance")
       .and("not.contain.text", "private upstream diagnostic");
   });
 

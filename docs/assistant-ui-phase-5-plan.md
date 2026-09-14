@@ -1,6 +1,6 @@
 # Assistant Phase 5 implementation plan: active editor context and approved edits
 
-Date: 2026-09-13. Status: proposed. Scope: P5-T0 through P5-T6 of
+Date: 2026-09-13. Status: implemented on `feature/assistant-ui`. Scope: P5-T0 through P5-T6 of
 [the integration plan](assistant-ui-integration.md#phase-5--active-editor-context-and-approved-edits).
 Predecessor: [Phase 4](assistant-ui-phase-4-plan.md), implemented on
 `feature/assistant-phase-4-read-only-ui` with its run-aware mock on

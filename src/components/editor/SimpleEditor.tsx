@@ -82,7 +82,6 @@ import {
 import { nextChapterPosition } from "@/utils/chapterPosition";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { InteractiveStoryPanel } from "@/components/editor/InteractiveStoryPanel";
-import { FloatingChatButton } from "../chat/FloatingChatButton";
 import { useCoWrite } from "@/hooks/useCoWrite";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useFullscreen } from "@/hooks/useFullscreen";
@@ -1608,9 +1607,6 @@ export function SimpleEditor() {
             </div>
           </SlideOverPanel>
 
-          {!isDemo && !focusMode && (
-            <FloatingChatButton storyId={state.story?.id} />
-          )}
 
           <ConfirmDialog
             open={splitDialogOpen}

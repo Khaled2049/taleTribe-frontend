@@ -63,7 +63,7 @@ const Story = () => {
           <Outlet />
         </main>
       </div>
-      {storyId && <FloatingChatButton storyId={storyId} scope="workspace" />}
+      {storyId && <FloatingChatButton storyId={storyId} />}
     </div>
   );
   return storyId ? (

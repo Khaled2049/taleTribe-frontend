@@ -1,6 +1,6 @@
 # Assistant Phase 3 implementation plan: read-only story agent and run loop
 
-Date: 2026-09-12. Status: proposed. Scope: P3-T1 through P3-T5 of
+Date: 2026-09-12. Status: implemented on `feature/assistant-ui`. Scope: P3-T1 through P3-T5 of
 [the integration plan](assistant-ui-integration.md#phase-3--read-only-story-agent-and-streaming-run-loop).
 Predecessor: [Phase 2](assistant-ui-phase-2-plan.md) (P2-T1 to P2-T3 done;
 T4/T5/T6 outstanding and not required here).

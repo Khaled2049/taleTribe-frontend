@@ -13,7 +13,6 @@ service cloud.firestore {
     //   invites       — signup gate, needs unauthenticated reads
     //   users         — BYOK settings and the AI usage counters
     //   userActivity  — client-side rate limits for the two features below
-    //   stories/chats — AI chat transcripts, kept for realtime
     //   bookClubs     — club chat, kept for realtime
     //   mcpAccess     — MCP allowlist requests
     //   mcpOauth*     — MCP server state, Admin SDK only
@@ -44,37 +43,12 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // The story document itself lives in PostgreSQL. This block exists only as
-    // the parent path for chat sessions, which stayed in Firestore for their
-    // realtime listener — hence no rules on the story document.
-    match /stories/{storyId} {
-
-      // Chat sessions are the last Firestore-resident part of a story, and the
-      // story document itself no longer exists here — it is in PostgreSQL. A
-      // get() on a missing doc returns null and dereferencing .data denies, so
-      // ownership is a field compare against the session's own denormalized
-      // uid.
-      //
-      // The client lists these with a userId filter; a resource-based read rule
-      // denies any query that could return someone else's session.
-      match /chats/{chatId} {
-        allow read: if request.auth != null &&
-          resource.data.userId == request.auth.uid;
-        allow create: if request.auth != null &&
-          request.resource.data.userId == request.auth.uid;
-        allow update, delete: if request.auth != null &&
-          resource.data.userId == request.auth.uid;
-
-        // Messages carry no owner of their own and are written only by Cloud
-        // Functions, so they inherit the session's. exists() first: an
-        // unguarded get() on a missing parent errors, which denies.
-        match /messages/{messageId} {
-          allow read: if request.auth != null &&
-            exists(/databases/$(database)/documents/stories/$(storyId)/chats/$(chatId)) &&
-            get(/databases/$(database)/documents/stories/$(storyId)/chats/$(chatId)).data.userId == request.auth.uid;
-          allow write: if false;
-        }
-      }
+    // Nothing under a story lives in Firestore any more: the story document,
+    // its chapters and the assistant's transcripts are all in PostgreSQL or
+    // gone. The path is left denied rather than deleted so an old client that
+    // still remembers it is refused rather than silently reading nothing.
+    match /stories/{storyId}/{document=**} {
+      allow read, write: if false;
     }
 
     match /bookClubs/{clubId} {

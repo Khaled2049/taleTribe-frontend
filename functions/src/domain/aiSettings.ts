@@ -234,11 +234,26 @@ export async function validateProviderKey(
  * Check if user can use AI. BYOK users always pass; others go through quota.
  * Returns providerConfig (non-null for BYOK) to pass to callAgentWithRetry.
  */
-export async function checkAiAccess(userId: string): Promise<AiAccessResult> {
+/**
+ * Resolve provider credentials without spending anything.
+ *
+ * Split out of `checkAiAccess` for callers that must not consume a second unit
+ * of daily quota for work already metered — resuming an approved assistant edit
+ * is the same turn to the user, and was counted when the run began.
+ */
+export async function describeAiAccess(userId: string): Promise<AiAccessResult> {
   const settings = await getUserAiSettings(userId);
+  return settings
+    ? { allowed: true, byok: true, providerConfig: settings }
+    : { allowed: true, byok: false, providerConfig: null };
+}
 
-  if (settings) {
-    return { allowed: true, byok: true, providerConfig: settings };
+export async function checkAiAccess(userId: string): Promise<AiAccessResult> {
+  const access = await describeAiAccess(userId);
+
+  // A user on their own key spends no platform quota.
+  if (access.byok) {
+    return access;
   }
 
   const allowed = await consumePlatformDailyQuota(userId);
@@ -252,7 +267,7 @@ export async function checkAiAccess(userId: string): Promise<AiAccessResult> {
     };
   }
 
-  return { allowed: true, byok: false, providerConfig: null };
+  return access;
 }
 
 function getDailyAiQuotaLimit(): number {
