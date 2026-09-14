@@ -696,8 +696,48 @@ function MessageMetadata() {
   );
 }
 
+function AssistantWorkingState() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-cy="assistant-working"
+      className="relative mt-2 overflow-hidden rounded-ns-lg border border-ns-gold/25 bg-ns-surface/80 px-4 py-3 shadow-ns-sm"
+    >
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-px animate-pulse bg-gradient-to-r from-transparent via-ns-gold/70 to-transparent motion-reduce:animate-none"
+      />
+      <div className="flex items-center gap-3">
+        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ns-gold/30 bg-ns-elevated text-ns-gold shadow-ns-sm">
+          <span className="absolute inset-1 animate-ping rounded-full border border-ns-gold/20 motion-reduce:animate-none" />
+          <Sparkles className="relative h-4 w-4 animate-pulse motion-reduce:animate-none" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-heading text-sm font-semibold text-ns-ink">
+            Gathering the threads
+          </p>
+          <p className="mt-0.5 font-ui text-[11px] leading-4 text-ns-ink-secondary">
+            Reading your story and shaping a careful response…
+          </p>
+        </div>
+        <span className="flex shrink-0 items-end gap-1" aria-hidden>
+          <span className="h-1.5 w-1.5 animate-[pulse_1.2s_ease-in-out_infinite] rounded-full bg-ns-gold motion-reduce:animate-none" />
+          <span className="h-2.5 w-1.5 animate-[pulse_1.2s_ease-in-out_0.2s_infinite] rounded-full bg-ns-accent/70 motion-reduce:animate-none" />
+          <span className="h-4 w-1.5 animate-[pulse_1.2s_ease-in-out_0.4s_infinite] rounded-full bg-ns-gold motion-reduce:animate-none" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function AssistantMessage() {
   const role = useAuiState((state) => state.message.role);
+  const waitingForFirstPart = useAuiState(
+    (state) =>
+      state.message.status?.type === "running" &&
+      state.message.content.length === 0,
+  );
   const isAssistant = role === "assistant";
   return (
     <MessagePrimitive.Root
@@ -719,6 +759,7 @@ function AssistantMessage() {
             Story assistant
           </div>
         )}
+        {isAssistant && waitingForFirstPart && <AssistantWorkingState />}
         <MessagePrimitive.Parts
           components={{
             Text: PlainTextPart,

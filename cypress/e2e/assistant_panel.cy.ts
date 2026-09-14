@@ -304,7 +304,12 @@ describe("story assistant panel", () => {
       "Keep waiting __script: hang{enter}",
     );
     cy.get('[data-cy="assistant-metadata"][data-run-id]').should("exist");
+    cy.get('[data-cy="assistant-working"]')
+      .should("be.visible")
+      .and("contain.text", "Gathering the threads")
+      .and("contain.text", "Reading your story");
     cy.get('[data-cy="assistant-stop"]').should("be.visible").click();
+    cy.get('[data-cy="assistant-working"]').should("not.exist");
     cy.get('[data-cy="assistant-notice-run.cancelled"]').should(
       "contain.text",
       "Stopped",
