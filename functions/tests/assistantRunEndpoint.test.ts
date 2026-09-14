@@ -36,7 +36,7 @@ test("continuations are rejected at the gateway when edit proposals are off", as
   const priorApi = process.env.ASSISTANT_API_ENABLED;
   const priorEdits = process.env.ASSISTANT_EDIT_PROPOSALS_ENABLED;
   process.env.ASSISTANT_API_ENABLED = "true";
-  delete process.env.ASSISTANT_EDIT_PROPOSALS_ENABLED;
+  process.env.ASSISTANT_EDIT_PROPOSALS_ENABLED = "false";
   let status = 0;
   let payload: unknown;
   const response = {

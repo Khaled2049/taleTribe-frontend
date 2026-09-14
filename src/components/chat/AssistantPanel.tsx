@@ -79,7 +79,7 @@ const READ_TOOL_NAMES = [
   "read_current_editor",
 ] as const;
 const EDITOR_ACTIONS_PRESENTED =
-  import.meta.env.VITE_ASSISTANT_EDITOR_ACTIONS_ENABLED === "true";
+  import.meta.env.VITE_ASSISTANT_EDITOR_ACTIONS_ENABLED !== "false";
 
 const AssistantPanelContext = createContext<{
   storyId: string;

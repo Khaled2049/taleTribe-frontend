@@ -29,3 +29,13 @@ test("edits and research cannot outlive the api flag", () => {
   assert.equal(flags.edits, false);
   assert.equal(flags.research, false);
 });
+test("the enabled api offers edits by default and keeps an explicit kill switch", () => {
+  assert.equal(assistantFlags({ ASSISTANT_API_ENABLED: "true" }).edits, true);
+  assert.equal(
+    assistantFlags({
+      ASSISTANT_API_ENABLED: "true",
+      ASSISTANT_EDIT_PROPOSALS_ENABLED: "false",
+    }).edits,
+    false,
+  );
+});
