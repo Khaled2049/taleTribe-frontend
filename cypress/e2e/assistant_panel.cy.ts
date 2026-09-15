@@ -141,6 +141,38 @@ describe("story assistant panel", () => {
       .and("contain.text", "2 model calls");
   });
 
+  it("answers /help locally, without a run, and sends a listed example", () => {
+    cy.intercept("POST", "**/assistantRun", (req) =>
+      replyWithEvents(req, textRun("run-help-example")),
+    ).as("assistantRun");
+
+    cy.get('[data-cy="open-chat"]').click();
+    cy.get('[data-cy="assistant-input"]').type("/help{enter}");
+
+    cy.get('[data-cy="assistant-help"]')
+      .should("be.visible")
+      .and("contain.text", "Search the manuscript")
+      .and("contain.text", "not saved");
+    // Nothing the run loop would not offer: research has no executor yet.
+    cy.get('[data-cy="assistant-help"]').should(
+      "not.contain.text",
+      "Look something up on the web",
+    );
+    // The whole point of answering locally: no request, and so no credits.
+    cy.get('[data-cy="assistant-usage"]').should("not.exist");
+    cy.get("@assistantRun.all").should("have.length", 0);
+
+    // An example is a live prompt, not decoration.
+    cy.get('[data-cy="assistant-help"]')
+      .contains("Give me an overview")
+      .click();
+    cy.wait("@assistantRun");
+    cy.get('[data-cy="assistant-message"]').should(
+      "contain.text",
+      "central image",
+    );
+  });
+
   it("renders a completed read tool and a bounded story reference", () => {
     const events = [
       base("run-tool", 0, {

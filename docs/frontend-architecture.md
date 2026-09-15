@@ -38,7 +38,7 @@ one is the most common way to make a mess.
 
 | Backend | Reach it via | Use it for |
 | --- | --- | --- |
-| **story-data** (PostgreSQL) | `@novelsync/story-data-client` | Stories, chapters, characters, places, plots, comments, profiles, guestbooks, reading history, book clubs, competitions |
+| **story-data** (PostgreSQL) | `@novelsync/story-data-client` | Stories, chapters, assistant threads, characters, places, plots, comments, profiles, guestbooks, reading history, book clubs, competitions |
 | **Firestore** | `firestore` from `@novelsync/platform-auth` | Book club chat, and legacy data not yet migrated |
 | **Cloud Functions** | `@/cloudFunctions` | AI generation, credits, storage uploads, anything needing a server secret |
 
@@ -50,8 +50,9 @@ truth.
 Firestore is still correct for two things: book club messages
 (`bookClubs/{clubId}/messages`), where a snapshot listener genuinely beats
 polling, and data that predates the cutover. It is **not** where the story
-assistant keeps its transcript — that lives in the panel's local runtime and is
-not persisted anywhere; `stories/{storyId}/{document=**}` is denied outright.
+assistant keeps its transcript: assistant threads and rich message parts are
+persisted in story-data and rehydrated through assistant-ui's history adapter.
+`stories/{storyId}/{document=**}` remains denied outright in Firestore.
 
 Cloud Functions are for work the browser must not do — anything holding an API
 key, spending credits, or moving money.

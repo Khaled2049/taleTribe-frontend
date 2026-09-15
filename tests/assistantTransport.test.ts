@@ -77,6 +77,35 @@ describe("assistant browser transport", () => {
     );
   });
 
+  it("includes the durable thread identity in the run request", async () => {
+    let body: Record<string, unknown> = {};
+    const getThreadId = vi.fn(async () => "thread-1");
+
+    await collect(
+      streamAssistantRun(
+        "story-1",
+        "Continue the scene",
+        new AbortController().signal,
+        {
+          endpoint: "/assistant",
+          getIdToken: async () => "token",
+          getThreadId,
+          fetcher: vi.fn(async (_url, init) => {
+            body = JSON.parse(String(init?.body));
+            return new Response(
+              streamOf(
+                'data: {"v":1,"runId":"r","seq":0,"type":"run.cancelled"}\n\n',
+              ),
+            );
+          }) as typeof fetch,
+        },
+      ),
+    );
+
+    expect(getThreadId).toHaveBeenCalledOnce();
+    expect(body.threadId).toBe("thread-1");
+  });
+
   it("aborts while authentication is still resolving", async () => {
     const controller = new AbortController();
     const fetcher = vi.fn() as unknown as typeof fetch;

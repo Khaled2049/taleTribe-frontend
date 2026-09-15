@@ -28,6 +28,23 @@ const assistantEvent = await compile(
   "AssistantEvent",
   { ...options, bannerComment: "" },
 );
+// Writer-facing help copy rather than a validated wire type, so it is emitted
+// as a frozen constant instead of being compiled from JSON Schema. The gate
+// mirrors the agents run loop; a consumer filters on it rather than assuming
+// every listed capability is reachable.
+const capabilityType = [
+  "",
+  'export type CapabilityGate = "always" | "edits" | "research";',
+  "export type Capability = {",
+  "  readonly id: string;",
+  "  readonly tools: readonly string[];",
+  "  readonly gate: CapabilityGate;",
+  "  readonly title: string;",
+  "  readonly summary: string;",
+  "  readonly example: string;",
+  "  readonly limits?: string;",
+  "};",
+].join("\n");
 const metadata = [
   "",
   `export const ASSISTANT_PROTOCOL_VERSION = ${JSON.stringify(schema.protocolVersion)} as const;`,
@@ -35,6 +52,10 @@ const metadata = [
   `export const TERMINAL_EVENT_TYPES = ${JSON.stringify(schema.terminalEventTypes)} as const;`,
   `export const APPROVAL_REQUIRED_TOOLS = ${JSON.stringify(schema.approvalRequiredTools)} as const;`,
   `export const LIMITS = ${JSON.stringify(schema.limits, null, 2)} as const;`,
+  capabilityType,
+  `export const HELP_PREAMBLE = ${JSON.stringify(schema.capabilities.preamble)} as const;`,
+  `export const HELP_BOUNDARIES: readonly string[] = ${JSON.stringify(schema.capabilities.boundaries, null, 2)};`,
+  `export const CAPABILITIES: readonly Capability[] = ${JSON.stringify(schema.capabilities.items, null, 2)};`,
   "",
 ].join("\n");
 const indent = (source) =>

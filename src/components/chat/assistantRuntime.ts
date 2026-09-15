@@ -21,6 +21,8 @@ import {
   toAssistantRunResult,
   type AssistantFailure,
 } from "./assistantRunModel";
+import { buildHelpRunResult } from "./localHelpResult";
+import { parseSlashCommand } from "./slashCommands";
 import type { EditorActionLedger } from "./editorActionLedger";
 
 type ActiveRequestRef = { current: AbortController | null };
@@ -126,11 +128,14 @@ export function createAssistantAdapter({
   activeRequest,
   transport,
   actionLedger,
+  editsEnabled,
 }: {
   storyId: string;
   activeRequest: ActiveRequestRef;
   transport: AssistantTransportDependencies;
   actionLedger: EditorActionLedger;
+  /** Mirrors the server flag, so `/help` never lists a tool a run won't offer. */
+  editsEnabled: boolean;
 }): ChatModelAdapter {
   return {
     async *run({ abortSignal, messages, unstable_getMessage }) {
@@ -146,6 +151,16 @@ export function createAssistantAdapter({
           actionLedger,
         );
         const prompt = latestUserText(messages);
+
+        // `/help` is answered here and goes no further: no request, no token,
+        // no credits, and no chance of the model describing a tool it does not
+        // have. Checked after the continuation, because an approval resume is
+        // not a fresh prompt however its text happens to read.
+        if (!continuation && parseSlashCommand(prompt) === "help") {
+          yield buildHelpRunResult({ editsEnabled });
+          return;
+        }
+
         for await (const event of streamAssistantRun(
           storyId,
           prompt,

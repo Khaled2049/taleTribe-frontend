@@ -16,6 +16,7 @@ export type AssistantTransportDependencies = {
   getIdToken: () => Promise<string | null>;
   fetcher?: typeof fetch;
   createClientMessageId?: () => string;
+  getThreadId?: () => Promise<string>;
   prepareEditorContext?: (
     mode: "send" | "continuation",
   ) => Promise<EditorContext | null>;
@@ -118,6 +119,9 @@ export async function* streamAssistantRun(
         signal,
       )
     : null;
+  const threadId = dependencies.getThreadId
+    ? await abortable(dependencies.getThreadId(), signal)
+    : undefined;
 
   const request: RequestInit = {
     method: "POST",
@@ -131,6 +135,7 @@ export async function* streamAssistantRun(
         text,
         clientMessageId:
           dependencies.createClientMessageId?.() ?? crypto.randomUUID(),
+        threadId,
         editorContext: editorContext ?? undefined,
         continuation: options.continuation,
       }),

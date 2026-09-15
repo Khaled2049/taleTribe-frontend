@@ -54,8 +54,10 @@ import {
 } from "./assistantNavigation";
 import { createAssistantAdapter } from "./assistantRuntime";
 import type { AssistantMessageMetadata } from "./assistantRunModel";
+import { HELP_COMMAND } from "./slashCommands";
 import {
   proposeEditorEditSchema,
+  type Capability,
   type ProposeEditorEditArgs,
 } from "@novelsync/assistant-contracts";
 import {
@@ -69,6 +71,7 @@ import {
 } from "./editorActionLedger";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { toast } from "sonner";
+import { AssistantThreadSession } from "./assistantHistory";
 
 const READ_TOOL_NAMES = [
   "get_story_overview",
@@ -751,12 +754,95 @@ function AssistantWorkingState() {
   );
 }
 
+/**
+ * The answer to `/help`, rendered from the catalog the agents repository
+ * generates. It reuses the icon each tool already carries in `toolDetails` so
+ * a capability here and the same tool in a transcript read as one thing.
+ */
+const CAPABILITY_ICONS: Record<
+  string,
+  ComponentType<{ className?: string }>
+> = {
+  story_overview: Library,
+  list_entities: Users,
+  entity_detail: FileSearch,
+  search_story: Search,
+  read_chapter: BookOpen,
+  read_current_editor: ListTree,
+  propose_edit: WandSparkles,
+  research_web: ExternalLink,
+};
+
+function CapabilityRow({ capability }: { capability: Capability }) {
+  const Icon = CAPABILITY_ICONS[capability.id] ?? MessageCircle;
+  return (
+    <li className="rounded-ns-lg border border-ns-border bg-ns-elevated p-3 shadow-ns-sm">
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-ns-border bg-ns-surface text-ns-accent">
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-heading text-sm font-semibold text-ns-ink">
+            {capability.title}
+          </p>
+          <p className="mt-0.5 text-[13px] leading-5 text-ns-ink-secondary">
+            {capability.summary}
+          </p>
+          {capability.limits && (
+            <p className="mt-1 font-ui text-[11px] leading-4 text-ns-ink-muted">
+              {capability.limits}
+            </p>
+          )}
+          <ThreadPrimitive.Suggestion
+            prompt={capability.example}
+            send
+            className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-ns-border bg-ns-surface px-2.5 py-1 text-left font-ui text-[11px] leading-4 text-ns-ink-secondary transition-colors hover:border-ns-border-strong hover:text-ns-ink"
+          >
+            <Sparkles className="h-3 w-3 shrink-0 text-ns-accent" aria-hidden />
+            <span className="truncate">{capability.example}</span>
+          </ThreadPrimitive.Suggestion>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function HelpCard({
+  help,
+}: {
+  help: NonNullable<AssistantMessageMetadata["help"]>;
+}) {
+  return (
+    <section data-cy="assistant-help" className="mt-1">
+      <p className="text-[15px] leading-7 text-ns-ink">{help.preamble}</p>
+      <ul className="mt-3 grid gap-2">
+        {help.capabilities.map((capability) => (
+          <CapabilityRow key={capability.id} capability={capability} />
+        ))}
+      </ul>
+      <ul className="mt-3 space-y-1 border-t border-ns-border pt-2.5 font-ui text-[11px] leading-4 text-ns-ink-muted">
+        {help.boundaries.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function AssistantMessage() {
   const role = useAuiState((state) => state.message.role);
   const waitingForFirstPart = useAuiState(
     (state) =>
       state.message.status?.type === "running" &&
       state.message.content.length === 0,
+  );
+  const help = useAuiState((state) =>
+    state.message.role === "assistant"
+      ? ((
+          state.message.metadata.custom?.novelsync as
+            AssistantMessageMetadata | undefined
+        )?.help ?? null)
+      : null,
   );
   const isAssistant = role === "assistant";
   return (
@@ -780,22 +866,28 @@ function AssistantMessage() {
           </div>
         )}
         {isAssistant && waitingForFirstPart && <AssistantWorkingState />}
-        <MessagePrimitive.Parts
-          components={{
-            Text: PlainTextPart,
-            Source: StorySource,
-            tools: {
-              by_name: {
-                ...Object.fromEntries(
-                  READ_TOOL_NAMES.map((name) => [name, ReadToolCard]),
-                ),
-                propose_editor_edit: ProposeEditorEditCard,
-                apply_editor_edit: ApplyEditorEditCard,
+        {/* The text part stays in the message so copy and assistive tech still
+            reach it; only the rendering is replaced. */}
+        {help ? (
+          <HelpCard help={help} />
+        ) : (
+          <MessagePrimitive.Parts
+            components={{
+              Text: PlainTextPart,
+              Source: StorySource,
+              tools: {
+                by_name: {
+                  ...Object.fromEntries(
+                    READ_TOOL_NAMES.map((name) => [name, ReadToolCard]),
+                  ),
+                  propose_editor_edit: ProposeEditorEditCard,
+                  apply_editor_edit: ApplyEditorEditCard,
+                },
+                Fallback: ReadToolCard,
               },
-              Fallback: ReadToolCard,
-            },
-          }}
-        />
+            }}
+          />
+        )}
         {isAssistant && <MessageMetadata />}
         <MessagePrimitive.Error>
           <AssistantConnectionError />
@@ -829,6 +921,8 @@ function AssistantMessage() {
 
 function EmptyAssistant() {
   const suggestions: readonly (readonly [string, string])[] = [
+    // First, because everything below is an example of one thing this answers.
+    ["What can you do?", HELP_COMMAND],
     ["Outline check", "Give me an overview of this story and its chapters."],
     ["Cast list", "List the characters in this story."],
     [
@@ -896,7 +990,8 @@ function Composer() {
         />
         <div className="flex items-center justify-between gap-3 px-1 pb-0.5">
           <p className="font-ui text-[10px] text-ns-ink-muted">
-            Enter to send · Shift+Enter for a new line
+            Enter to send · Shift+Enter for a new line · {HELP_COMMAND} for what
+            I can do
           </p>
           <ThreadPrimitive.If running={false}>
             <ComposerPrimitive.Send
@@ -920,7 +1015,7 @@ function Composer() {
         </div>
       </ComposerPrimitive.Root>
       <p className="mt-2 text-center font-ui text-[9px] tracking-wide text-ns-ink-muted">
-        Current story only · Conversation isn’t saved
+        Current story only · Conversation saved
       </p>
     </div>
   );
@@ -932,6 +1027,11 @@ export default function AssistantPanel({ storyId }: { storyId: string }) {
   const editorBridge = useEditorBridge();
   const [actionLedger] = useState(() => new EditorActionLedger());
   const navigate = useNavigate();
+  const threadSession = useMemo(
+    () => new AssistantThreadSession(storyId),
+    [storyId],
+  );
+  const history = useMemo(() => threadSession.history(), [threadSession]);
   const endpoint =
     import.meta.env.VITE_ASSISTANT_RUN_FIREBASE === "true"
       ? getFunctionUrl("assistantRun")
@@ -942,18 +1042,20 @@ export default function AssistantPanel({ storyId }: { storyId: string }) {
         storyId,
         activeRequest,
         actionLedger,
+        editsEnabled: EDITOR_ACTIONS_PRESENTED,
         transport: {
           endpoint,
           getIdToken: async () => auth.currentUser?.getIdToken() ?? null,
+          getThreadId: () => threadSession.threadId(),
           prepareEditorContext: async (mode) =>
             mode === "send"
               ? (editorBridge?.prepareSnapshot() ?? null)
               : (editorBridge?.getSnapshot() ?? null),
         },
       }),
-    [actionLedger, editorBridge, endpoint, storyId],
+    [actionLedger, editorBridge, endpoint, storyId, threadSession],
   );
-  const runtime = useLocalRuntime(adapter);
+  const runtime = useLocalRuntime(adapter, { adapters: { history } });
 
   const stopRun = useCallback(() => {
     activeRequest.current?.abort();

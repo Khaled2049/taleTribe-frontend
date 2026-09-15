@@ -1,29 +1,45 @@
 # Assistant Phase 7 implementation plan: retire the legacy chat
 
-Date: 2026-09-13. Status: in progress — 7-T1 through 7-T8 implemented on
-`feature/assistant-ui`; 7-T9 (purging the orphaned transcripts) outstanding. Scope: P7-T4 and P7-T5 of
-[the integration plan](assistant-ui-integration.md#phase-7--durable-threads-story-data-writes-and-legacy-cleanup).
+Date: 2026-09-13. Status: in progress — the legacy cutover tasks are implemented
+on `feature/assistant-ui`; durable threads and canonical story-data writes were
+restored to scope on 2026-09-14. The transcript purge is blocked until durable
+storage is live and any retained legacy conversations have been migrated. Scope:
+Phase 7 of [the integration plan](assistant-ui-integration.md#phase-7--durable-threads-story-data-writes-and-legacy-cleanup).
 Predecessor: [Phase 5](assistant-ui-phase-5-plan.md), implemented on
 `feature/assistant-ui` across frontend, agents and creditProxy.
 
-Phase 7 as originally written bundles four unrelated jobs. This plan takes two
-of them — delete the legacy chat, then make the naming and documentation tell
-the truth — and explicitly drops the rest.
+Phase 7 originally bundled four related cutover jobs. The first implementation
+pass retired the legacy chat before durable assistant state was ready. The
+remaining work now restores the intended end state: story-data owns threads and
+messages, both assistant and MCP mutations use story-data, and the old
+transcripts are removed only after that replacement is proven.
 
 ## Non-goals
 
-Deliberately **not** in this phase:
+Still deliberately **not** in this phase:
 
-- **P7-T1 durable assistant threads.** Transcripts stay in memory for the life
-  of the panel. See preflight gap 3: this is a product decision, not an
-  oversight, and it must be made knowingly before the legacy path is deleted.
-- **P7-T2 assistant-ui thread adapters.** Nothing to adapt without durable
-  threads.
-- **P7-T3 backend writes to story-data.** The Phase 5 shape stands: the model
-  proposes, the browser applies, the existing `If-Match` path saves.
-- **MCP migration.** `mcpOauth*`, `mcpWrites` and `mcpAccess` stay in Firestore,
-  owned by the agents service and reached only through the Admin SDK. Nothing
-  here touches them.
+- Persisting an MCP client's surrounding chat transcript. The MCP server sees
+  tool calls, not the client application's user/model messages.
+- Removing the assistant's browser approval gate. Shared mutation semantics do
+  not require assistant and MCP to have identical consent UX.
+- Moving MCP OAuth tokens or the rollout allowlist out of Firestore. Story and
+  chapter writes move to story-data; MCP identity infrastructure does not.
+
+## Restored durable-state work
+
+- **P7-T1 durable assistant threads:** add story-scoped thread and rich-message
+  storage to story-data, including idempotency, pagination, status, metadata,
+  revision guards, and cascade deletion.
+- **P7-T2 assistant-ui thread adapters:** create/list/load/update/archive
+  threads and rehydrate structured messages, tool calls, sources, and pending
+  approvals.
+- **P7-T3 canonical writes and capability parity:** port MCP writes from
+  Firestore to story-data and have the MCP and assistant adapters share one
+  capability catalog. Browser-only editor context remains an explicit channel
+  extension.
+- Enable MCP writes by default only after P7-T3 removes the split-brain guard;
+  keep `stories:write`, ownership, revisions, limits, and the emergency kill
+  switch.
 
 ## What is already implemented
 
@@ -66,18 +82,13 @@ they had configured to be free.
 already understands `provider_config` (the `_byok_config` ContextVar), so the
 work is confined to the Function and the run request.
 
-### 3. Conversations stop surviving a reload
+### 3. Conversations previously stopped surviving a reload
 
-The legacy chat persists every turn to `stories/{id}/chats/{id}/messages` and
-rehydrates on open. The assistant keeps its transcript in `useLocalRuntime`
-state, which is cleared on story change and lost on refresh. With P7-T1 out of
-scope, deleting the legacy chat means **accepting that assistant conversations
-are ephemeral**.
-
-That is defensible — the assistant reads canonical story state on every run, so
-a lost transcript loses no story data — but it is a visible product regression
-and must be an explicit choice, not a side effect. If it is not acceptable,
-P7-T1 comes back into scope and this phase waits.
+The legacy chat persisted every turn to `stories/{id}/chats/{id}/messages`, but
+the first assistant cutover kept its transcript only in `useLocalRuntime` and
+lost it on refresh. That regression is not acceptable. P7-T1 and P7-T2 are back
+in scope: story-data persists story-scoped threads and rich message parts, and
+the assistant-ui history adapter restores them when the panel reopens.
 
 ### 4. In production today the legacy chat is the only chat
 
@@ -190,18 +201,21 @@ Remove, in this order: `Chatbot.tsx` (207 lines), `ChatMessage.tsx`,
 ### 7-T9: Drop the orphaned transcripts (frontend)
 
 Deleting the rules does not delete the data. `stories/*/chats/*/messages`
-documents remain in Firestore, now unreachable by any client. The product is
-pre-release and the only account with transcripts is the owner's, so purge them
-with a one-off Admin SDK script rather than writing a migration.
+documents remain in Firestore, now unreachable by any client. Do not purge them
+until P7-T1 and P7-T2 are live and the owner has explicitly chosen whether to
+migrate or discard the legacy transcript.
 
 ## Ordering
 
-7-T1 and 7-T2 close the capability gaps and can run in parallel. 7-T3 ships the
+The durable P7-T1 backend lands before the P7-T2 frontend adapter, and both land
+before the legacy transcript purge. Canonical MCP writes and parity follow;
+only after every MCP story mutation uses story-data may writes default on. The
+existing 7-T1 and 7-T2 capability-gap tasks can run in parallel. 7-T3 ships the
 assistant as the default with the legacy path still present and revertible by
 flag. Only then do 7-T4 through 7-T6 delete, in that order — browser, then
 Function, then agent — so that at no point does a live caller outlive its
-handler. 7-T7 follows the deletions. 7-T8 and 7-T9 can land any time after
-7-T6.
+handler. 7-T7 follows the deletions. 7-T8 can land after 7-T6; 7-T9 waits for
+durable storage and an explicit migration-or-purge decision.
 
 ## Phase gate
 
@@ -210,6 +224,10 @@ handler. 7-T7 follows the deletions. 7-T8 and 7-T9 can land any time after
   with no upstream body leaked to the browser.
 - A BYOK user completes an assistant run, including a tool round, with no
   platform credits spent.
+- Assistant messages, structured parts, sources, and approvals survive a panel
+  close and page reload without crossing story or owner boundaries.
+- MCP story mutations use story-data revisions and are enabled by default only
+  after the Firestore write path is gone.
 - No `Chatbot`, `chatStore`, `sendChatMessage`, `clearChatSession` or
   `chatWithContext` symbol remains in any repository.
 - `firestore.rules` denies client access to `stories/{id}/chats`, book-club

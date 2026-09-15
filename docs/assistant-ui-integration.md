@@ -276,6 +276,25 @@ Tool schemas must be strict, versioned, size-limited, and validated again at
 the execution boundary. Model output is untrusted even when it matches a tool
 schema.
 
+#### Telling the writer about them: `/help`
+
+The panel answers `/help` (and `/?`) in the browser -- no request, no model
+call, no credits -- from a catalog generated out of the same tool registry the
+table above describes. See
+[the plan](assistant-ui-help-command-plan.md).
+
+The catalog is `assistant/help.py` in taleTribe-agents, exported into
+`schema/v1.json` under `capabilities`, vendored here by
+`scripts/sync_assistant_fixtures.py`, and compiled into `CAPABILITIES` by the
+contracts package. `tests/test_assistant_help.py` asserts the catalog
+partitions `TOOL_SCHEMAS`, so **a new tool without help copy fails CI** rather
+than quietly going undocumented. Each entry carries a `gate` mirroring
+`available_tools`, which is why `research_web` -- registered but with no
+executor, and hardcoded off in `run.py` -- is never listed.
+
+Matching is exact: `/helo` and `/help me tighten this` are ordinary prompts and
+go to the model. An editor approval resume is never parsed as a command.
+
 ### Editor proposal
 
 ```json

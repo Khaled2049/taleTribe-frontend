@@ -5,6 +5,7 @@ import type {
   ToolCallMessagePart,
 } from "@assistant-ui/react";
 import type {
+  Capability,
   ErrorCode,
   ProjectedApproval,
   ProjectedToolCall,
@@ -25,7 +26,22 @@ export type AssistantFailure = {
   message: string;
 };
 
+/** A locally answered `/help`, carried on metadata so the panel can render it. */
+export type AssistantHelp = {
+  preamble: string;
+  boundaries: readonly string[];
+  capabilities: readonly Capability[];
+};
+
 export type AssistantMessageMetadata = {
+  /**
+   * `local_help` is the browser answering itself: no run, no tokens, no
+   * credits. It is a metadata discriminator rather than a new content part
+   * because parts are the server-owned protocol vocabulary, and a client-only
+   * part type would be a word only one side of the wire knows.
+   */
+  kind: "run" | "local_help";
+  help: AssistantHelp | null;
   runId: string | null;
   provider: string | null;
   model: string | null;
@@ -217,6 +233,8 @@ export function toAssistantRunResult(
   content.push(...state.references.map(sourcePart));
 
   const metadata: AssistantMessageMetadata = {
+    kind: "run",
+    help: null,
     runId: state.runId,
     provider: state.usage.provider ?? state.provider,
     model: state.usage.model ?? state.model,
