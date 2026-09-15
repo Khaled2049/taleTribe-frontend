@@ -696,6 +696,26 @@ function MessageMetadata() {
   );
 }
 
+function AssistantConnectionError() {
+  const hasStructuredFailure = useAuiState(
+    (state) =>
+      state.message.role === "assistant" &&
+      Boolean(
+        (
+          state.message.metadata.custom?.novelsync as
+            AssistantMessageMetadata | undefined
+        )?.failure,
+      ),
+  );
+  if (hasStructuredFailure) return null;
+
+  return (
+    <div role="alert" className="mt-2 text-xs text-ns-destructive">
+      The assistant connection failed safely. Please retry.
+    </div>
+  );
+}
+
 function AssistantWorkingState() {
   return (
     <div
@@ -778,9 +798,7 @@ function AssistantMessage() {
         />
         {isAssistant && <MessageMetadata />}
         <MessagePrimitive.Error>
-          <div role="alert" className="mt-2 text-xs text-ns-destructive">
-            The assistant connection failed safely. Please retry.
-          </div>
+          <AssistantConnectionError />
         </MessagePrimitive.Error>
         {isAssistant && (
           <ActionBarPrimitive.Root

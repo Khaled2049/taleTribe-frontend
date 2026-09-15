@@ -276,6 +276,7 @@ describe("story assistant panel", () => {
     cy.get('[data-cy="assistant-error-provider_unavailable"]').should(
       "be.visible",
     );
+    cy.contains("The assistant connection failed safely").should("not.exist");
     cy.get('[data-cy="assistant-retry"]').click();
     cy.wait("@assistantRun");
     cy.get('[data-cy="assistant-message"]').should(
