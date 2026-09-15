@@ -500,7 +500,10 @@ const AllStories: React.FC = () => {
                 ) : (
                   <>
                     {/* Mobile: list layout */}
-                    <div className="sm:hidden divide-y divide-ns-border border-t border-ns-border">
+                    <div
+                      data-cy="story-list"
+                      className="sm:hidden divide-y divide-ns-border border-t border-ns-border"
+                    >
                       {stories.map((story) => (
                         <div
                           key={story.id}
@@ -583,7 +586,10 @@ const AllStories: React.FC = () => {
                     </div>
 
                     {/* Desktop: grid layout */}
-                    <div className="hidden sm:grid sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2">
+                    <div
+                      data-cy="story-grid"
+                      className="hidden sm:grid sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2"
+                    >
                       {stories.map((story) => (
                         <div
                           key={story.id}

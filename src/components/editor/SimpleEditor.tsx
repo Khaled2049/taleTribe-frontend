@@ -1,5 +1,11 @@
 import "../style.css";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   AlignCenter,
   AlignJustify,
@@ -33,7 +39,12 @@ import {
   X,
 } from "lucide-react";
 
-import { useParams, useSearchParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { useAuthContext } from "../../contexts/AuthContext";
 import { useDemoMode } from "@/contexts/DemoModeContext";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
@@ -71,7 +82,6 @@ import {
 import { nextChapterPosition } from "@/utils/chapterPosition";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { InteractiveStoryPanel } from "@/components/editor/InteractiveStoryPanel";
-import { FloatingChatButton } from "../chat/FloatingChatButton";
 import { useCoWrite } from "@/hooks/useCoWrite";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useFullscreen } from "@/hooks/useFullscreen";
@@ -80,6 +90,7 @@ import { toast } from "sonner";
 import { summarizeChapter } from "@/cloudFunctions/ai";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/queries/queryKeys";
+import { useEditorBridge } from "@/components/editor/EditorBridge";
 
 const DEMO_STORY: Story = {
   id: "demo",
@@ -130,6 +141,8 @@ export function SimpleEditor() {
   const { isDemo, requireAuth } = useDemoMode();
   const { storyId } = useParams<{ storyId: string }>();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const openInteractivePanelOnMount = searchParams.get("wizard") === "true";
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
@@ -144,6 +157,18 @@ export function SimpleEditor() {
 
   // Editor instance for header
   const [editor, setEditor] = useState<Editor | null>(null);
+  const editorBridge = useEditorBridge();
+  const persistedRevisionRef = useRef<number | undefined>(undefined);
+  const chapterTitleRef = useRef("");
+  const dirtyRef = useRef(false);
+  const flushAndWaitRef = useRef<() => Promise<number | undefined>>(
+    async () => undefined,
+  );
+  const bridgeRegistrationRef = useRef<{
+    transaction: (transaction: import("@tiptap/pm/state").Transaction) => void;
+    revisionChanged: () => void;
+    unregister: () => void;
+  } | null>(null);
   const {
     isInteractivePanelOpen,
     setIsInteractivePanelOpen,
@@ -271,7 +296,8 @@ export function SimpleEditor() {
   // Save function that will be passed to useAutosave
   const performSave = useCallback(
     async (content: string) => {
-      if (isDemo) return;
+      let persistedRevision = state.currentChapter?.revision;
+      if (isDemo) return persistedRevision;
       if (!state.story) {
         throw new Error("No story selected");
       }
@@ -292,6 +318,9 @@ export function SimpleEditor() {
         actions.updateChapterInList(state.currentChapter.id, {
           ...savedChapter,
         });
+        persistedRevision = savedChapter.revision;
+        persistedRevisionRef.current = persistedRevision;
+        bridgeRegistrationRef.current?.revisionChanged();
       }
 
       // Only update story metadata if it changed (optimization)
@@ -304,6 +333,7 @@ export function SimpleEditor() {
         actions.replaceStory(savedStory);
         actions.clearMetadataChanged();
       }
+      return persistedRevision;
     },
     [
       state.story,
@@ -321,6 +351,7 @@ export function SimpleEditor() {
   const {
     triggerSave,
     forceSave,
+    flushAndWait,
     flushSave,
     saveState,
     isDirty,
@@ -330,6 +361,36 @@ export function SimpleEditor() {
     debounceMs: 3000,
     enabled: !!state.story && !!state.currentChapter,
   });
+
+  persistedRevisionRef.current = state.currentChapter?.revision;
+  chapterTitleRef.current = state.chapterTitle;
+  dirtyRef.current = isDirty;
+  flushAndWaitRef.current = flushAndWait;
+  const currentStoryId = state.story?.id;
+  const currentChapterId = state.currentChapter?.id;
+
+  useLayoutEffect(() => {
+    if (!editorBridge || !editor || !currentStoryId || !currentChapterId) {
+      bridgeRegistrationRef.current = null;
+      return;
+    }
+    const registration = editorBridge.register({
+      storyId: currentStoryId,
+      chapterId: currentChapterId,
+      editor,
+      getChapterTitle: () => chapterTitleRef.current,
+      getPersistedRevision: () => persistedRevisionRef.current,
+      getDirty: () => dirtyRef.current,
+      flushAndWait: () => flushAndWaitRef.current(),
+    });
+    bridgeRegistrationRef.current = registration;
+    return () => {
+      registration.unregister();
+      if (bridgeRegistrationRef.current === registration) {
+        bridgeRegistrationRef.current = null;
+      }
+    };
+  }, [currentChapterId, currentStoryId, editor, editorBridge]);
 
   // Load story and chapters
   const loadStory = useCallback(
@@ -569,18 +630,51 @@ export function SimpleEditor() {
   };
 
   // Handle chapter selection with unsaved changes check
-  const handleChapterSelect = (chapter: Chapter) => {
-    if (isDirty) {
-      setPendingChapter(chapter);
-      setUnsavedChangesDialogOpen(true);
-    } else {
-      actions.selectChapter(chapter);
-      if (!isLgUp) {
-        actions.setLeftSidebarOpen(false);
+  const handleChapterSelect = useCallback(
+    (chapter: Chapter) => {
+      if (isDirty) {
+        setPendingChapter(chapter);
+        setUnsavedChangesDialogOpen(true);
+      } else {
+        actions.selectChapter(chapter);
+        if (!isLgUp) {
+          actions.setLeftSidebarOpen(false);
+        }
+        resetSaveState();
       }
-      resetSaveState();
+    },
+    [actions, isDirty, isLgUp, resetSaveState],
+  );
+
+  // Assistant chapter navigation is an explicit route-state contract. Consume
+  // it only after chapters load, then clear it before selecting so refreshes do
+  // not repeat the action. The normal unsaved-changes guard still applies.
+  useEffect(() => {
+    const requestedChapterId = (
+      location.state as { assistantChapterId?: unknown } | null
+    )?.assistantChapterId;
+    if (typeof requestedChapterId !== "string" || state.isLoading) return;
+
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: null,
+    });
+    const chapter = state.chapters.find(
+      (candidate) => candidate.id === requestedChapterId,
+    );
+    if (chapter && chapter.id !== state.currentChapter?.id) {
+      handleChapterSelect(chapter);
     }
-  };
+  }, [
+    handleChapterSelect,
+    location.pathname,
+    location.search,
+    location.state,
+    navigate,
+    state.chapters,
+    state.currentChapter?.id,
+    state.isLoading,
+  ]);
 
   const handleSaveAndContinue = async () => {
     if (state.currentChapter) {
@@ -1193,6 +1287,9 @@ export function SimpleEditor() {
                     chapterId={state.currentChapter?.id || ""}
                     userId={user?.uid}
                     onEditorReady={setEditor}
+                    onTransaction={(transaction) =>
+                      bridgeRegistrationRef.current?.transaction(transaction)
+                    }
                     onOpenCoWrite={openCoWrite}
                   />
                 </div>
@@ -1510,9 +1607,6 @@ export function SimpleEditor() {
             </div>
           </SlideOverPanel>
 
-          {!isDemo && !focusMode && (
-            <FloatingChatButton storyId={state.story?.id} />
-          )}
 
           <ConfirmDialog
             open={splitDialogOpen}

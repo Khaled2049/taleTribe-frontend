@@ -26,10 +26,13 @@
     "cy:run": "cypress run --e2e",
     "e2e": "./scripts/e2e-stack.sh",
     "test": "vitest run",
+    "assistant:contracts:generate": "yarn workspace @novelsync/assistant-contracts run generate",
+    "assistant:contracts:check": "yarn workspace @novelsync/assistant-contracts run check",
     "test:watch": "vitest",
     "test:rules": "vitest run --config vitest.rules.config.ts"
   },
   "dependencies": {
+    "@assistant-ui/react": "0.15.18",
     "@hello-pangea/dnd": "^18.0.1",
     "@radix-ui/react-dialog": "^1.1.1",
     "@radix-ui/react-dropdown-menu": "^2.1.1",
@@ -84,6 +87,7 @@
     "uuid": "^14.0.0",
     "viem": "^2.46.3",
     "wagmi": "^3.5.0",
+    "zod": "^4.4.3",
     "zustand": "^5.0.13"
   },
   "devDependencies": {

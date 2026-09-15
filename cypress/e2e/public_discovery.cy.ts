@@ -46,9 +46,14 @@ describe("Public discovery", () => {
     // No login: this is the anonymous path.
     cy.visit("/stories");
 
-    cy.contains("The Lamplighter's Ledger", { timeout: 20000 }).should(
-      "be.visible",
-    );
+    // Scoped to the desktop grid on purpose: the page renders the same list
+    // twice (a `sm:hidden` mobile list and a `hidden sm:grid` desktop grid), so
+    // an unscoped cy.contains matches the mobile copy first — which is
+    // display:none at this spec's 1280px viewport.
+    cy.get('[data-cy="story-grid"]', { timeout: 20000 })
+      .contains("The Lamplighter's Ledger")
+      .should("be.visible");
+    // The draft must be absent from both layouts, so this one stays page-wide.
     cy.contains("Unfinished Business").should("not.exist");
   });
 
