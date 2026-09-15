@@ -1,5 +1,6 @@
 /** Dedicated local assistant gateway harness. Never deployed as a server. */
 import express from "express";
+import { rateLimit } from "express-rate-limit";
 import * as admin from "firebase-admin";
 import { handleAssistantRun } from "./endpoints/assistantRun";
 import { assistantFlags } from "./domain/assistantFlags";
@@ -19,10 +20,21 @@ admin.initializeApp({
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "4kb" }));
+const assistantRunRateLimit = rateLimit({
+  windowMs: 60_000,
+  limit: 20,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      error: "Too many assistant requests. Try again shortly.",
+    });
+  },
+});
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", mode: "assistant-run" });
 });
-app.post("/assistantRun", handleAssistantRun);
+app.post("/assistantRun", assistantRunRateLimit, handleAssistantRun);
 // No direct browser CORS: Vite exposes this through a first-party proxy path.
 app.listen(5002, "127.0.0.1", () => {
   console.info("Assistant run gateway listening on 127.0.0.1:5002");
