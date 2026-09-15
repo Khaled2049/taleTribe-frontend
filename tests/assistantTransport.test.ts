@@ -110,6 +110,45 @@ describe("assistant browser transport", () => {
     await expect(run).rejects.not.toThrow(/private upstream detail/);
   });
 
+  it("retries one transient gateway failure before reading the stream", async () => {
+    const fetcherMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response('{"error":{"code":"provider_unavailable"}}', {
+          status: 502,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          streamOf(
+            'data: {"v":1,"runId":"recovered","seq":0,"type":"run.cancelled"}\n\n',
+          ),
+          { status: 200 },
+        ),
+      );
+    const fetcher = fetcherMock as typeof fetch;
+
+    const events = await collect(
+      streamAssistantRun("story-1", "Hello", new AbortController().signal, {
+        endpoint: "/assistant",
+        getIdToken: async () => "token",
+        createClientMessageId: () => "client-1",
+        fetcher,
+      }),
+    );
+
+    expect(fetcherMock).toHaveBeenCalledTimes(2);
+    expect(
+      fetcherMock.mock.calls.map((call) =>
+        JSON.parse(String((call[1] as RequestInit).body)),
+      ),
+    ).toEqual([
+      expect.objectContaining({ clientMessageId: "client-1" }),
+      expect.objectContaining({ clientMessageId: "client-1" }),
+    ]);
+    expect(events).toHaveLength(1);
+  });
+
   it("uses a fresh client message identity for every retry", async () => {
     const bodies: Array<{ clientMessageId: string }> = [];
     let nextId = 0;

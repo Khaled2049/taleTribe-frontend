@@ -25,6 +25,9 @@ export type AssistantRunOptions = {
   continuation?: EditorContinuation;
 };
 
+const RETRYABLE_GATEWAY_STATUSES = new Set([502, 503, 504]);
+const GATEWAY_RETRY_DELAY_MS = 300;
+
 export class AssistantRequestError extends Error {
   constructor(readonly failure: AssistantFailure) {
     super(failure.message);
@@ -34,6 +37,21 @@ export class AssistantRequestError extends Error {
 
 function abortError(): DOMException {
   return new DOMException("Assistant request cancelled", "AbortError");
+}
+
+async function waitForGatewayRetry(signal: AbortSignal): Promise<void> {
+  if (signal.aborted) throw abortError();
+  await new Promise<void>((resolve, reject) => {
+    const timer = globalThis.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, GATEWAY_RETRY_DELAY_MS);
+    const onAbort = () => {
+      globalThis.clearTimeout(timer);
+      reject(abortError());
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 async function abortable<T>(
@@ -101,27 +119,35 @@ export async function* streamAssistantRun(
       )
     : null;
 
-  const response = await (dependencies.fetcher ?? fetch)(
-    dependencies.endpoint,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(
-        buildRunRequest({
-          storyId,
-          text,
-          clientMessageId:
-            dependencies.createClientMessageId?.() ?? crypto.randomUUID(),
-          editorContext: editorContext ?? undefined,
-          continuation: options.continuation,
-        }),
-      ),
-      signal,
+  const request: RequestInit = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     },
-  );
+    body: JSON.stringify(
+      buildRunRequest({
+        storyId,
+        text,
+        clientMessageId:
+          dependencies.createClientMessageId?.() ?? crypto.randomUUID(),
+        editorContext: editorContext ?? undefined,
+        continuation: options.continuation,
+      }),
+    ),
+    signal,
+  };
+  const fetcher = dependencies.fetcher ?? fetch;
+  let response = await fetcher(dependencies.endpoint, request);
+
+  // The gateway cannot return one of these statuses after an assistant stream
+  // has started, so retrying once cannot duplicate a visible/model response.
+  // Keep the retry bounded: persistent outages still become an honest error.
+  if (RETRYABLE_GATEWAY_STATUSES.has(response.status)) {
+    await response.body?.cancel();
+    await waitForGatewayRetry(signal);
+    response = await fetcher(dependencies.endpoint, request);
+  }
 
   if (!response.ok) {
     throw new AssistantRequestError(assistantFailureForStatus(response.status));
