@@ -196,17 +196,24 @@ connect to local emulators:
 - Auth: 9099, Firestore: 8080, Functions: 5001, Storage: 9199
 
 Firestore holds nothing under `stories/{id}` any more — chapters moved to
-story-data and the assistant keeps no transcript. The rules deny the whole
-subtree.
+story-data and the assistant keeps no transcript there either; assistant
+history is durable now, but in story-data's Postgres, not Firestore. The rules
+deny the whole subtree.
 
 ### AI Features
 - **Story assistant**: `AssistantPanel` (assistant-ui headless primitives, Inkwell
   styling) → the `assistantRun` Function → `POST /assistant/run` in
   taleTribe-agents → tool-calling run loop over story-data → creditProxy
   `/v1/chat`. Six read tools plus `propose_editor_edit`, which proposes a
-  single-selection rewrite the writer must Apply. Transcripts are ephemeral by
-  design: they live in the panel's local runtime, not in any database. The
-  gateway enforces ownership, `checkAiAccess` quota and BYOK; the browser flag
+  single-selection rewrite the writer must Apply. Threads and messages are
+  durable: `packages/story-data-client/src/repos/AssistantThreadRepo.ts` reads
+  and writes `/v1/stories/{storyId}/assistant-threads` in story-data (tables
+  `assistant_threads`/`assistant_messages`, migration
+  `000024_assistant_threads.sql`), with `If-Match` revisions on updates and an
+  `idempotencyKey` on each message append so a retried post never double-writes.
+  This replaced the earlier ephemeral, local-runtime-only design — do not
+  reintroduce that assumption elsewhere in the codebase. The gateway enforces
+  ownership, `checkAiAccess` quota and BYOK; the browser flag
   `VITE_ASSISTANT_UI_ENABLED` only controls presentation.
 - **Brainstorm / Text Enhancement**: API calls to Cloud Functions
 - **Daily quota**: UI display uses `VITE_MAX_AI_USAGE` (default 100) and user profile fields (`aiUsage`, `lastAiUsageDate`). Server-side enforcement is in `functions/src/aiSettings.ts` (`checkAiAccess` → `consumePlatformDailyQuota`), controlled by `MAX_AI_USAGE` env var. Keep `VITE_MAX_AI_USAGE` aligned with `MAX_AI_USAGE`. BYOK users bypass quota.
