@@ -195,10 +195,26 @@ Config in `packages/platform-auth/src/firebase.ts` (it used to be
 connect to local emulators:
 - Auth: 9099, Firestore: 8080, Functions: 5001, Storage: 9199
 
-Firestore subcollection pattern: `stories/{id}/chapters`, `stories/{id}/chats/{id}/messages`.
+Firestore holds nothing under `stories/{id}` any more — chapters moved to
+story-data and the assistant keeps no transcript there either; assistant
+history is durable now, but in story-data's Postgres, not Firestore. The rules
+deny the whole subtree.
 
 ### AI Features
-- **Chat**: Real-time Firestore subcollection + Cloud Function (`/sendChatMessage`) with story-context RAG
+- **Story assistant**: `AssistantPanel` (assistant-ui headless primitives, Inkwell
+  styling) → the `assistantRun` Function → `POST /assistant/run` in
+  taleTribe-agents → tool-calling run loop over story-data → creditProxy
+  `/v1/chat`. Six read tools plus `propose_editor_edit`, which proposes a
+  single-selection rewrite the writer must Apply. Threads and messages are
+  durable: `packages/story-data-client/src/repos/AssistantThreadRepo.ts` reads
+  and writes `/v1/stories/{storyId}/assistant-threads` in story-data (tables
+  `assistant_threads`/`assistant_messages`, migration
+  `000024_assistant_threads.sql`), with `If-Match` revisions on updates and an
+  `idempotencyKey` on each message append so a retried post never double-writes.
+  This replaced the earlier ephemeral, local-runtime-only design — do not
+  reintroduce that assumption elsewhere in the codebase. The gateway enforces
+  ownership, `checkAiAccess` quota and BYOK; the browser flag
+  `VITE_ASSISTANT_UI_ENABLED` only controls presentation.
 - **Brainstorm / Text Enhancement**: API calls to Cloud Functions
 - **Daily quota**: UI display uses `VITE_MAX_AI_USAGE` (default 100) and user profile fields (`aiUsage`, `lastAiUsageDate`). Server-side enforcement is in `functions/src/aiSettings.ts` (`checkAiAccess` → `consumePlatformDailyQuota`), controlled by `MAX_AI_USAGE` env var. Keep `VITE_MAX_AI_USAGE` aligned with `MAX_AI_USAGE`. BYOK users bypass quota.
 - **Indexing budget**: (re)embedding is metered separately from the chat quota, at `MAX_INDEX_USAGE` (default 300/day) per user. It lives entirely in `taleTribe-agents` now — the outbox consumer (`postgres_context.py`, `indexing_usage` table in story-data) charges it; no Function is involved. A unit is one embedding pass, not one autosave: nothing collapses the outbox on the write side, so the consumer drops events superseded by a higher revision of the same source in the batch. Applies to BYOK users too: indexing uses the platform embedder regardless. Deletes are never gated. Over budget, an event is deferred to the next UTC day rather than dropped, so the index goes stale but never loses the write.
@@ -303,7 +319,8 @@ Light theme: warm parchment (`#FDFCF9`) bg, sealing-wax red accent (`#B91C1C`). 
 - `guestbook/` — Per-user profile guestbook (entries, replies, votes)
 - `web3/` — Wallet connect, fee cards, transaction status
 - `common/` — Shared utilities (Modal, ConfirmDialog, ThemeToggle, Icons, etc.)
-- `chat/` — Chatbot and floating chat button
+- `chat/` — the story assistant panel, its runtime/transport adapters and
+  the floating trigger
 - `explore/` — Discovery pages, plus the whole competitions UI (ledger, detail,
   host/entry dialogs, phase walkthrough)
 - `seo/` — SEOHead, StructuredData

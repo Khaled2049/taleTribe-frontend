@@ -3,6 +3,8 @@ import { BookOpen, Layers, Users, MapPin, ArrowLeft } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { StoryWorkspaceTabs } from "./components/StoryWorkspaceTabs";
 import { useFocusModeStore } from "@/stores/focusModeStore";
+import { FloatingChatButton } from "@/components/chat/FloatingChatButton";
+import { EditorBridgeProvider } from "@/components/editor/EditorBridge";
 
 const NAV_ITEMS = [
   { label: "Editor", path: "", icon: BookOpen, end: true },
@@ -15,7 +17,7 @@ const Story = () => {
   const { storyId } = useParams<{ storyId: string }>();
   const focusMode = useFocusModeStore((s) => s.focusMode);
 
-  return (
+  const workspace = (
     <div className="flex h-full bg-ns-bg overflow-hidden">
       <nav
         className={`${
@@ -61,7 +63,13 @@ const Story = () => {
           <Outlet />
         </main>
       </div>
+      {storyId && <FloatingChatButton storyId={storyId} />}
     </div>
+  );
+  return storyId ? (
+    <EditorBridgeProvider storyId={storyId}>{workspace}</EditorBridgeProvider>
+  ) : (
+    workspace
   );
 };
 

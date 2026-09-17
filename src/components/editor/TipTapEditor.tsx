@@ -17,6 +17,7 @@ import Italic from "@tiptap/extension-italic";
 import Strike from "@tiptap/extension-strike";
 import { ImageNode } from "@/components/editor/ImageNode";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
+import type { Transaction } from "@tiptap/pm/state";
 import type { Node as PMNode, Schema } from "@tiptap/pm/model";
 import { storageService } from "@/services/StorageService";
 import CharacterCount from "@tiptap/extension-character-count";
@@ -115,6 +116,7 @@ interface TipTapEditorProps {
   chapterId?: string;
   userId?: string;
   onEditorReady?: (editor: Editor | null) => void;
+  onTransaction?: (transaction: Transaction) => void;
   onOpenCoWrite?: () => void;
 }
 
@@ -127,6 +129,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   chapterId,
   userId,
   onEditorReady,
+  onTransaction,
   onOpenCoWrite,
 }) => {
   const { requireAuth } = useDemoMode();
@@ -138,6 +141,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   // every change through a ref to avoid a stale closure in onUpdate.
   const onSaveRef = useRef(onSave);
   const onBlurRef = useRef(onBlur);
+  const onTransactionRef = useRef(onTransaction);
   // Ref so the paste plugin (created once) can surface errors via React state
   const pasteErrorRef = useRef<((msg: string) => void) | null>(null);
 
@@ -145,6 +149,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   onContentChangeRef.current = onContentChange;
   onSaveRef.current = onSave;
   onBlurRef.current = onBlur;
+  onTransactionRef.current = onTransaction;
 
   // Timed error banner shared by all AI features and the paste plugin
   const [editorError, setEditorError] = useState("");
@@ -345,6 +350,9 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       onContentChangeRef.current(content);
       // Forward straight to the autosave hook, which owns the (single) debounce.
       onSaveRef.current(content);
+    },
+    onTransaction: ({ transaction }) => {
+      onTransactionRef.current?.(transaction);
     },
     onBlur: () => {
       // Flush a pending debounced save the moment the user clicks away.

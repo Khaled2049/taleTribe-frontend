@@ -24,6 +24,10 @@ export default defineConfig({
         __dirname,
         "./packages/platform-auth/src/index.ts",
       ),
+      "@novelsync/assistant-contracts": path.resolve(
+        __dirname,
+        "./packages/assistant-contracts/src/index.ts",
+      ),
     },
   },
   test: {

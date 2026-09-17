@@ -25,6 +25,10 @@ export default defineConfig(({ mode }) => ({
         __dirname,
         "./packages/platform-auth/src/index.ts",
       ),
+      "@novelsync/assistant-contracts": path.resolve(
+        __dirname,
+        "./packages/assistant-contracts/src/index.ts",
+      ),
       buffer: "buffer/",
     },
   },
@@ -33,6 +37,11 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     proxy: {
+      "/assistant-run": {
+        target: "http://127.0.0.1:5002",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/assistant-run/, ""),
+      },
       "/story-data": {
         target: "http://localhost:8084",
         changeOrigin: true,

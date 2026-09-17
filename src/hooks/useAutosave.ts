@@ -9,7 +9,7 @@ export interface SaveState {
 }
 
 interface UseAutosaveOptions {
-  onSave: (content: string) => Promise<void>;
+  onSave: (content: string) => Promise<number | undefined>;
   debounceMs?: number;
   enabled?: boolean;
 }
@@ -22,6 +22,8 @@ interface UseAutosaveReturn {
    * caller genuinely has fresher content than the editor.
    */
   forceSave: (content?: string) => Promise<void>;
+  /** Save all queued editor content and resolve with its persisted revision. */
+  flushAndWait: () => Promise<number | undefined>;
   /** Flush a pending debounced save now (e.g. on blur / tab hide). No-op if none. */
   flushSave: () => void;
   saveState: SaveState;
@@ -45,8 +47,16 @@ export function useAutosave({
   // for what gets persisted. Updated on every triggerSave/forceSave call.
   const latestContentRef = useRef<string>("");
   const isSavingRef = useRef(false);
+  const isDirtyRef = useRef(false);
   const hasQueuedSaveRef = useRef(false);
   const lastSavedRef = useRef<Date | null>(null);
+  const lastPersistedRevisionRef = useRef<number | undefined>(undefined);
+  const saveWaitersRef = useRef<
+    Array<{
+      resolve: (revision: number | undefined) => void;
+      reject: (error: unknown) => void;
+    }>
+  >([]);
   // Bumped on every reset (e.g. chapter switch). A save started under one
   // generation must not requeue or stamp state under a later one — otherwise an
   // in-flight save could write the new chapter's text via the old chapter's
@@ -70,6 +80,10 @@ export function useAutosave({
     }
     saveGenerationRef.current += 1;
     hasQueuedSaveRef.current = false;
+    isDirtyRef.current = false;
+    saveWaitersRef.current
+      .splice(0)
+      .forEach(({ resolve }) => resolve(undefined));
     setSaveState({ status: "idle", lastSaved: null });
     setIsDirty(false);
     lastSavedRef.current = null;
@@ -85,7 +99,7 @@ export function useAutosave({
         setSaveState((prev) => ({ ...prev, status: "saving" }));
 
         try {
-          await onSave(contentToSave);
+          const persistedRevision = await onSave(contentToSave);
 
           // A reset (chapter switch) happened while this save was in flight: the
           // hook now belongs to a different chapter. Don't requeue with the new
@@ -94,6 +108,7 @@ export function useAutosave({
 
           const now = new Date();
           lastSavedRef.current = now;
+          lastPersistedRevisionRef.current = persistedRevision;
 
           if (hasQueuedSaveRef.current) {
             hasQueuedSaveRef.current = false;
@@ -102,7 +117,11 @@ export function useAutosave({
           }
 
           setSaveState({ status: "saved", lastSaved: now });
+          isDirtyRef.current = false;
           setIsDirty(false);
+          saveWaitersRef.current
+            .splice(0)
+            .forEach(({ resolve }) => resolve(persistedRevision));
           return;
         } catch (error) {
           if (saveGenerationRef.current !== myGeneration) return;
@@ -112,6 +131,9 @@ export function useAutosave({
             errorMessage:
               error instanceof Error ? error.message : "Save failed",
           });
+          saveWaitersRef.current
+            .splice(0)
+            .forEach(({ reject }) => reject(error));
           return;
         } finally {
           isSavingRef.current = false;
@@ -133,6 +155,7 @@ export function useAutosave({
 
       if (isSavingRef.current) {
         hasQueuedSaveRef.current = true;
+        isDirtyRef.current = true;
         setIsDirty(true);
         setSaveState((prev) => ({ ...prev, status: "pending" }));
         return;
@@ -148,6 +171,7 @@ export function useAutosave({
       if (!enabled) return;
 
       latestContentRef.current = content;
+      isDirtyRef.current = true;
       setIsDirty(true);
       setSaveState((prev) => ({
         ...prev,
@@ -171,6 +195,18 @@ export function useAutosave({
     if (timerRef.current) {
       void forceSave();
     }
+  }, [enabled, forceSave]);
+
+  const flushAndWait = useCallback((): Promise<number | undefined> => {
+    if (!enabled) return Promise.resolve(undefined);
+    if (!timerRef.current && !isSavingRef.current && !isDirtyRef.current) {
+      return Promise.resolve(lastPersistedRevisionRef.current);
+    }
+    const settled = new Promise<number | undefined>((resolve, reject) => {
+      saveWaitersRef.current.push({ resolve, reject });
+    });
+    void forceSave();
+    return settled;
   }, [enabled, forceSave]);
 
   // Flush when the tab is hidden (switching tabs, minimizing, mobile background)
@@ -209,6 +245,7 @@ export function useAutosave({
   return {
     triggerSave,
     forceSave,
+    flushAndWait,
     flushSave,
     saveState,
     isDirty,

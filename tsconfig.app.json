@@ -26,7 +26,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@novelsync/story-data-client": ["./packages/story-data-client/src/index.ts"],
-      "@novelsync/platform-auth": ["./packages/platform-auth/src/index.ts"]
+      "@novelsync/platform-auth": ["./packages/platform-auth/src/index.ts"],
+      "@novelsync/assistant-contracts": ["./packages/assistant-contracts/src/index.ts"]
     }
   },
   "include": ["src", "packages/*/src"]
