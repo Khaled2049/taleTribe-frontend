@@ -1,4 +1,4 @@
-# NovelSync E2E (Cypress)
+# TheTaleTribe E2E (Cypress)
 
 End-to-end tests for the core journey: **start a story → define world-building →
 chat with the AI**. They drive the real app against the full local stack

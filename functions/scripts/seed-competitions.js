@@ -570,7 +570,7 @@ async function runApiScenario({ scenario, adminUser, adminIdentity, writers, pri
     votingDeadline: iso(scenario.dates.voting),
     prizeAmount: tale(prizeTale),
     ...(scenario.entryFeeTale ? { entryFee: tale(scenario.entryFeeTale) } : {}),
-    creatorName: 'TaleTribe',
+    creatorName: 'TheTaleTribe',
   })
 
   const competitionId = created.id

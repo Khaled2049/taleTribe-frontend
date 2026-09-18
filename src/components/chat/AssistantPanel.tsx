@@ -71,7 +71,12 @@ import {
 } from "./editorActionLedger";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { toast } from "sonner";
-import { AssistantThreadSession } from "./assistantHistory";
+import {
+  AssistantThreadSession,
+  conversationKey,
+  type ConversationTarget,
+} from "./assistantHistory";
+import { AssistantThreadControls } from "./AssistantThreadControls";
 
 const READ_TOOL_NAMES = [
   "get_story_overview",
@@ -1023,15 +1028,70 @@ function Composer() {
 
 export default function AssistantPanel({ storyId }: { storyId: string }) {
   const [open, setOpen] = useState(false);
+  const [target, setTarget] = useState<ConversationTarget>({ mode: "latest" });
+
+  return (
+    <AssistantConversation
+      key={conversationKey(target)}
+      storyId={storyId}
+      open={open}
+      setOpen={setOpen}
+      target={target}
+      onSelect={setTarget}
+    />
+  );
+}
+
+function ThreadControlsRow(props: {
+  session: AssistantThreadSession;
+  target: ConversationTarget;
+  activeTitle: string | null;
+  onSelect: (target: ConversationTarget) => void;
+}) {
+  const running = useAuiState((state) => state.thread.isRunning);
+  return (
+    <div className="relative">
+      <AssistantThreadControls {...props} disabled={running} />
+    </div>
+  );
+}
+
+function AssistantConversation({
+  storyId,
+  open,
+  setOpen,
+  target,
+  onSelect,
+}: {
+  storyId: string;
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  target: ConversationTarget;
+  onSelect: (target: ConversationTarget) => void;
+}) {
   const activeRequest = useRef<AbortController | null>(null);
   const editorBridge = useEditorBridge();
   const [actionLedger] = useState(() => new EditorActionLedger());
   const navigate = useNavigate();
+  const [activeTitle, setActiveTitle] = useState<string | null>(null);
   const threadSession = useMemo(
-    () => new AssistantThreadSession(storyId),
-    [storyId],
+    () => new AssistantThreadSession(storyId, undefined, target),
+    [storyId, target],
   );
   const history = useMemo(() => threadSession.history(), [threadSession]);
+
+  useEffect(() => {
+    let live = true;
+    void threadSession
+      .loadExisting()
+      .then((thread) => {
+        if (live) setActiveTitle(thread?.title ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [threadSession]);
   const endpoint =
     import.meta.env.VITE_ASSISTANT_RUN_FIREBASE === "true"
       ? getFunctionUrl("assistantRun")
@@ -1067,7 +1127,7 @@ export default function AssistantPanel({ storyId }: { storyId: string }) {
       if (!nextOpen) stopRun();
       setOpen(nextOpen);
     },
-    [stopRun],
+    [setOpen, stopRun],
   );
 
   useEffect(
@@ -1088,7 +1148,7 @@ export default function AssistantPanel({ storyId }: { storyId: string }) {
         actionLedger.clear();
         setOpen(false);
       }),
-    [actionLedger, runtime],
+    [actionLedger, runtime, setOpen],
   );
 
   const navigateTo = useCallback(
@@ -1157,6 +1217,12 @@ export default function AssistantPanel({ storyId }: { storyId: string }) {
                     </button>
                   </Dialog.Close>
                 </div>
+                <ThreadControlsRow
+                  session={threadSession}
+                  target={target}
+                  activeTitle={activeTitle}
+                  onSelect={onSelect}
+                />
               </header>
 
               <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">

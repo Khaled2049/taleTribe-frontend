@@ -288,7 +288,7 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
                             <span className="block font-ui text-xs text-ns-ink-muted truncate">
                               by {option.bookData.volumeInfo.authors.join(", ")}
                               {option.bookData.source === "novelsync" &&
-                                " · on NovelSync"}
+                                " · on TheTaleTribe"}
                             </span>
                           )}
                         </span>

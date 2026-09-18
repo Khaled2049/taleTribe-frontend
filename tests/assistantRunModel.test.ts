@@ -130,6 +130,37 @@ describe("assistant-ui run conversion", () => {
       finishReason: "run.cancelled",
       failure: null,
     });
+    // Regression: story-data rejects an empty `parts` array (422), so a run
+    // that never streams anything must still persist a non-empty part.
+    expect(localAbort.content).toEqual([
+      expect.objectContaining({ type: "text", text: expect.any(String) }),
+    ]);
+  });
+
+  it("never yields empty content on a terminal result, to avoid a story-data 422", () => {
+    let state = emptyRunState();
+    [
+      { type: "run.started", provider: "mock", model: "mock-1" },
+      {
+        type: "run.failed",
+        code: "provider_unavailable",
+        message: "The AI service is unreachable right now.",
+      },
+    ].forEach((event, seq) => {
+      state = applyEvent(
+        state,
+        assistantEventSchema.parse({ v: 1, runId: "no-tokens", seq, ...event }),
+      );
+    });
+
+    const result = toAssistantRunResult(state);
+    expect(result.status).toMatchObject({ type: "incomplete", reason: "error" });
+    expect(result.content).toEqual([
+      expect.objectContaining({
+        type: "text",
+        text: "The AI service is unreachable right now.",
+      }),
+    ]);
   });
 
   it("projects a valid editor approval as a required action", () => {

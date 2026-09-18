@@ -78,7 +78,7 @@ const StoryRow = ({
 );
 
 /**
- * Tabbed book picker: published NovelSync stories or Google Books.
+ * Tabbed book picker: published TheTaleTribe stories or Google Books.
  * Emits a normalized IBookOfTheMonth either way.
  */
 export const BookPicker = ({
@@ -125,7 +125,7 @@ export const BookPicker = ({
             </p>
             <p className="font-ui text-xs text-ns-ink-muted truncate">
               {selected.volumeInfo.authors?.join(", ") || "Unknown author"}
-              {selected.source === "novelsync" && " · on NovelSync"}
+              {selected.source === "novelsync" && " · on TheTaleTribe"}
             </p>
           </div>
         </div>
@@ -134,7 +134,7 @@ export const BookPicker = ({
       <Tabs defaultValue="novelsync">
         <TabsList className="w-full">
           <TabsTrigger value="novelsync" className="flex-1">
-            On NovelSync
+            On TheTaleTribe
           </TabsTrigger>
           <TabsTrigger value="google" className="flex-1">
             Google Books

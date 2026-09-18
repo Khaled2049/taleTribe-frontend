@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Bring up the full NovelSync stack against local emulators and run the Cypress
+# Bring up the full TheTaleTribe stack against local emulators and run the Cypress
 # E2E suite headlessly, then tear everything down. Mirrors story/dev.sh but is
 # non-interactive and CI-friendly.
 #

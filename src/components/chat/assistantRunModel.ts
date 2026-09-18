@@ -232,6 +232,18 @@ export function toAssistantRunResult(
   }
   content.push(...state.references.map(sourcePart));
 
+  if (content.length === 0 && status.type !== "running") {
+    content.push({
+      type: "text",
+      text:
+        failure?.message ??
+        (status.type === "incomplete" && status.reason === "cancelled"
+          ? "Stopped before responding."
+          : "The assistant finished without a response."),
+      status: textPartStatus(status),
+    });
+  }
+
   const metadata: AssistantMessageMetadata = {
     kind: "run",
     help: null,

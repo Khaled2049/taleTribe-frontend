@@ -212,7 +212,7 @@ export async function buildEpub(
 
   const isoLanguage = toIsoLanguage(story.language);
   const modified = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-  const identifier = `novelsync-story-${storyId}`;
+  const identifier = `thetaletribe-story-${storyId}`;
 
   const orderedChapters = [...chapters].sort((a, b) => a.order - b.order);
   const chapterFiles = orderedChapters.map((chapter, index) => {

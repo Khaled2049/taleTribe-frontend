@@ -112,7 +112,7 @@ export default function RecommendationCard({
           title={item.author || undefined}
           className="truncate font-ui text-xs text-ns-ink-muted"
         >
-          {item.author || "TaleTribe author"}
+          {item.author || "TheTaleTribe author"}
         </p>
       </div>
 

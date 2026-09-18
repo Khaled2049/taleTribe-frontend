@@ -1,4 +1,4 @@
-/** Server-to-server transport for the TaleTribe recommendation service. */
+/** Server-to-server transport for TheTaleTribe recommendation service. */
 import { GoogleAuth } from "google-auth-library";
 import { defineString } from "firebase-functions/params";
 
@@ -6,7 +6,7 @@ const recommendationServiceUrlParam = defineString(
   "RECOMMENDATION_SERVICE_URL",
   {
     default: "http://localhost:8100",
-    description: "URL of the TaleTribe recommendation service",
+    description: "URL of TheTaleTribe recommendation service",
   },
 );
 
