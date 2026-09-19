@@ -38,26 +38,6 @@ const features = [
   },
 ] as const;
 
-function Wordmark() {
-  return (
-    <Link
-      to="/"
-      className="group inline-flex items-center gap-3 text-ns-ink no-underline"
-      aria-label={`${APP_NAME} home`}
-    >
-      <span
-        className="relative flex h-7 w-7 items-center justify-center rounded-full border border-ns-border-strong bg-ns-accent-subtle transition-colors duration-300 group-hover:border-ns-accent"
-        aria-hidden="true"
-      >
-        <span className="h-3.5 w-px -rotate-[28deg] bg-ns-accent" />
-      </span>
-      <span className="font-heading text-[1.65rem] font-medium tracking-[-0.02em]">
-        {APP_NAME}
-      </span>
-    </Link>
-  );
-}
-
 function ThemeToggle({ compact = false }: { compact?: boolean }) {
   const { theme, toggleTheme } = useTheme();
   const nextTheme = theme === "light" ? "dark" : "light";
@@ -108,44 +88,6 @@ export default function HomePage() {
       <OrganizationSchema />
 
       <div className="min-h-screen bg-ns-bg text-ns-ink transition-colors duration-300">
-        <header className="relative border-b border-ns-border">
-          <div
-            className="absolute inset-x-0 top-0 h-[2px]"
-            style={{
-              background:
-                "linear-gradient(90deg, var(--ns-accent), var(--ns-gold-bright), var(--ns-teal))",
-            }}
-            aria-hidden="true"
-          />
-          <nav
-            className="mx-auto flex h-[76px] max-w-[1240px] items-center justify-between px-5 sm:px-8 lg:px-10"
-            aria-label="Primary navigation"
-          >
-            <Wordmark />
-
-            <div className="flex items-center gap-2 sm:gap-5">
-              <a
-                href="#features"
-                className="hidden font-ui text-sm font-medium text-ns-ink-secondary no-underline transition-colors duration-200 hover:text-ns-accent sm:inline"
-              >
-                Features
-              </a>
-              <Link
-                to="/sign-in"
-                className="px-2.5 py-2 font-ui text-sm font-medium text-ns-ink-secondary no-underline transition-colors duration-200 hover:text-ns-ink sm:px-3"
-              >
-                Sign in
-              </Link>
-              <Link
-                to="/sign-up"
-                className="rounded-full bg-ns-ink px-4 py-2.5 font-ui text-xs font-semibold text-ns-bg no-underline transition-all duration-200 hover:-translate-y-0.5 hover:bg-ns-accent hover:text-[var(--ns-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ns-bg active:translate-y-0 sm:px-5 sm:text-sm"
-              >
-                Get started
-              </Link>
-            </div>
-          </nav>
-        </header>
-
         <main>
           <section className="relative isolate overflow-hidden px-5 pb-24 pt-24 text-center sm:px-8 sm:pb-32 sm:pt-32 lg:pb-40 lg:pt-40">
             <div
@@ -200,7 +142,7 @@ export default function HomePage() {
               </div>
 
               <p className="mt-6 font-ui text-[0.7rem] tracking-wide text-ns-ink-muted">
-                No credit card. Your words remain yours.
+                Your words remain yours.
               </p>
             </div>
           </section>

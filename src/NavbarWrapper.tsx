@@ -18,10 +18,10 @@ export const NavbarWrapper = () => {
     <div className="h-screen flex flex-col overflow-hidden bg-ns-bg">
       {/* Editor is a focused, full-height workspace — hide the navbar there and
           let users navigate away with the browser back button. */}
-      {!isEditorPage && !isPublicHome && <Navbar />}
+      {!isEditorPage && <Navbar />}
 
       <main
-        className={`w-full h-full bg-ns-bg ${
+        className={`w-full min-h-0 flex-1 bg-ns-bg ${
           isEditorPage || isAuthPage ? "overflow-hidden" : "overflow-y-auto"
         }`}
       >
