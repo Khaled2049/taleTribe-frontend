@@ -16,6 +16,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { appQueryClient } from "./lib/queryClient";
 import { AuthBootstrap } from "./components/AppBootstrap/AuthBootstrap";
 import { RouteError } from "./components/common/RouteError";
+import { useAuthContext } from "./contexts/AuthContext";
 
 const Root = lazy(() => import("./routes/root"));
 const Signin = lazy(() => import("./routes/Auth/sign-in"));
@@ -67,6 +68,19 @@ const LoadingFallback = () => (
   </div>
 );
 
+/**
+ * The signed-in home is the member's guestbook feed. The marketing page stays
+ * at the same public URL for visitors, and auth must resolve before choosing a
+ * page so returning members never see the marketing page flash on screen.
+ */
+const HomeRoute = () => {
+  const { user, loading } = useAuthContext();
+
+  if (loading) return <LoadingFallback />;
+
+  return user ? <WallPage /> : <Root />;
+};
+
 const router = createBrowserRouter([
   {
     path: "/",
@@ -77,7 +91,7 @@ const router = createBrowserRouter([
         path: "/",
         element: (
           <Suspense fallback={<LoadingFallback />}>
-            <Root />
+            <HomeRoute />
           </Suspense>
         ),
       },

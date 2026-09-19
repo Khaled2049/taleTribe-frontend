@@ -78,7 +78,7 @@ describe("assistant-ui run conversion", () => {
         modelCalls: 2,
       },
       finishReason: "max_steps",
-      notice: expect.stringContaining("Stopped early"),
+      notice: expect.stringMatching(/\S/),
     });
 
     let length = emptyRunState();
@@ -91,10 +91,19 @@ describe("assistant-ui run conversion", () => {
         assistantEventSchema.parse({ v: 1, runId: "length", seq, ...event }),
       );
     });
-    expect(toAssistantRunResult(length).status).toEqual({
+    const lengthResult = toAssistantRunResult(length);
+    expect(lengthResult.status).toEqual({
       type: "incomplete",
       reason: "length",
     });
+    expect(lengthResult.metadata?.custom?.novelsync).toMatchObject({
+      notice: expect.stringMatching(/\S/),
+    });
+    expect(
+      (lengthResult.metadata?.custom?.novelsync as { notice?: string })?.notice,
+    ).not.toBe(
+      (maxSteps.metadata?.custom?.novelsync as { notice?: string })?.notice,
+    );
   });
 
   it("maps tool and run failures to display-only safe records", () => {

@@ -126,65 +126,73 @@ function toolDetails(
   switch (toolName) {
     case "get_story_overview":
       return {
-        title: "Story overview",
+        title: "Looking over your story",
         detail:
           typeof resultRecord?.chapter_count === "number"
-            ? `${resultRecord.chapter_count} chapters reviewed`
-            : "Reading story structure",
+            ? `Read through ${resultRecord.chapter_count} ${resultRecord.chapter_count === 1 ? "chapter" : "chapters"}`
+            : "Getting a sense of the whole thing",
         icon: Library,
       };
     case "list_story_entities": {
-      const kind = String(
-        argRecord?.kind ?? resultRecord?.kind ?? "story details",
-      );
+      const kind = String(argRecord?.kind ?? resultRecord?.kind ?? "detail");
+      const plural =
+        kind === "character"
+          ? "characters"
+          : kind === "place"
+            ? "places"
+            : kind === "plot"
+              ? "plot lines"
+              : "story details";
       const count = resultItems(result).length;
       return {
-        title: `Story ${kind}s`,
+        title: `Checking your ${plural}`,
         detail: count
-          ? `${count} ${count === 1 ? "entry" : "entries"} found`
-          : `Reading ${kind}s`,
+          ? `Found ${count}`
+          : `Nothing written down yet`,
         icon:
           kind === "character" ? Users : kind === "place" ? MapPin : ListTree,
       };
     }
     case "get_story_entity":
       return {
-        title: "Story detail",
-        detail: String(
-          resultRecord?.name ?? argRecord?.kind ?? "Reading canonical data",
-        ),
+        title: typeof resultRecord?.name === "string"
+          ? `Looking up ${resultRecord.name}`
+          : "Looking up a detail",
+        detail: "Reading what you have written down",
         icon: FileSearch,
       };
     case "search_story": {
       const count = resultItems(result).length;
       return {
-        title: "Story search",
+        title: "Searching your story",
         detail:
           typeof argRecord?.query === "string"
-            ? `${count ? `${count} matches for` : "Searching for"} “${argRecord.query}”`
-            : "Searching story passages",
+            ? `${count ? `Found ${count} ${count === 1 ? "mention" : "mentions"} of` : "Looking for"} “${argRecord.query}”`
+            : "Looking through your pages",
         icon: Search,
       };
     }
     case "read_chapter":
       return {
-        title: "Chapter reading",
-        detail: String(resultRecord?.title ?? "Reading a chapter passage"),
+        title: typeof resultRecord?.title === "string"
+          ? `Reading “${resultRecord.title}”`
+          : "Reading a chapter",
         icon: BookOpen,
+        detail: "Going through the words on the page",
       };
     case "read_current_editor":
       return {
-        title: "Current editor",
+        title: "Looking at your highlight",
         detail:
           resultRecord?.available === false
-            ? "No editor selection was shared"
-            : "Checking the available editor selection",
+            ? "Nothing was highlighted in the editor"
+            : "Reading the words you picked out",
         icon: FileSearch,
       };
     default:
       return {
-        title: "Story read",
-        detail: "The assistant used a read-only story tool",
+        title: "Reading your story",
+        detail: "Looking something up — it cannot change your writing",
         icon: FileSearch,
       };
   }
@@ -213,7 +221,7 @@ function ReadToolCard({
 
   return (
     <section
-      className="my-2 overflow-hidden rounded-ns-lg border border-ns-border bg-ns-surface/80 font-ui shadow-ns-sm"
+      className="my-2 overflow-hidden rounded-ns-lg border border-ns-border bg-ns-surface/80 font-ui shadow-ns-sm animate-ns-slide-down motion-reduce:animate-none"
       data-cy={`assistant-tool-${toolName}`}
       aria-label={`${title}: ${running ? "running" : isError ? "failed" : "complete"}`}
     >
@@ -240,7 +248,7 @@ function ReadToolCard({
             {isError
               ? String(
                   resultRecord?.message ??
-                    "This story read could not be completed.",
+                    "This one did not work — try asking again.",
                 )
               : detail}
           </p>
@@ -248,12 +256,12 @@ function ReadToolCard({
             <div className="mt-2 flex flex-wrap gap-1.5">
               {stale && (
                 <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
-                  Indexed copy may be stale
+                  May not include your latest edits
                 </span>
               )}
               {truncated && (
                 <span className="rounded-full border border-ns-border-strong bg-ns-elevated px-2 py-0.5 text-[10px] font-semibold text-ns-ink-secondary">
-                  Partial result
+                  Showing part of it
                 </span>
               )}
             </div>
@@ -719,7 +727,7 @@ function AssistantConnectionError() {
 
   return (
     <div role="alert" className="mt-2 text-xs text-ns-destructive">
-      The assistant connection failed safely. Please retry.
+      Could not reach the assistant. Nothing was changed — please try again.
     </div>
   );
 }
@@ -927,17 +935,17 @@ function AssistantMessage() {
 function EmptyAssistant() {
   const suggestions: readonly (readonly [string, string])[] = [
     // First, because everything below is an example of one thing this answers.
-    ["What can you do?", HELP_COMMAND],
-    ["Outline check", "Give me an overview of this story and its chapters."],
-    ["Cast list", "List the characters in this story."],
+    ["What can you help with?", HELP_COMMAND],
+    ["See the big picture", "Give me an overview of this story and its chapters."],
+    ["Meet your characters", "List the characters in this story."],
     [
-      "Find a thread",
+      "Search your story",
       "Search the story for the protagonist’s central conflict.",
     ],
     ...(EDITOR_ACTIONS_PRESENTED
       ? [
           [
-            "Polish selection",
+            "Improve what you highlighted",
             "Suggest a tighter revision for the text I selected in the editor.",
           ] as const,
         ]
@@ -953,18 +961,19 @@ function EmptyAssistant() {
           Read between the lines
         </h3>
         <p className="mt-2 text-sm leading-6 text-ns-ink-secondary">
-          Ask about the story’s chapters, characters, places, plot, or passages.
+          Ask anything about your chapters, characters, places or plot.
           {EDITOR_ACTIONS_PRESENTED
-            ? " Selected text can be revised only after you review and apply it."
-            : " This assistant can read, never edit."}
+            ? " If you highlight a passage, it can suggest a rewrite — nothing changes until you say yes."
+            : " It only reads your story. Your writing stays exactly as you left it."}
         </p>
         <div className="mt-7 grid gap-2 text-left">
-          {suggestions.map(([label, prompt]) => (
+          {suggestions.map(([label, prompt], index) => (
             <ThreadPrimitive.Suggestion
               key={label}
               prompt={prompt}
               send
-              className="group rounded-ns-lg border border-ns-border bg-ns-elevated px-3.5 py-3 text-left shadow-ns-sm transition-all hover:-translate-y-0.5 hover:border-ns-border-strong hover:shadow-ns motion-reduce:transform-none motion-reduce:transition-none"
+              style={{ animationDelay: `${120 + index * 60}ms` }}
+              className="group rounded-ns-lg border border-ns-border bg-ns-elevated px-3.5 py-3 text-left opacity-0 shadow-ns-sm transition-all duration-200 ease-ns-spring animate-ns-slide-up hover:-translate-y-0.5 hover:border-ns-accent hover:shadow-ns motion-reduce:transform-none motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:transition-none"
             >
               <span className="block font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-ns-accent">
                 {label}
@@ -1202,8 +1211,8 @@ function AssistantConversation({
                       className="mt-1.5 font-ui text-[11px] leading-4 text-ns-ink-muted"
                     >
                       {EDITOR_ACTIONS_PRESENTED
-                        ? "Reads your story · changes selected text only with approval"
-                        : "A read-only companion for this story workspace"}
+                        ? "Knows your story · only changes words you highlight, and always asks first"
+                        : "Knows your story · reads along, never changes your writing"}
                     </Dialog.Description>
                   </div>
                   <Dialog.Close asChild>

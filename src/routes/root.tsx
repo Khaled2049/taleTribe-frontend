@@ -1,130 +1,99 @@
-import { useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuthContext } from "@/contexts/AuthContext";
-import { motion, useInView } from "framer-motion";
-import { ArrowRight, BookOpen } from "lucide-react";
+import { ArrowRight, Cloud, GitBranch, Moon, PenLine, Sun } from "lucide-react";
+import { Link } from "react-router-dom";
 import { SEOHead } from "@/components/seo/SEOHead";
 import {
-  WebSiteSchema,
   OrganizationSchema,
+  WebSiteSchema,
 } from "@/components/seo/StructuredData";
 import { APP_NAME, SEO_CONFIG } from "@/config/seo";
+import { useTheme } from "@/contexts/ThemeContext";
 
-/* ------------------------------------------------------------------ */
-/*  Data                                                               */
-/* ------------------------------------------------------------------ */
-
-const values = [
+const features = [
   {
-    num: "01",
-    heading: "Your work, your audience.",
-    body: "Publish stories directly to readers who discover and follow your writing. No gatekeepers. No algorithms deciding your worth.",
+    icon: PenLine,
+    number: "01",
+    title: "Immersive focus mode",
+    description:
+      "A quiet, uncluttered canvas that keeps the page in front of you and every distraction out of sight.",
+    accent:
+      "border-ns-accent bg-ns-accent-subtle text-ns-accent group-hover:bg-ns-accent group-hover:text-[var(--ns-bg)]",
   },
   {
-    num: "02",
-    heading: "A community of craft.",
-    body: "Connect with writers and readers who take independent storytelling seriously. Critique, encourage, and grow together.",
+    icon: Cloud,
+    number: "02",
+    title: "Cloud sync & Markdown",
+    description:
+      "Your work is saved as you write and ready wherever inspiration finds you. Import, export, and stay portable.",
+    accent:
+      "border-ns-teal-border bg-ns-teal-subtle text-ns-teal group-hover:border-ns-teal group-hover:bg-ns-teal group-hover:text-[var(--ns-bg)]",
   },
   {
-    num: "03",
-    heading: "Earn from your words.",
-    body: "Readers can tip the stories that move them — supporting the writers they love, directly and immediately.",
+    icon: GitBranch,
+    number: "03",
+    title: "Organized plotlines",
+    description:
+      "Keep chapters, characters, places, and story beats connected without leaving your manuscript behind.",
+    accent:
+      "border-ns-border-strong bg-ns-surface text-ns-gold group-hover:border-ns-gold group-hover:bg-ns-gold group-hover:text-[var(--ns-bg)]",
   },
-];
+] as const;
 
-const experience = [
-  {
-    label: "Write",
-    heading: "A canvas as serious as your ambition.",
-    body: "Draft chapters in a focused editor built for long-form storytelling. Keep your characters, places, and plot notes always within reach.",
-  },
-  {
-    label: "Share",
-    heading: "Stories find their readers here.",
-    body: "Publish chapters as you write. Build a following chapter by chapter. Your audience grows with your work.",
-  },
-  {
-    label: "Belong",
-    heading: "Independent doesn't mean alone.",
-    body: "Join a community that reads, writes, and talks about craft. Competitions, book clubs, and feedback loops for every stage of your work.",
-  },
-];
-
-/* ------------------------------------------------------------------ */
-/*  Animation variants                                                 */
-/* ------------------------------------------------------------------ */
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 32 },
-  visible: (i: number = 0) => ({
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.75,
-      delay: i * 0.1,
-      ease: [0.16, 1, 0.3, 1],
-    },
-  }),
-};
-
-const fadeIn = {
-  hidden: { opacity: 0 },
-  visible: (i: number = 0) => ({
-    opacity: 1,
-    transition: {
-      duration: 0.9,
-      delay: i * 0.12,
-      ease: [0.4, 0, 0.2, 1],
-    },
-  }),
-};
-
-/* ------------------------------------------------------------------ */
-/*  Scroll-triggered section wrapper                                   */
-/* ------------------------------------------------------------------ */
-
-function Section({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: "-80px" });
+function Wordmark() {
   return (
-    <motion.section
-      ref={ref}
-      initial="hidden"
-      animate={inView ? "visible" : "hidden"}
-      className={className}
+    <Link
+      to="/"
+      className="group inline-flex items-center gap-3 text-ns-ink no-underline"
+      aria-label={`${APP_NAME} home`}
     >
-      {children}
-    </motion.section>
+      <span
+        className="relative flex h-7 w-7 items-center justify-center rounded-full border border-ns-border-strong bg-ns-accent-subtle transition-colors duration-300 group-hover:border-ns-accent"
+        aria-hidden="true"
+      >
+        <span className="h-3.5 w-px -rotate-[28deg] bg-ns-accent" />
+      </span>
+      <span className="font-heading text-[1.65rem] font-medium tracking-[-0.02em]">
+        {APP_NAME}
+      </span>
+    </Link>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Page                                                               */
-/* ------------------------------------------------------------------ */
+function ThemeToggle({ compact = false }: { compact?: boolean }) {
+  const { theme, toggleTheme } = useTheme();
+  const nextTheme = theme === "light" ? "dark" : "light";
+
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      className="group inline-flex items-center gap-2 font-ui text-xs font-medium text-ns-ink-secondary transition-colors duration-200 hover:text-ns-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent focus-visible:ring-offset-4 focus-visible:ring-offset-ns-bg"
+      aria-label={`Switch to ${nextTheme} mode`}
+      title={`Switch to ${nextTheme} mode`}
+    >
+      <span className="flex h-8 w-8 items-center justify-center rounded-full border border-ns-border-strong bg-ns-surface transition-colors group-hover:border-ns-accent group-hover:text-ns-accent">
+        {theme === "light" ? (
+          <Moon className="h-3.5 w-3.5" aria-hidden="true" />
+        ) : (
+          <Sun className="h-3.5 w-3.5" aria-hidden="true" />
+        )}
+      </span>
+      {!compact && <span>{theme === "light" ? "Dark" : "Light"} mode</span>}
+    </button>
+  );
+}
 
 export default function HomePage() {
-  const navigate = useNavigate();
-  const { user } = useAuthContext();
-
   return (
     <>
       <SEOHead
-        title={`${APP_NAME} — Where Your Stories Live`}
-        description="TheTaleTribe is where writers write, publish, and build a presence around their work. Join a community of writers and readers who take independent storytelling seriously."
+        title={`${APP_NAME} — A quiet place to write`}
+        description={`${APP_NAME} is a calm, focused writing workspace for drafting stories, organizing plotlines, and keeping every chapter in sync.`}
         keywords={[
-          "indie authors",
-          "story writing platform",
-          "author community",
-          "independent publishing",
-          "writing community",
-          "novel writing",
-          "storytelling",
+          "distraction-free writing app",
+          "novel writing software",
+          "story organizer",
+          "focus writing mode",
+          "creative writing platform",
         ]}
         url="/"
         type="website"
@@ -138,259 +107,219 @@ export default function HomePage() {
       />
       <OrganizationSchema />
 
-      <div className="min-h-screen bg-ns-bg text-ns-ink ns-grain overflow-x-hidden">
-        {/* ============================================================ */}
-        {/*  HERO                                                         */}
-        {/* ============================================================ */}
-        <section className="relative min-h-[92svh] flex flex-col justify-center">
-          {/* Brand accent line — the singular visual signature */}
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-ns-accent" />
-
-          <div className="max-w-5xl mx-auto px-5 sm:px-8 lg:px-12 w-full py-24">
-            {/* Overline */}
-            <motion.p
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.6,
-                delay: 0.15,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-              className="font-ui text-overline text-ns-ink-muted mb-8"
-            >
-              For independent authors
-            </motion.p>
-
-            {/* Headline */}
-            <motion.h1
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.9,
-                delay: 0.3,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-              className="font-heading text-[clamp(3.2rem,8vw,6.5rem)] leading-[0.92] tracking-tight mb-8 max-w-4xl"
-            >
-              Where your
-              <br />
-              <span className="italic text-ns-accent">stories live.</span>
-            </motion.h1>
-
-            {/* Subheadline */}
-            <motion.p
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.7,
-                delay: 0.5,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-              className="font-body text-body-lg text-ns-ink-secondary max-w-md leading-relaxed mb-12"
-            >
-              Write your stories. Publish to readers who care.
-              <br />
-              Build a presence that's entirely yours.
-            </motion.p>
-
-            {/* CTAs */}
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.6,
-                delay: 0.68,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-              className="flex flex-wrap gap-4 items-center"
-            >
-              {!user && (
-                <button
-                  onClick={() => navigate("/sign-up")}
-                  className="group inline-flex items-center gap-2.5 rounded-full bg-ns-accent hover:bg-ns-accent-hover text-white px-8 py-3.5 font-ui font-semibold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  Start Writing
-                  <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
-                </button>
-              )}
-              <button
-                onClick={() => navigate("/stories")}
-                className="inline-flex items-center gap-2.5 rounded-full border border-ns-border-strong bg-transparent hover:bg-ns-surface px-8 py-3.5 font-ui font-semibold text-ns-ink transition-all duration-300"
-              >
-                Explore Stories
-                <BookOpen className="h-4 w-4" />
-              </button>
-            </motion.div>
-          </div>
-
-          {/* Scroll hint */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.4, duration: 1 }}
-            className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center"
+      <div className="min-h-screen bg-ns-bg text-ns-ink transition-colors duration-300">
+        <header className="relative border-b border-ns-border">
+          <div
+            className="absolute inset-x-0 top-0 h-[2px]"
+            style={{
+              background:
+                "linear-gradient(90deg, var(--ns-accent), var(--ns-gold-bright), var(--ns-teal))",
+            }}
+            aria-hidden="true"
+          />
+          <nav
+            className="mx-auto flex h-[76px] max-w-[1240px] items-center justify-between px-5 sm:px-8 lg:px-10"
+            aria-label="Primary navigation"
           >
-            <motion.div
-              animate={{ y: [0, 8, 0] }}
-              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-              className="w-[1px] h-8 bg-gradient-to-b from-ns-ink-muted to-transparent"
-            />
-          </motion.div>
-        </section>
+            <Wordmark />
 
-        {/* ============================================================ */}
-        {/*  BRAND / VALUE — Three numbered statements, no cards         */}
-        {/* ============================================================ */}
-        <Section className="border-t border-ns-border">
-          <div className="max-w-5xl mx-auto px-5 sm:px-8 lg:px-12 py-24 sm:py-32">
-            <motion.p
-              variants={fadeIn}
-              className="font-ui text-overline text-ns-ink-muted mb-16"
-            >
-              What we're about
-            </motion.p>
-
-            <div>
-              {values.map((item, i) => (
-                <motion.div
-                  key={item.num}
-                  variants={fadeUp}
-                  custom={i}
-                  className="group grid grid-cols-[5rem_1fr] sm:grid-cols-[8rem_1fr] gap-6 sm:gap-12 py-10 sm:py-12 border-t border-ns-border first:border-t-0"
-                >
-                  {/* Ghost number */}
-                  <span
-                    aria-hidden
-                    className="font-heading text-[3.5rem] sm:text-[5.5rem] leading-none text-ns-ink/[0.05] select-none tabular-nums pt-1 transition-colors duration-500 group-hover:text-ns-ink/[0.1]"
-                  >
-                    {item.num}
-                  </span>
-
-                  {/* Content */}
-                  <div className="pt-1 sm:pt-3">
-                    <h3 className="font-heading text-[clamp(1.4rem,3vw,2rem)] leading-tight tracking-tight mb-3">
-                      {item.heading}
-                    </h3>
-                    <p className="font-body text-body text-ns-ink-secondary leading-relaxed max-w-prose">
-                      {item.body}
-                    </p>
-                  </div>
-                </motion.div>
-              ))}
+            <div className="flex items-center gap-2 sm:gap-5">
+              <a
+                href="#features"
+                className="hidden font-ui text-sm font-medium text-ns-ink-secondary no-underline transition-colors duration-200 hover:text-ns-accent sm:inline"
+              >
+                Features
+              </a>
+              <Link
+                to="/sign-in"
+                className="px-2.5 py-2 font-ui text-sm font-medium text-ns-ink-secondary no-underline transition-colors duration-200 hover:text-ns-ink sm:px-3"
+              >
+                Sign in
+              </Link>
+              <Link
+                to="/sign-up"
+                className="rounded-full bg-ns-ink px-4 py-2.5 font-ui text-xs font-semibold text-ns-bg no-underline transition-all duration-200 hover:-translate-y-0.5 hover:bg-ns-accent hover:text-[var(--ns-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ns-bg active:translate-y-0 sm:px-5 sm:text-sm"
+              >
+                Get started
+              </Link>
             </div>
-          </div>
-        </Section>
+          </nav>
+        </header>
 
-        {/* ============================================================ */}
-        {/*  EXPERIENCE — Alternating editorial text blocks, no cards    */}
-        {/* ============================================================ */}
-        <Section className="border-t border-ns-border bg-ns-surface/30">
-          <div className="max-w-5xl mx-auto px-5 sm:px-8 lg:px-12 py-24 sm:py-32">
-            <motion.p
-              variants={fadeIn}
-              className="font-ui text-overline text-ns-ink-muted mb-20"
-            >
-              The experience
-            </motion.p>
+        <main>
+          <section className="relative isolate overflow-hidden px-5 pb-24 pt-24 text-center sm:px-8 sm:pb-32 sm:pt-32 lg:pb-40 lg:pt-40">
+            <div
+              className="pointer-events-none absolute left-1/2 top-[12%] -z-10 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-ns-accent-subtle blur-3xl sm:h-[38rem] sm:w-[38rem]"
+              aria-hidden="true"
+            />
+            <div
+              className="pointer-events-none absolute -right-28 bottom-12 -z-10 h-72 w-72 rounded-full bg-ns-teal-subtle blur-3xl sm:right-[3%]"
+              aria-hidden="true"
+            />
 
-            {experience.map((item, i) => {
-              const isRight = i % 2 !== 0;
-              return (
-                <motion.div
-                  key={item.label}
-                  variants={fadeUp}
-                  custom={i * 0.4}
-                  className={`py-14 sm:py-20 border-t border-ns-border flex ${
-                    isRight ? "justify-end" : "justify-start"
-                  }`}
+            <div className="mx-auto max-w-[970px]">
+              <p className="mb-7 inline-flex items-center gap-3 font-ui text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-ns-accent sm:mb-9">
+                <span className="h-px w-7 bg-ns-accent" aria-hidden="true" />
+                A writing room of your own
+                <span className="h-px w-7 bg-ns-accent" aria-hidden="true" />
+              </p>
+              <h1 className="font-heading text-[clamp(3.8rem,9vw,7.6rem)] font-normal leading-[0.88] tracking-[-0.055em] text-ns-ink">
+                Write until the world
+                <br className="hidden sm:block" /> goes{" "}
+                <em className="font-normal text-ns-accent">quiet.</em>
+              </h1>
+              <p className="mx-auto mt-8 max-w-[610px] font-body text-lg leading-[1.7] text-ns-ink-secondary sm:mt-10 sm:text-xl">
+                A calm, considered workspace for turning loose ideas into
+                finished stories—without the noise that gets between you and the
+                page.
+              </p>
+
+              <div className="mt-10 flex flex-col items-center justify-center gap-5 sm:mt-12 sm:flex-row">
+                <Link
+                  to="/sign-up"
+                  className="group inline-flex min-w-[210px] items-center justify-center gap-3 rounded-full bg-ns-accent px-7 py-4 font-ui text-sm font-semibold text-[var(--ns-bg)] no-underline shadow-ns-glow transition-all duration-200 hover:-translate-y-0.5 hover:bg-ns-accent-hover hover:text-[var(--ns-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent focus-visible:ring-offset-4 focus-visible:ring-offset-ns-bg active:translate-y-0"
                 >
-                  <div className={`max-w-lg ${isRight ? "text-right" : ""}`}>
-                    <p
-                      className={`font-ui text-overline text-ns-accent mb-5 ${
-                        isRight ? "text-right" : ""
+                  Start writing free
+                  <ArrowRight
+                    className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+                    aria-hidden="true"
+                  />
+                </Link>
+                <Link
+                  to="/try"
+                  className="group inline-flex items-center gap-2 border-b border-ns-border-strong pb-1 font-ui text-sm font-medium text-ns-ink-secondary no-underline transition-colors duration-200 hover:border-ns-teal hover:text-ns-teal"
+                >
+                  Explore the editor
+                  <span
+                    className="transition-transform duration-200 group-hover:translate-x-0.5"
+                    aria-hidden="true"
+                  >
+                    ↗
+                  </span>
+                </Link>
+              </div>
+
+              <p className="mt-6 font-ui text-[0.7rem] tracking-wide text-ns-ink-muted">
+                No credit card. Your words remain yours.
+              </p>
+            </div>
+          </section>
+
+          <section
+            id="features"
+            className="scroll-mt-8 border-y border-ns-border bg-ns-surface"
+            aria-labelledby="features-title"
+          >
+            <div className="mx-auto max-w-[1240px] px-5 sm:px-8 lg:px-10">
+              <div className="flex flex-col gap-5 border-b border-ns-border py-12 sm:flex-row sm:items-end sm:justify-between sm:py-14">
+                <div>
+                  <p className="font-ui text-[0.66rem] font-semibold uppercase tracking-[0.22em] text-ns-teal">
+                    Everything in its place
+                  </p>
+                  <h2
+                    id="features-title"
+                    className="mt-3 font-heading text-[clamp(2.3rem,5vw,3.8rem)] font-normal leading-none tracking-[-0.035em] text-ns-ink"
+                  >
+                    Tools that know when to disappear.
+                  </h2>
+                </div>
+                <p className="max-w-[340px] font-body text-base leading-relaxed text-ns-ink-secondary">
+                  Just enough structure to hold a whole world. Never enough to
+                  interrupt the sentence you are writing.
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-3">
+                {features.map((feature, index) => {
+                  const Icon = feature.icon;
+                  return (
+                    <article
+                      key={feature.title}
+                      className={`group py-12 md:min-h-[330px] md:px-9 md:py-14 lg:px-12 ${
+                        index > 0
+                          ? "border-t border-ns-border md:border-l md:border-t-0"
+                          : ""
                       }`}
                     >
-                      {item.label}
-                    </p>
-                    <h3 className="font-heading text-[clamp(1.8rem,4vw,2.75rem)] italic leading-tight tracking-tight mb-5 text-ns-ink">
-                      {item.heading}
-                    </h3>
-                    <p className="font-body text-body text-ns-ink-secondary leading-relaxed">
-                      {item.body}
-                    </p>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </Section>
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors duration-300 ${feature.accent}`}
+                        >
+                          <Icon
+                            className="h-[17px] w-[17px]"
+                            aria-hidden="true"
+                          />
+                        </span>
+                        <span className="font-ui text-[0.65rem] font-medium tracking-[0.16em] text-ns-ink-muted">
+                          {feature.number}
+                        </span>
+                      </div>
+                      <h3 className="mt-12 font-heading text-[1.85rem] font-medium leading-tight tracking-[-0.025em] text-ns-ink">
+                        {feature.title}
+                      </h3>
+                      <p className="mt-4 max-w-[310px] font-body text-base leading-[1.7] text-ns-ink-secondary">
+                        {feature.description}
+                      </p>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
 
-        {/* ============================================================ */}
-        {/*  SOCIAL PROOF — Pull-quote, no cards                         */}
-        {/* ============================================================ */}
-        <Section className="border-t border-b border-ns-border">
-          <div className="max-w-5xl mx-auto px-5 sm:px-8 lg:px-12 py-24 sm:py-32 text-center">
-            <motion.blockquote
-              variants={fadeUp}
-              className="font-heading text-[clamp(1.6rem,4vw,2.75rem)] italic leading-snug tracking-tight text-ns-ink max-w-3xl mx-auto mb-10"
-            >
-              "For writers who publish without permission.
-              <br className="hidden sm:block" /> For readers who want something
-              real."
-            </motion.blockquote>
-
-            <motion.div
-              variants={fadeIn}
-              custom={1}
-              className="flex items-center justify-center gap-4"
-            >
-              <div className="h-px w-10 bg-ns-border-strong" />
-              <p className="font-ui text-overline text-ns-ink-muted">
-                Thousands of stories. One community.
-              </p>
-              <div className="h-px w-10 bg-ns-border-strong" />
-            </motion.div>
-          </div>
-        </Section>
-
-        {/* ============================================================ */}
-        {/*  FINAL CTA                                                   */}
-        {/* ============================================================ */}
-        <Section className="relative">
-          <div className="max-w-5xl mx-auto px-5 sm:px-8 lg:px-12 py-28 sm:py-36 text-center">
-            <motion.h2
-              variants={fadeUp}
-              className="font-heading text-[clamp(2.5rem,6vw,5rem)] leading-[0.95] tracking-tight mb-6"
-            >
-              Your story
+          <section className="relative overflow-hidden px-5 py-24 text-center sm:px-8 sm:py-32">
+            <div
+              className="pointer-events-none absolute bottom-[-8rem] left-1/2 h-64 w-[38rem] -translate-x-1/2 rounded-full bg-ns-accent-subtle blur-3xl"
+              aria-hidden="true"
+            />
+            <p className="relative mx-auto max-w-2xl font-heading text-[clamp(2.4rem,5vw,4.25rem)] font-normal leading-[1.03] tracking-[-0.035em] text-ns-ink">
+              The blank page is waiting.
               <br />
-              <span className="italic text-ns-accent">belongs here.</span>
-            </motion.h2>
-
-            <motion.p
-              variants={fadeUp}
-              custom={1}
-              className="font-body text-body-lg text-ns-ink-secondary mb-12 max-w-xs mx-auto leading-relaxed"
+              <span className="italic text-ns-gold">
+                Meet it without the clutter.
+              </span>
+            </p>
+            <Link
+              to="/sign-up"
+              className="group relative mt-9 inline-flex items-center gap-3 font-ui text-sm font-semibold text-ns-accent no-underline transition-colors hover:text-ns-accent-hover"
             >
-              Start writing today.
-              <br />
-              Your first chapter is waiting.
-            </motion.p>
+              Begin your first chapter
+              <ArrowRight
+                className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1"
+                aria-hidden="true"
+              />
+            </Link>
+          </section>
+        </main>
 
-            <motion.div variants={fadeUp} custom={2}>
-              <button
-                onClick={() => navigate("/sign-up")}
-                className="group inline-flex items-center gap-2.5 rounded-full bg-ns-ink text-[var(--ns-bg)] hover:opacity-85 px-10 py-4 font-ui font-semibold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+        <footer className="border-t border-ns-border">
+          <div className="mx-auto flex max-w-[1240px] flex-col gap-6 px-5 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-ui text-xs text-ns-ink-secondary">
+              <span>
+                © {new Date().getFullYear()} {APP_NAME}
+              </span>
+              <Link
+                to="/privacy-policy"
+                className="text-inherit no-underline transition-colors hover:text-ns-accent"
               >
-                Join {APP_NAME}
-                <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
-              </button>
-            </motion.div>
-          </div>
+                Privacy
+              </Link>
+              <Link
+                to="/terms-of-use"
+                className="text-inherit no-underline transition-colors hover:text-ns-accent"
+              >
+                Terms
+              </Link>
+            </div>
 
-          {/* Bottom accent mirror */}
-          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-ns-accent opacity-25" />
-        </Section>
+            <div className="sm:hidden">
+              <ThemeToggle compact />
+            </div>
+            <div className="hidden sm:block">
+              <ThemeToggle />
+            </div>
+          </div>
+        </footer>
       </div>
     </>
   );

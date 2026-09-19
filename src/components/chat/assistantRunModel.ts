@@ -182,14 +182,14 @@ function textPartStatus(status: MessageStatus) {
 
 function completionNotice(state: RunState, cancelled: boolean): string | null {
   if (cancelled || state.terminal?.type === "run.cancelled") {
-    return "Stopped. The partial response above was kept.";
+    return "Stopped. What it had written so far is above.";
   }
   if (state.terminal?.type !== "run.completed") return null;
   if (state.terminal.finishReason === "max_steps") {
-    return "Stopped early after reaching the reading-step limit. The partial result is shown above.";
+    return "It spent a while reading and ran out of time to finish. Try asking something more specific.";
   }
   if (state.terminal.finishReason === "length") {
-    return "The response reached its output limit. The partial result is shown above.";
+    return "This answer got long and was cut short. Ask for the rest and it will carry on.";
   }
   if (state.terminal.finishReason === "tool_calls") {
     if (
@@ -199,7 +199,7 @@ function completionNotice(state: RunState, cancelled: boolean): string | null {
     ) {
       return null;
     }
-    return "The response stopped before the requested reading work was finished.";
+    return "It stopped part way through looking things up. Try asking again.";
   }
   return null;
 }
