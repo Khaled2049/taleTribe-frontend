@@ -19,6 +19,7 @@ import {
 import { useWalletState } from "@/hooks/useWalletState";
 import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
+import { APP_NAME } from "@/config/seo";
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -107,9 +108,17 @@ const MobileMenu = ({ isOpen, onClose }: MobileMenuProps) => {
     >
       <div className="flex flex-col h-full">
         <div className="flex items-center justify-between p-4 border-b border-ns-border shrink-0">
-          <h2 className="text-xl font-heading font-semibold text-ns-accent">
-            Menu
-          </h2>
+          <div className="flex items-center gap-2.5 text-ns-ink">
+            <span
+              className="relative flex h-7 w-7 items-center justify-center rounded-full border border-ns-border-strong bg-ns-accent-subtle"
+              aria-hidden="true"
+            >
+              <span className="h-3.5 w-px -rotate-[28deg] bg-ns-accent" />
+            </span>
+            <span className="font-heading text-xl font-semibold tracking-[-0.02em]">
+              {APP_NAME}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             {/* <ThemeToggle /> */}
             <button
@@ -211,19 +220,26 @@ const MobileMenu = ({ isOpen, onClose }: MobileMenuProps) => {
               <>
                 <div className="space-y-2 mb-6">
                   <Link
-                    to="/try"
+                    to="/sign-up"
                     onClick={onClose}
-                    className="block w-full px-4 py-3 border border-ns-border hover:border-ns-border-strong text-ns-ink text-center font-ui rounded-ns transition-colors"
+                    className="block w-full rounded-ns bg-ns-ink px-4 py-3 text-center font-ui font-semibold text-ns-bg transition-colors hover:bg-ns-accent hover:text-[var(--ns-bg)]"
                   >
-                    Try Editor
+                    Get started
                   </Link>
                   <button
                     type="button"
                     onClick={handleSignIn}
-                    className="w-full px-4 py-3 bg-ns-accent hover:bg-ns-accent-hover text-white font-semibold font-ui rounded-ns transition-colors"
+                    className="w-full rounded-ns border border-ns-border px-4 py-3 font-ui font-semibold text-ns-ink transition-colors hover:border-ns-border-strong hover:bg-ns-surface"
                   >
-                    Sign In
+                    Sign in
                   </button>
+                  <Link
+                    to="/try"
+                    onClick={onClose}
+                    className="block w-full px-4 py-2 text-center font-ui text-sm text-ns-ink-secondary transition-colors hover:text-ns-accent"
+                  >
+                    Explore the editor
+                  </Link>
                 </div>
 
                 <nav aria-label="Discover">

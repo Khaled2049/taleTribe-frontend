@@ -34,9 +34,9 @@ const NavLinks = ({ className = "", onLinkClick }: NavLinksProps) => {
             onClick={onLinkClick}
             aria-current={active ? "page" : undefined}
             className={`
-              relative font-ui text-sm font-medium no-underline whitespace-nowrap
+              relative inline-flex items-center gap-1.5 font-ui text-sm font-medium no-underline whitespace-nowrap
               transition-colors duration-200
-              ${active ? "text-ns-ink" : "text-ns-ink-secondary hover:text-ns-ink"}
+              ${active ? "text-ns-accent" : "text-ns-ink-secondary hover:text-ns-accent"}
               ${className}
             `}
           >
