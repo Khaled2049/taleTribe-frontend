@@ -225,7 +225,7 @@ const BookClubs = () => {
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6">
             <div className="min-w-0 sm:flex-1">
               <p className="font-ui text-[10px] font-semibold tracking-[0.2em] uppercase text-dark-green dark:text-light-green mb-4">
-                Novelsync — Reading Circles
+                TheTaleTribe — Reading Circles
               </p>
               <h1 className="font-heading text-[clamp(1.75rem,7vw,4.5rem)] font-light italic leading-[1.05] whitespace-nowrap text-neutral-900 dark:text-white">
                 Find Your Reading Tribe.

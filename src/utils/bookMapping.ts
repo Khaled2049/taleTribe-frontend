@@ -3,7 +3,7 @@ import { IBook } from "@/types/IBook";
 import { StoryMetadata } from "@novelsync/story-data-client";
 
 /**
- * Maps a published NovelSync story to the club book shape.
+ * Maps a published TheTaleTribe story to the club book shape.
  * Firestore rejects `undefined` values, so optional keys are only
  * included when they carry a value.
  */

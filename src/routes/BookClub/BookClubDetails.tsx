@@ -262,7 +262,7 @@ const BookClubDetails: React.FC = () => {
                         to={`/story/${book.storyId}`}
                         className="font-ui text-[11px] font-semibold tracking-[0.12em] uppercase text-ns-accent hover:opacity-80 transition-opacity"
                       >
-                        Read on NovelSync →
+                        Read on TheTaleTribe →
                       </Link>
                     )}
                     {!!book.totalChapters && (

@@ -39,9 +39,9 @@ const Navbar = () => {
             {/* Left Section - Logo */}
             <div className="flex items-center flex-shrink-0 z-10">
               <Link
-                to={user ? "/stories" : "/"}
+                to="/"
                 className="text-2xl sm:text-3xl md:text-4xl font-heading font-semibold text-ns-ink transition-all duration-300 hover:text-ns-accent hover:drop-shadow-lg tracking-tight"
-                aria-label={user ? `${APP_NAME} Stories` : `${APP_NAME} Home`}
+                aria-label={`${APP_NAME} Home`}
               >
                 {APP_NAME}
               </Link>

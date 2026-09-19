@@ -1,7 +1,7 @@
 import { defineConfig } from "cypress";
 import { registerTasks } from "./cypress/support/tasks.mjs";
 
-// E2E suite for the NovelSync core journey. Runs against the full local stack
+// E2E suite for TheTaleTribe's core journey. Runs against the full local stack
 // brought up by scripts/e2e-stack.sh: Firebase emulators (Firestore 8080, Auth
 // 9099, Functions 5001), the Python agent (8000), and creditProxy (mock LLM,
 // 8090). The app is served by the Vite dev server in development mode so the

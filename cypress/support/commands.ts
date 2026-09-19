@@ -1,7 +1,7 @@
 /// <reference types="cypress" />
 
 /**
- * Custom commands for the NovelSync E2E suite.
+ * Custom commands for TheTaleTribe E2E suite.
  *
  * `login` drives the real sign-in form (most faithful to a user) — the seeded
  * user already has a `completed` invite so the invite gate passes. The job

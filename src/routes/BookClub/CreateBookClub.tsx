@@ -178,7 +178,7 @@ const CreateBookClub = ({
             <label className={fieldLabelClass}>Opening Read</label>
             <p className="font-body text-sm text-neutral-400 dark:text-neutral-600 mb-5">
               Choose the first book your club will read together — a story
-              published on NovelSync, or anything from Google Books.
+              published on TheTaleTribe, or anything from Google Books.
             </p>
             <BookPicker
               onSelect={setBookOfTheMonth}

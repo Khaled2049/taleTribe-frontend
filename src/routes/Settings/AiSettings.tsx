@@ -180,7 +180,7 @@ const AiSettings = () => {
           Current Status
         </p>
         <p className="text-xs text-black/60 dark:text-white/60 font-body mb-3">
-          Choose NovelSync&apos;s shared AI quota or connect your own provider
+          Choose TheTaleTribe&apos;s shared AI quota or connect your own provider
           key.
         </p>
         {isActive ? (
@@ -193,7 +193,7 @@ const AiSettings = () => {
                 {" — "}
                 billed by{" "}
                 <span className="font-semibold capitalize">{provider}</span>,
-                not NovelSync
+                not TheTaleTribe
               </span>
             </div>
             <p className="mt-2 text-xs text-black/60 dark:text-white/60 font-body">

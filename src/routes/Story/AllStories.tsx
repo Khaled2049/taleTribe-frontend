@@ -249,7 +249,7 @@ const AllStories: React.FC = () => {
         title={
           forYou.data?.mode === "behavioral"
             ? "For you"
-            : "Popular on TaleTribe"
+            : "Popular on TheTaleTribe"
         }
         data={forYou.data}
         loading={forYou.isLoading}

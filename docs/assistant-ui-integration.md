@@ -978,7 +978,7 @@ Repository: frontend/functions/agents
 
 Repository: all touched repositories
 
-- Replace remaining NovelSync-facing assistant copy with TheTaleTribe.
+- Replace any remaining legacy-brand assistant copy with TheTaleTribe.
 - Update OpenAPI, `.env.example`, architecture docs, runbooks, security docs,
   and local-stack instructions.
 - Document how to select mock, Ollama, platform, and BYOK modes.

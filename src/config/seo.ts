@@ -4,7 +4,7 @@
  */
 
 // Application name from environment variable (allows easy rebranding)
-export const APP_NAME = import.meta.env.VITE_APP_NAME || "thetaletribe";
+export const APP_NAME = import.meta.env.VITE_APP_NAME || "TheTaleTribe";
 
 // Get the base URL from environment or use a default
 const getBaseUrl = () => {

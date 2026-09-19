@@ -128,7 +128,7 @@ const McpAccessCard: React.FC<{ userId: string | undefined }> = ({
         label="Connect Claude to your stories"
         description={
           status === "granted"
-            ? "Add the NovelSync connector in Claude to read and draft your stories."
+            ? "Add TheTaleTribe's connector in Claude to read and draft your stories."
             : status === "revoked"
               ? "Access was turned off for this account. You can request it again and we'll take another look."
               : "MCP is in limited testing. Request access and we'll review it."

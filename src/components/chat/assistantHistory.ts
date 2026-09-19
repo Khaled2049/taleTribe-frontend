@@ -16,6 +16,8 @@ import {
 const STORAGE_VERSION = 1;
 const PAGE_SIZE = 100;
 const MAX_PAGES = 100;
+const DEFAULT_THREAD_TITLE = "New conversation";
+const MAX_TITLE_LENGTH = 60;
 
 export type ThreadRepository = {
   listThreads(
@@ -52,7 +54,50 @@ export type ThreadRepository = {
       metadata?: Record<string, unknown>;
     },
   ): Promise<AssistantMessage>;
+  updateThread(
+    storyId: string,
+    thread: AssistantThread,
+    patch: { title?: string; archived?: boolean },
+  ): Promise<AssistantThread>;
+  getThread(storyId: string, threadId: string): Promise<AssistantThread>;
 };
+
+export type ConversationTarget =
+  | { mode: "latest" }
+  | { mode: "new"; nonce: number }
+  | { mode: "thread"; threadId: string };
+
+export function conversationKey(target: ConversationTarget): string {
+  switch (target.mode) {
+    case "new":
+      return `new:${target.nonce}`;
+    case "thread":
+      return `thread:${target.threadId}`;
+    default:
+      return "latest";
+  }
+}
+
+export function titleFromMessage(text: string): string | null {
+  const firstLine = text.split("\n").find((line) => line.trim()) ?? "";
+  const collapsed = firstLine.replace(/\s+/g, " ").trim();
+  if (!collapsed) return null;
+  if (collapsed.length <= MAX_TITLE_LENGTH) return collapsed;
+  const clipped = collapsed.slice(0, MAX_TITLE_LENGTH);
+  const lastSpace = clipped.lastIndexOf(" ");
+  return `${(lastSpace > 20 ? clipped.slice(0, lastSpace) : clipped).trimEnd()}...`;
+}
+
+function userText(parts: unknown[]): string {
+  return parts
+    .map((part) =>
+      part && typeof part === "object" && (part as { type?: string }).type === "text"
+        ? ((part as { text?: string }).text ?? "")
+        : "",
+    )
+    .filter(Boolean)
+    .join(" ");
+}
 
 type StoredAssistantUI = {
   version: number;
@@ -186,18 +231,53 @@ export class AssistantThreadSession {
   constructor(
     readonly storyId: string,
     private readonly repository: ThreadRepository = assistantThreadRepo,
+    private readonly target: ConversationTarget = { mode: "latest" },
   ) {}
 
   async loadExisting(): Promise<AssistantThread | null> {
     if (!this.existing) {
-      this.existing = this.repository
-        .listThreads(this.storyId, undefined, PAGE_SIZE)
-        .then(
-          (page) => page.threads.find((thread) => !thread.archivedAt) ?? null,
-        )
-        .then((thread) => (this.thread = thread));
+      this.existing = this.resolve().then((thread) => (this.thread = thread));
     }
     return this.existing;
+  }
+
+  private async resolve(): Promise<AssistantThread | null> {
+    if (this.target.mode === "new") return null;
+    if (this.target.mode === "thread") {
+      try {
+        return await this.repository.getThread(
+          this.storyId,
+          this.target.threadId,
+        );
+      } catch {
+        return null;
+      }
+    }
+    const page = await this.repository.listThreads(
+      this.storyId,
+      undefined,
+      PAGE_SIZE,
+    );
+    return page.threads.find((thread) => !thread.archivedAt) ?? null;
+  }
+
+  async listThreads(): Promise<AssistantThread[]> {
+    const page = await this.repository.listThreads(
+      this.storyId,
+      undefined,
+      PAGE_SIZE,
+    );
+    return page.threads.filter((thread) => !thread.archivedAt);
+  }
+
+  async archive(thread: AssistantThread): Promise<void> {
+    await this.repository.updateThread(this.storyId, thread, {
+      archived: true,
+    });
+  }
+
+  current(): AssistantThread | null {
+    return this.thread;
   }
 
   async ensureThread(): Promise<AssistantThread> {
@@ -210,6 +290,26 @@ export class AssistantThreadSession {
 
   async threadId(): Promise<string> {
     return (await this.ensureThread()).id;
+  }
+
+  private async nameThread(
+    thread: AssistantThread,
+    text: string,
+  ): Promise<void> {
+    if (thread.title !== DEFAULT_THREAD_TITLE) return;
+    const title = titleFromMessage(text);
+    if (!title) return;
+    try {
+      const renamed = await this.repository.updateThread(
+        this.storyId,
+        thread,
+        { title },
+      );
+      this.thread = renamed;
+      this.existing = Promise.resolve(renamed);
+    } catch {
+      return;
+    }
   }
 
   history(): ThreadHistoryAdapter {
@@ -267,12 +367,16 @@ export class AssistantThreadSession {
       append: async (item) => {
         if (item.message.role === "system") return;
         const thread = await this.ensureThread();
+        const serialized = serialize(item);
         const message = await this.repository.appendMessage(
           this.storyId,
           thread.id,
-          serialize(item),
+          serialized,
         );
         persisted.set(item.message.id, message);
+        if (item.message.role === "user") {
+          await this.nameThread(thread, userText(serialized.parts));
+        }
       },
       update: async (item) => {
         if (item.message.role !== "assistant") return;

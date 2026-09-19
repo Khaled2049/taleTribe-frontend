@@ -137,13 +137,13 @@ export const onInviteApproved = onDocumentUpdated(
                 <hr style="border: none; border-top: 1px solid #e7e2d8; margin: 32px 0;">
 
                 <p style="color: #999; font-size: 12px; line-height: 1.6;">
-                  Didn't apply to The Tale Tribe? No worries — you can safely ignore this email,
+                  Didn't apply to TheTaleTribe? No worries — you can safely ignore this email,
                   and this chapter will close on its own.
                 </p>
               </div>
             `,
             text: `
-The Tale Tribe — A pen, a page, and you.
+TheTaleTribe — A pen, a page, and you.
 
 Great news — your application to join the tribe has been approved!
 Tap the link below to set up your author profile and start spinning tales:
@@ -152,7 +152,7 @@ ${magicLink}
 
 This magic link expires in 24 hours.
 
-Didn't apply to The Tale Tribe? You can safely ignore this email.
+Didn't apply to TheTaleTribe? You can safely ignore this email.
             `,
           });
 

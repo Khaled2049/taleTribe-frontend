@@ -1,5 +1,5 @@
 {
-  "name": "novel-sync",
+  "name": "the-tale-tribe",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,7 +13,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:analyze": "tsc -b && vite build --mode analyze",
-    "kill-ports": "test -x ../../kill-ports && ../../kill-ports || echo 'kill-ports moved to the NovelSync workspace root (it now stops story-data and creditProxy too). Run ./kill-ports from there.'",
+    "kill-ports": "test -x ../../kill-ports && ../../kill-ports || echo 'kill-ports moved to TheTaleTribe workspace root (it now stops story-data and creditProxy too). Run ./kill-ports from there.'",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc -b",
