@@ -795,7 +795,7 @@ export function SimpleEditor() {
           className={`flex-1 py-2.5 font-ui text-xs font-medium tracking-wide transition-all duration-150 ${
             state.rightTab === "format"
               ? "border-b-2 border-ns-accent text-ns-accent"
-              : "text-ns-ink-muted hover:text-ns-ink-secondary hover:bg-ns-surface-hover"
+              : "text-ns-ink-secondary hover:text-ns-ink hover:bg-ns-surface-hover"
           }`}
         >
           Format
@@ -805,18 +805,18 @@ export function SimpleEditor() {
           className={`flex-1 py-2.5 font-ui text-xs font-medium tracking-wide transition-all duration-150 ${
             state.rightTab === "document"
               ? "border-b-2 border-ns-accent text-ns-accent"
-              : "text-ns-ink-muted hover:text-ns-ink-secondary hover:bg-ns-surface-hover"
+              : "text-ns-ink-secondary hover:text-ns-ink hover:bg-ns-surface-hover"
           }`}
         >
           Document
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 text-ns-ink">
         {state.rightTab === "format" && editor && (
           <div className="space-y-4">
             <div>
-              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-muted font-ui mb-2">
+              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-secondary font-ui mb-2">
                 Text
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -827,7 +827,7 @@ export function SimpleEditor() {
                     setFontSize(value);
                     editor.chain().focus().setFontSize(value).run();
                   }}
-                  className="rounded-ns border border-ns-border bg-white px-2 py-1.5 text-xs font-ui"
+                  className="rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink shadow-ns-sm focus:border-ns-accent focus:ring-2 focus:ring-[var(--ns-ring)] dark:[color-scheme:dark]"
                 >
                   {fontSizes.map((size) => (
                     <option key={size} value={size}>
@@ -844,7 +844,7 @@ export function SimpleEditor() {
                       .setFontFamily(event.target.value)
                       .run();
                   }}
-                  className="rounded-ns border border-ns-border bg-white px-2 py-1.5 text-xs font-ui"
+                  className="rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink shadow-ns-sm focus:border-ns-accent focus:ring-2 focus:ring-[var(--ns-ring)] dark:[color-scheme:dark]"
                 >
                   {fontFamilies.map((family) => (
                     <option key={family} value={family}>
@@ -861,14 +861,14 @@ export function SimpleEditor() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => editor.chain().focus().undo().run()}
-                  className="p-2 rounded-ns border border-ns-border hover:bg-white"
+                  className="p-2 rounded-ns border border-ns-border text-ns-ink hover:bg-ns-elevated"
                   title="Undo"
                 >
                   <Undo2 className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => editor.chain().focus().redo().run()}
-                  className="p-2 rounded-ns border border-ns-border hover:bg-white"
+                  className="p-2 rounded-ns border border-ns-border text-ns-ink hover:bg-ns-elevated"
                   title="Redo"
                 >
                   <Redo2 className="w-4 h-4" />
@@ -877,7 +877,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().setHorizontalRule().run()
                   }
-                  className="p-2 rounded-ns border border-ns-border hover:bg-white"
+                  className="p-2 rounded-ns border border-ns-border text-ns-ink hover:bg-ns-elevated"
                   title="Divider"
                 >
                   <RemoveFormatting className="w-4 h-4" />
@@ -886,7 +886,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().clearTextFormatting().run()
                   }
-                  className="p-2 rounded-ns border border-ns-border hover:bg-white"
+                  className="p-2 rounded-ns border border-ns-border text-ns-ink hover:bg-ns-elevated"
                   title="Clear formatting"
                 >
                   <Eraser className="w-4 h-4" />
@@ -895,35 +895,35 @@ export function SimpleEditor() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => editor.chain().focus().toggleBold().run()}
-                  className={`px-2 py-1.5 rounded-ns border text-xs font-semibold ${editor.isActive("bold") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`px-2 py-1.5 rounded-ns border text-xs font-semibold text-ns-ink ${editor.isActive("bold") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Bold"
                 >
                   B
                 </button>
                 <button
                   onClick={() => editor.chain().focus().toggleItalic().run()}
-                  className={`px-2 py-1.5 rounded-ns border text-xs italic ${editor.isActive("italic") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`px-2 py-1.5 rounded-ns border text-xs italic text-ns-ink ${editor.isActive("italic") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Italic"
                 >
                   I
                 </button>
                 <button
                   onClick={() => editor.chain().focus().toggleUnderline().run()}
-                  className={`px-2 py-1.5 rounded-ns border text-xs underline ${editor.isActive("underline") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`px-2 py-1.5 rounded-ns border text-xs underline text-ns-ink ${editor.isActive("underline") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Underline"
                 >
                   U
                 </button>
                 <button
                   onClick={() => editor.chain().focus().toggleStrike().run()}
-                  className={`px-2 py-1.5 rounded-ns border text-xs line-through ${editor.isActive("strike") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`px-2 py-1.5 rounded-ns border text-xs line-through text-ns-ink ${editor.isActive("strike") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Strikethrough"
                 >
                   S
                 </button>
                 <button
                   onClick={applyLink}
-                  className={`p-2 rounded-ns border ${editor.isActive("link") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("link") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Link"
                 >
                   <Link2 className="w-4 h-4" />
@@ -932,13 +932,13 @@ export function SimpleEditor() {
             </div>
 
             <div>
-              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-muted font-ui mb-2">
+              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-secondary font-ui mb-2">
                 Structure
               </p>
               <div className="flex items-center gap-1 flex-wrap">
                 <button
                   onClick={() => editor.chain().focus().setParagraph().run()}
-                  className={`p-2 rounded-ns border ${editor.isActive("paragraph") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("paragraph") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Paragraph"
                 >
                   <Pilcrow className="w-4 h-4" />
@@ -947,7 +947,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().toggleHeading({ level: 1 }).run()
                   }
-                  className={`p-2 rounded-ns border ${editor.isActive("heading", { level: 1 }) ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("heading", { level: 1 }) ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Heading 1"
                 >
                   <Heading1 className="w-4 h-4" />
@@ -956,7 +956,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().toggleHeading({ level: 2 }).run()
                   }
-                  className={`p-2 rounded-ns border ${editor.isActive("heading", { level: 2 }) ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("heading", { level: 2 }) ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Heading 2"
                 >
                   <Heading2 className="w-4 h-4" />
@@ -965,7 +965,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().toggleBulletList().run()
                   }
-                  className={`p-2 rounded-ns border ${editor.isActive("bulletList") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("bulletList") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Bullet list"
                 >
                   <List className="w-4 h-4" />
@@ -974,7 +974,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().toggleOrderedList().run()
                   }
-                  className={`p-2 rounded-ns border ${editor.isActive("orderedList") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("orderedList") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Numbered list"
                 >
                   <ListOrdered className="w-4 h-4" />
@@ -983,7 +983,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().toggleBlockquote().run()
                   }
-                  className={`p-2 rounded-ns border ${editor.isActive("blockquote") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("blockquote") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Quote"
                 >
                   <Quote className="w-4 h-4" />
@@ -992,7 +992,7 @@ export function SimpleEditor() {
             </div>
 
             <div>
-              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-muted font-ui mb-2">
+              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-secondary font-ui mb-2">
                 Paragraph
               </p>
               <div className="flex items-center gap-1 flex-wrap mb-2">
@@ -1000,7 +1000,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().setTextAlign("left").run()
                   }
-                  className={`p-2 rounded-ns border ${activeTextAlign === "left" ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${activeTextAlign === "left" ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Align left"
                 >
                   <AlignLeft className="w-4 h-4" />
@@ -1009,7 +1009,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().setTextAlign("center").run()
                   }
-                  className={`p-2 rounded-ns border ${activeTextAlign === "center" ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${activeTextAlign === "center" ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Align center"
                 >
                   <AlignCenter className="w-4 h-4" />
@@ -1018,7 +1018,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().setTextAlign("right").run()
                   }
-                  className={`p-2 rounded-ns border ${activeTextAlign === "right" ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${activeTextAlign === "right" ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Align right"
                 >
                   <AlignRight className="w-4 h-4" />
@@ -1027,21 +1027,21 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().setTextAlign("justify").run()
                   }
-                  className={`p-2 rounded-ns border ${activeTextAlign === "justify" ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-white"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${activeTextAlign === "justify" ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Justify"
                 >
                   <AlignJustify className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => editor.chain().focus().decreaseIndent().run()}
-                  className="p-2 rounded-ns border border-ns-border hover:bg-white"
+                  className="p-2 rounded-ns border border-ns-border text-ns-ink hover:bg-ns-elevated"
                   title="Outdent"
                 >
                   <IndentDecrease className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => editor.chain().focus().increaseIndent().run()}
-                  className="p-2 rounded-ns border border-ns-border hover:bg-white"
+                  className="p-2 rounded-ns border border-ns-border text-ns-ink hover:bg-ns-elevated"
                   title="Indent"
                 >
                   <IndentIncrease className="w-4 h-4" />
@@ -1055,7 +1055,7 @@ export function SimpleEditor() {
                     setLineHeight(value);
                     editor.chain().focus().setLineHeight(value).run();
                   }}
-                  className="rounded-ns border border-ns-border bg-white px-2 py-1.5 text-xs font-ui"
+                  className="rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink shadow-ns-sm focus:border-ns-accent focus:ring-2 focus:ring-[var(--ns-ring)] dark:[color-scheme:dark]"
                 >
                   {lineHeights.map((value) => (
                     <option key={value} value={value}>
@@ -1070,7 +1070,7 @@ export function SimpleEditor() {
                     setParagraphSpacing(value);
                     editor.chain().focus().setParagraphSpacing(value).run();
                   }}
-                  className="rounded-ns border border-ns-border bg-white px-2 py-1.5 text-xs font-ui"
+                  className="rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink shadow-ns-sm focus:border-ns-accent focus:ring-2 focus:ring-[var(--ns-ring)] dark:[color-scheme:dark]"
                 >
                   {paragraphSpacings.map((value) => (
                     <option key={value} value={value}>
@@ -1082,11 +1082,11 @@ export function SimpleEditor() {
             </div>
 
             <div>
-              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-muted font-ui mb-2">
+              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-secondary font-ui mb-2">
                 Colors
               </p>
               <div className="grid grid-cols-2 gap-2">
-                <label className="rounded-ns border border-ns-border bg-white px-2 py-1.5 text-xs font-ui flex items-center justify-between gap-2">
+                <label className="rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink flex items-center justify-between gap-2 shadow-ns-sm">
                   Text
                   <input
                     type="color"
@@ -1099,7 +1099,7 @@ export function SimpleEditor() {
                     className="h-6 w-8 cursor-pointer border-0 bg-transparent"
                   />
                 </label>
-                <label className="rounded-ns border border-ns-border bg-white px-2 py-1.5 text-xs font-ui flex items-center justify-between gap-2">
+                <label className="rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink flex items-center justify-between gap-2 shadow-ns-sm">
                   Highlight
                   <input
                     type="color"
@@ -1117,7 +1117,7 @@ export function SimpleEditor() {
                 onClick={() =>
                   editor.chain().focus().unsetHighlightColor().run()
                 }
-                className="mt-2 w-full rounded-ns border border-ns-border bg-white px-2 py-1.5 text-xs font-ui hover:bg-ns-surface-hover"
+                className="mt-2 w-full rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink shadow-ns-sm hover:bg-ns-surface-hover"
               >
                 Clear highlight
               </button>
@@ -1127,7 +1127,7 @@ export function SimpleEditor() {
 
         {state.rightTab === "document" && (
           <div className="space-y-4">
-            <div className="rounded-ns border border-ns-border bg-white p-3">
+            <div className="rounded-ns border border-ns-border bg-ns-elevated p-3 text-ns-ink shadow-ns-sm">
               <WritingStats
                 currentChapter={state.currentChapter}
                 chaptersCount={state.chapters.length}
@@ -1136,8 +1136,8 @@ export function SimpleEditor() {
                 textWordCount={editor?.storage.characterCount?.words?.()}
               />
             </div>
-            <div className="rounded-ns border border-ns-border bg-white p-3">
-              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-muted font-ui mb-2">
+            <div className="rounded-ns border border-ns-border bg-ns-elevated p-3 text-ns-ink shadow-ns-sm">
+              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-secondary font-ui mb-2">
                 Defaults
               </p>
               <button
@@ -1160,7 +1160,7 @@ export function SimpleEditor() {
                     .unsetTextAlign()
                     .run();
                 }}
-                className="w-full rounded-ns border border-ns-border bg-white px-2 py-1.5 text-xs font-ui hover:bg-ns-surface-hover"
+                className="w-full rounded-ns border border-ns-border bg-ns-surface px-2 py-1.5 text-xs font-ui text-ns-ink hover:bg-ns-surface-hover"
               >
                 Reset document style
               </button>
@@ -1606,7 +1606,6 @@ export function SimpleEditor() {
               {inspectorPanelContent}
             </div>
           </SlideOverPanel>
-
 
           <ConfirmDialog
             open={splitDialogOpen}

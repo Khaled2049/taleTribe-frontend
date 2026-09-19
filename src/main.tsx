@@ -17,6 +17,7 @@ import { appQueryClient } from "./lib/queryClient";
 import { AuthBootstrap } from "./components/AppBootstrap/AuthBootstrap";
 import { RouteError } from "./components/common/RouteError";
 import { useAuthContext } from "./contexts/AuthContext";
+import RequireAuth from "./routes/RequireAuth";
 
 const Root = lazy(() => import("./routes/root"));
 const Signin = lazy(() => import("./routes/Auth/sign-in"));
@@ -185,9 +186,11 @@ const router = createBrowserRouter([
       {
         path: "/book-clubs/:id",
         element: (
-          <Suspense fallback={<LoadingFallback />}>
-            <BookClubDetails />
-          </Suspense>
+          <RequireAuth>
+            <Suspense fallback={<LoadingFallback />}>
+              <BookClubDetails />
+            </Suspense>
+          </RequireAuth>
         ),
       },
       {

@@ -33,107 +33,119 @@ const Navbar = () => {
 
   return (
     <>
-      <nav className="w-full sticky top-0 z-50 ns-glass border-b border-ns-border transition-colors duration-300">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative flex justify-between items-center h-16">
-            {/* Left Section - Logo */}
-            <div className="flex items-center flex-shrink-0 z-10">
-              <Link
-                to="/"
-                className="text-2xl sm:text-3xl md:text-4xl font-heading font-semibold text-ns-ink transition-all duration-300 hover:text-ns-accent hover:drop-shadow-lg tracking-tight"
-                aria-label={`${APP_NAME} Home`}
-              >
-                {APP_NAME}
-              </Link>
-            </div>
-
-            {/* Center Section - Section navigation */}
-            <nav
-              aria-label="Sections"
-              className="hidden lg:flex items-center gap-6 xl:gap-8 z-10"
+      <header className="relative z-50 w-full shrink-0 border-b border-ns-border bg-ns-bg/95 backdrop-blur-md transition-colors duration-300">
+        <div
+          className="absolute inset-x-0 top-0 h-[2px]"
+          style={{
+            background:
+              "linear-gradient(90deg, var(--ns-accent), var(--ns-gold-bright), var(--ns-teal))",
+          }}
+          aria-hidden="true"
+        />
+        <nav
+          className="mx-auto flex h-[76px] max-w-[1240px] items-center justify-between px-5 sm:px-8 lg:px-10"
+          aria-label="Primary navigation"
+        >
+          <Link
+            to="/"
+            className="group inline-flex shrink-0 items-center gap-3 text-ns-ink no-underline"
+            aria-label={`${APP_NAME} home`}
+          >
+            <span
+              className="relative flex h-7 w-7 items-center justify-center rounded-full border border-ns-border-strong bg-ns-accent-subtle transition-colors duration-300 group-hover:border-ns-accent"
+              aria-hidden="true"
             >
-              <NavLinks />
-            </nav>
+              <span className="h-3.5 w-px -rotate-[28deg] bg-ns-accent" />
+            </span>
+            <span className="font-heading text-[1.65rem] font-medium tracking-[-0.02em]">
+              {APP_NAME}
+            </span>
+          </Link>
 
-            {/* Right Section - Desktop */}
-            <div className="hidden lg:flex items-center gap-4 xl:gap-6 z-10">
-              {/* Wallet Connect Button */}
-              {WEB3_ENABLED && (
-                <div className="flex items-center">
-                  <WalletConnectButton />
-                </div>
-              )}
-
-              {/* User Dropdown */}
-              {loading ? (
-                <div className="flex items-center justify-center w-10 h-10">
-                  <Loader className="w-6 h-6 animate-spin text-ns-accent" />
-                </div>
-              ) : user ? (
-                <div className="relative" ref={dropdownContainerRef}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleDropdown();
-                    }}
-                    className="flex items-center gap-3 pl-1.5 pr-3 py-1.5 rounded-full border border-ns-border hover:border-ns-accent/40 hover:bg-ns-surface focus:outline-none focus:ring-2 focus:ring-[var(--ns-ring)] focus:ring-offset-2 focus:ring-offset-[var(--ns-ring-offset)] transition-all"
-                    aria-label="User menu"
-                    aria-expanded={isDropdownOpen}
-                  >
-                    {user.photoURL && user.photoURL.trim() !== "" ? (
-                      <img
-                        src={user.photoURL}
-                        alt="User Avatar"
-                        className="w-9 h-9 rounded-full border-2 border-ns-border object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="w-9 h-9 rounded-full bg-ns-accent flex items-center justify-center flex-shrink-0">
-                        <User className="w-5 h-5 text-white" />
-                      </div>
-                    )}
-                    <span className="font-ui text-sm font-semibold text-ns-ink truncate max-w-[180px]">
-                      @{user.username || "user"}
-                    </span>
-                  </button>
-                  <UserDropdown
-                    isOpen={isDropdownOpen}
-                    onClose={closeDropdown}
-                    user={user}
-                    containerRef={dropdownContainerRef}
-                  />
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <Link
-                    to="/try"
-                    className="px-4 py-2 border border-ns-border hover:border-ns-border-strong text-ns-ink-secondary hover:text-ns-ink font-ui text-sm rounded-full transition-all duration-200"
-                  >
-                    Try Editor
-                  </Link>
-                  <Link
-                    to="/sign-in"
-                    className="px-5 py-2 bg-ns-accent hover:bg-ns-accent-hover text-white font-ui font-semibold rounded-full transition-all duration-300 hover:scale-105 shadow-ns-sm hover:shadow-ns text-sm"
-                  >
-                    Sign In
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            {/* Mobile Menu Button */}
-            <div className="lg:hidden flex items-center gap-3">
-              <button
-                onClick={toggleMobileMenu}
-                className="p-2 text-ns-ink-secondary hover:text-ns-ink hover:bg-ns-surface rounded-ns transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--ns-ring)] active:scale-95"
-                aria-label="Toggle mobile menu"
-                aria-expanded={isMobileMenuOpen}
-              >
-                <Menu className="w-6 h-6" />
-              </button>
-            </div>
+          <div
+            role="group"
+            aria-label="Sections"
+            className="hidden items-center gap-6 lg:flex xl:gap-8"
+          >
+            <NavLinks />
           </div>
-        </div>
-      </nav>
+
+          <div className="hidden items-center gap-4 lg:flex xl:gap-6">
+            {/* Wallet Connect Button */}
+            {WEB3_ENABLED && (
+              <div className="flex items-center">
+                <WalletConnectButton />
+              </div>
+            )}
+
+            {/* User Dropdown */}
+            {loading ? (
+              <div className="flex items-center justify-center w-10 h-10">
+                <Loader className="w-6 h-6 animate-spin text-ns-accent" />
+              </div>
+            ) : user ? (
+              <div className="relative" ref={dropdownContainerRef}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleDropdown();
+                  }}
+                  className="flex items-center gap-3 rounded-full border border-ns-border py-1.5 pl-1.5 pr-3 transition-all hover:border-ns-accent/40 hover:bg-ns-surface focus:outline-none focus:ring-2 focus:ring-[var(--ns-ring)] focus:ring-offset-2 focus:ring-offset-[var(--ns-ring-offset)]"
+                  aria-label="User menu"
+                  aria-expanded={isDropdownOpen}
+                >
+                  {user.photoURL && user.photoURL.trim() !== "" ? (
+                    <img
+                      src={user.photoURL}
+                      alt="User Avatar"
+                      className="w-9 h-9 rounded-full border-2 border-ns-border object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-ns-accent flex items-center justify-center flex-shrink-0">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
+                  )}
+                  <span className="font-ui text-sm font-semibold text-ns-ink truncate max-w-[180px]">
+                    @{user.username || "user"}
+                  </span>
+                </button>
+                <UserDropdown
+                  isOpen={isDropdownOpen}
+                  onClose={closeDropdown}
+                  user={user}
+                  containerRef={dropdownContainerRef}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <Link
+                  to="/sign-in"
+                  className="px-2.5 py-2 font-ui text-sm font-medium text-ns-ink-secondary no-underline transition-colors duration-200 hover:text-ns-ink sm:px-3"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/sign-up"
+                  className="rounded-full bg-ns-ink px-5 py-2.5 font-ui text-sm font-semibold text-ns-bg no-underline transition-all duration-200 hover:-translate-y-0.5 hover:bg-ns-accent hover:text-[var(--ns-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ns-bg active:translate-y-0"
+                >
+                  Get started
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 lg:hidden">
+            <button
+              onClick={toggleMobileMenu}
+              className="rounded-full border border-ns-border-strong bg-ns-surface p-2 text-ns-ink-secondary transition-colors hover:border-ns-accent hover:text-ns-accent focus:outline-none focus:ring-2 focus:ring-[var(--ns-ring)] active:scale-95"
+              aria-label="Toggle mobile menu"
+              aria-expanded={isMobileMenuOpen}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
+        </nav>
+      </header>
 
       {/* Mobile Menu */}
       <MobileMenu isOpen={isMobileMenuOpen} onClose={closeMobileMenu} />
