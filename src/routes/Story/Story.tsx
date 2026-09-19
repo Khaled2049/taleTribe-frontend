@@ -5,6 +5,7 @@ import { StoryWorkspaceTabs } from "./components/StoryWorkspaceTabs";
 import { useFocusModeStore } from "@/stores/focusModeStore";
 import { FloatingChatButton } from "@/components/chat/FloatingChatButton";
 import { EditorBridgeProvider } from "@/components/editor/EditorBridge";
+import { AssistantProposalProvider } from "@/components/chat/AssistantProposalContext";
 
 const NAV_ITEMS = [
   { label: "Editor", path: "", icon: BookOpen, end: true },
@@ -67,7 +68,9 @@ const Story = () => {
     </div>
   );
   return storyId ? (
-    <EditorBridgeProvider storyId={storyId}>{workspace}</EditorBridgeProvider>
+    <EditorBridgeProvider storyId={storyId}>
+      <AssistantProposalProvider>{workspace}</AssistantProposalProvider>
+    </EditorBridgeProvider>
   ) : (
     workspace
   );

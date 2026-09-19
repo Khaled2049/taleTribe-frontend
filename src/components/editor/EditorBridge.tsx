@@ -42,6 +42,11 @@ type EditorSession = {
   getDirty: () => boolean;
   flushAndWait: () => Promise<number | undefined>;
   documentVersion: number;
+  lastSelection: {
+    from: number;
+    to: number;
+    text: string;
+  } | null;
 };
 
 function selectedText(editor: Editor, from: number, to: number): string {
@@ -77,25 +82,37 @@ function editorWindow(editor: Editor, selectionText: string | null) {
   };
 }
 
-function snapshot(session: EditorSession): AssistantEditorContext {
+function retainedSelection(session: EditorSession) {
   const { from, to } = session.editor.state.selection;
   const selectionEligible = isSupportedSelection(session.editor, from, to);
-  const text = selectionEligible
+  const currentText = selectionEligible
     ? selectedText(session.editor, from, to)
-    : null;
+    : "";
+  if (selectionEligible && currentText) {
+    session.lastSelection = { from, to, text: currentText };
+    return session.lastSelection;
+  }
+
+  const retained = session.lastSelection;
+  if (
+    retained &&
+    isSupportedSelection(session.editor, retained.from, retained.to) &&
+    selectedText(session.editor, retained.from, retained.to) === retained.text
+  ) {
+    return retained;
+  }
+  session.lastSelection = null;
+  return null;
+}
+
+function snapshot(session: EditorSession): AssistantEditorContext {
+  const selection = retainedSelection(session);
   return {
     chapterId: session.chapterId,
     persistedRevision: session.getPersistedRevision() ?? null,
     documentVersion: session.documentVersion,
-    selection:
-      selectionEligible && text
-        ? {
-            from,
-            to,
-            text,
-          }
-        : null,
-    buffer: editorWindow(session.editor, text),
+    selection,
+    buffer: editorWindow(session.editor, selection?.text ?? null),
     dirty: session.getDirty(),
   };
 }
@@ -119,14 +136,23 @@ export class EditorBridgeStore {
     this.listeners.forEach((listener) => listener());
   }
 
-  register(session: Omit<EditorSession, "documentVersion">) {
-    const registered: EditorSession = { ...session, documentVersion: 0 };
+  register(session: Omit<EditorSession, "documentVersion" | "lastSelection">) {
+    const registered: EditorSession = {
+      ...session,
+      documentVersion: 0,
+      lastSelection: null,
+    };
+    retainedSelection(registered);
     this.active = registered;
     this.emit();
     return {
       transaction: (transaction: Transaction) => {
         if (this.active !== registered) return;
-        if (transaction.docChanged) registered.documentVersion += 1;
+        if (transaction.docChanged) {
+          registered.documentVersion += 1;
+          registered.lastSelection = null;
+        }
+        retainedSelection(registered);
         this.emit();
       },
       revisionChanged: () => {

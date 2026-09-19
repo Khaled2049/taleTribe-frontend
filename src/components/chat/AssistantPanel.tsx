@@ -25,6 +25,8 @@ import {
   LoaderCircle,
   MapPin,
   MessageCircle,
+  PanelRightClose,
+  PanelRightOpen,
   RotateCcw,
   Search,
   Send,
@@ -77,6 +79,8 @@ import {
   type ConversationTarget,
 } from "./assistantHistory";
 import { AssistantThreadControls } from "./AssistantThreadControls";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useAssistantProposal } from "./AssistantProposalContext";
 
 const READ_TOOL_NAMES = [
   "get_story_overview",
@@ -88,6 +92,33 @@ const READ_TOOL_NAMES = [
 ] as const;
 const EDITOR_ACTIONS_PRESENTED =
   import.meta.env.VITE_ASSISTANT_EDITOR_ACTIONS_ENABLED !== "false";
+const ASSISTANT_DOCK_OPEN_KEY = "tale-tribe:assistant-dock-open";
+const ASSISTANT_DOCK_WIDTH_KEY = "tale-tribe:assistant-dock-width";
+const MIN_DOCK_WIDTH = 360;
+const MAX_DOCK_WIDTH = 560;
+
+function initialDockOpen() {
+  if (typeof window === "undefined") return true;
+  const stored = window.localStorage.getItem(ASSISTANT_DOCK_OPEN_KEY);
+  return stored === null ? true : stored === "true";
+}
+
+function clampDockWidth(width: number) {
+  if (typeof window === "undefined") {
+    return Math.min(MAX_DOCK_WIDTH, Math.max(MIN_DOCK_WIDTH, width));
+  }
+  const viewportMaximum = Math.max(
+    MIN_DOCK_WIDTH,
+    Math.min(MAX_DOCK_WIDTH, window.innerWidth * 0.48),
+  );
+  return Math.min(viewportMaximum, Math.max(MIN_DOCK_WIDTH, width));
+}
+
+function initialDockWidth() {
+  if (typeof window === "undefined") return 448;
+  const stored = Number(window.localStorage.getItem(ASSISTANT_DOCK_WIDTH_KEY));
+  return clampDockWidth(Number.isFinite(stored) && stored > 0 ? stored : 448);
+}
 
 const AssistantPanelContext = createContext<{
   storyId: string;
@@ -146,18 +177,17 @@ function toolDetails(
       const count = resultItems(result).length;
       return {
         title: `Checking your ${plural}`,
-        detail: count
-          ? `Found ${count}`
-          : `Nothing written down yet`,
+        detail: count ? `Found ${count}` : `Nothing written down yet`,
         icon:
           kind === "character" ? Users : kind === "place" ? MapPin : ListTree,
       };
     }
     case "get_story_entity":
       return {
-        title: typeof resultRecord?.name === "string"
-          ? `Looking up ${resultRecord.name}`
-          : "Looking up a detail",
+        title:
+          typeof resultRecord?.name === "string"
+            ? `Looking up ${resultRecord.name}`
+            : "Looking up a detail",
         detail: "Reading what you have written down",
         icon: FileSearch,
       };
@@ -174,9 +204,10 @@ function toolDetails(
     }
     case "read_chapter":
       return {
-        title: typeof resultRecord?.title === "string"
-          ? `Reading “${resultRecord.title}”`
-          : "Reading a chapter",
+        title:
+          typeof resultRecord?.title === "string"
+            ? `Reading “${resultRecord.title}”`
+            : "Reading a chapter",
         icon: BookOpen,
         detail: "Going through the words on the page",
       };
@@ -335,6 +366,9 @@ function ApplyEditorEditCard({
   respondToApproval,
 }: ToolCallMessagePartProps) {
   const context = useContext(AssistantPanelContext);
+  const proposalPreview = useAssistantProposal();
+  const presentProposal = proposalPreview?.present;
+  const clearProposal = proposalPreview?.clear;
   const bridge = useEditorBridge();
   const editorSnapshot = useEditorBridgeSnapshot();
   const { isOnline } = useNetworkStatus();
@@ -350,12 +384,12 @@ function ApplyEditorEditCard({
     }
     return objectValue(part.result)?.proposalId === proposalId;
   });
-  const parsedProposal = proposeEditorEditSchema.safeParse(
-    proposalPart?.type === "tool-call" ? proposalPart.args : null,
-  );
-  const proposal: ProposeEditorEditArgs | null = parsedProposal.success
-    ? parsedProposal.data
-    : null;
+  const proposal = useMemo<ProposeEditorEditArgs | null>(() => {
+    const parsed = proposeEditorEditSchema.safeParse(
+      proposalPart?.type === "tool-call" ? proposalPart.args : null,
+    );
+    return parsed.success ? parsed.data : null;
+  }, [proposalPart]);
   const operation =
     proposal?.operations.length === 1 &&
     proposal.operations[0]?.type === "replace"
@@ -378,28 +412,33 @@ function ApplyEditorEditCard({
     !resolved &&
     !busy &&
     isOnline;
+  const previewKey =
+    approvalId ?? (typeof proposalId === "string" ? proposalId : undefined);
 
-  const resolveDecision = async (
-    decision: "rejected" | "revision_requested",
-    revisionFeedback?: string,
-  ) => {
-    if (!context || !approvalId || resolved || busy) return;
-    context.actionLedger.resolve(approvalId, {
-      decision,
-      feedback: revisionFeedback,
-    });
-    try {
-      await respondToApproval({
-        approved: false,
-        reason: decision,
+  const resolveDecision = useCallback(
+    async (
+      decision: "rejected" | "revision_requested",
+      revisionFeedback?: string,
+    ) => {
+      if (!context || !approvalId || resolved || busy) return;
+      context.actionLedger.resolve(approvalId, {
+        decision,
+        feedback: revisionFeedback,
       });
-    } catch {
-      context.actionLedger.reset(approvalId);
-      toast.error("The decision could not be recorded. Please try again.");
-    }
-  };
+      try {
+        await respondToApproval({
+          approved: false,
+          reason: decision,
+        });
+      } catch {
+        context.actionLedger.reset(approvalId);
+        toast.error("The decision could not be recorded. Please try again.");
+      }
+    },
+    [approvalId, busy, context, respondToApproval, resolved],
+  );
 
-  const apply = async () => {
+  const apply = useCallback(async () => {
     if (!context || !bridge || !approvalId || !proposal || !canApply) return;
     if (!context.actionLedger.beginApply(approvalId)) return;
     const result = await bridge.applyProposal(proposal);
@@ -417,7 +456,44 @@ function ApplyEditorEditCard({
           : "The assistant could not record the save result.",
       );
     }
-  };
+  }, [approvalId, bridge, canApply, context, proposal, respondToApproval]);
+
+  const reject = useCallback(() => {
+    void resolveDecision("rejected");
+  }, [resolveDecision]);
+
+  const askForRevision = useCallback(() => {
+    setShowFeedback(true);
+  }, []);
+
+  useEffect(() => {
+    if (!presentProposal || !clearProposal || !previewKey) return;
+    if (proposal && !resolved && proposalCheck.ok) {
+      presentProposal({
+        key: previewKey,
+        proposal,
+        canApply,
+        busy,
+        apply: () => void apply(),
+        reject,
+        askForRevision,
+      });
+      return () => clearProposal(previewKey);
+    }
+    clearProposal(previewKey);
+  }, [
+    apply,
+    askForRevision,
+    busy,
+    canApply,
+    clearProposal,
+    previewKey,
+    presentProposal,
+    proposal,
+    proposalCheck.ok,
+    reject,
+    resolved,
+  ]);
 
   const copyReplacement = async () => {
     if (!operation) return;
@@ -936,7 +1012,10 @@ function EmptyAssistant() {
   const suggestions: readonly (readonly [string, string])[] = [
     // First, because everything below is an example of one thing this answers.
     ["What can you help with?", HELP_COMMAND],
-    ["See the big picture", "Give me an overview of this story and its chapters."],
+    [
+      "See the big picture",
+      "Give me an overview of this story and its chapters.",
+    ],
     ["Meet your characters", "List the characters in this story."],
     [
       "Search your story",
@@ -1036,15 +1115,18 @@ function Composer() {
 }
 
 export default function AssistantPanel({ storyId }: { storyId: string }) {
-  const [open, setOpen] = useState(false);
+  const [desktopOpen, setDesktopOpen] = useState(initialDockOpen);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [target, setTarget] = useState<ConversationTarget>({ mode: "latest" });
 
   return (
     <AssistantConversation
       key={conversationKey(target)}
       storyId={storyId}
-      open={open}
-      setOpen={setOpen}
+      desktopOpen={desktopOpen}
+      setDesktopOpen={setDesktopOpen}
+      mobileOpen={mobileOpen}
+      setMobileOpen={setMobileOpen}
       target={target}
       onSelect={setTarget}
     />
@@ -1067,14 +1149,18 @@ function ThreadControlsRow(props: {
 
 function AssistantConversation({
   storyId,
-  open,
-  setOpen,
+  desktopOpen,
+  setDesktopOpen,
+  mobileOpen,
+  setMobileOpen,
   target,
   onSelect,
 }: {
   storyId: string;
-  open: boolean;
-  setOpen: (open: boolean) => void;
+  desktopOpen: boolean;
+  setDesktopOpen: (open: boolean) => void;
+  mobileOpen: boolean;
+  setMobileOpen: (open: boolean) => void;
   target: ConversationTarget;
   onSelect: (target: ConversationTarget) => void;
 }) {
@@ -1082,6 +1168,8 @@ function AssistantConversation({
   const editorBridge = useEditorBridge();
   const [actionLedger] = useState(() => new EditorActionLedger());
   const navigate = useNavigate();
+  const { isLgUp } = useBreakpoint();
+  const [dockWidth, setDockWidth] = useState(initialDockWidth);
   const [activeTitle, setActiveTitle] = useState<string | null>(null);
   const threadSession = useMemo(
     () => new AssistantThreadSession(storyId, undefined, target),
@@ -1126,17 +1214,39 @@ function AssistantConversation({
   );
   const runtime = useLocalRuntime(adapter, { adapters: { history } });
 
-  const stopRun = useCallback(() => {
-    activeRequest.current?.abort();
-    runtime.thread.cancelRun();
-  }, [runtime]);
+  useEffect(() => {
+    window.localStorage.setItem(ASSISTANT_DOCK_OPEN_KEY, String(desktopOpen));
+  }, [desktopOpen]);
 
-  const changeOpen = useCallback(
-    (nextOpen: boolean) => {
-      if (!nextOpen) stopRun();
-      setOpen(nextOpen);
+  useEffect(() => {
+    window.localStorage.setItem(ASSISTANT_DOCK_WIDTH_KEY, String(dockWidth));
+  }, [dockWidth]);
+
+  const resizeDock = useCallback((clientX: number) => {
+    setDockWidth(clampDockWidth(window.innerWidth - clientX));
+  }, []);
+
+  const beginResize = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      const previousCursor = document.body.style.cursor;
+      const previousSelection = document.body.style.userSelect;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const move = (pointerEvent: PointerEvent) =>
+        resizeDock(pointerEvent.clientX);
+      const finish = () => {
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", finish);
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousSelection;
+      };
+
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", finish, { once: true });
     },
-    [setOpen, stopRun],
+    [resizeDock],
   );
 
   useEffect(
@@ -1155,17 +1265,18 @@ function AssistantConversation({
         runtime.thread.cancelRun();
         runtime.thread.reset();
         actionLedger.clear();
-        setOpen(false);
+        setDesktopOpen(false);
+        setMobileOpen(false);
       }),
-    [actionLedger, runtime, setOpen],
+    [actionLedger, runtime, setDesktopOpen, setMobileOpen],
   );
 
   const navigateTo = useCallback(
     (to: string, state?: { assistantChapterId: string }) => {
-      changeOpen(false);
+      if (!isLgUp) setMobileOpen(false);
       navigate(to, state ? { state } : undefined);
     },
-    [changeOpen, navigate],
+    [isLgUp, navigate, setMobileOpen],
   );
   const panelContext = useMemo(
     () => ({ storyId, navigateTo, actionLedger }),
@@ -1175,86 +1286,199 @@ function AssistantConversation({
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <AssistantPanelContext.Provider value={panelContext}>
-        <Dialog.Root open={open} onOpenChange={changeOpen}>
-          <Dialog.Trigger asChild>
-            <button
-              type="button"
-              data-cy="open-chat"
-              className="fixed bottom-24 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-ns-accent text-white shadow-ns-lg transition-all duration-200 hover:-translate-y-0.5 hover:bg-ns-accent-hover active:scale-95 motion-reduce:transform-none motion-reduce:transition-none md:right-6"
-              aria-label="Open story assistant"
-              title="Story assistant"
-            >
-              <MessageCircle className="h-5 w-5" />
-            </button>
-          </Dialog.Trigger>
-          <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
-            <Dialog.Content
+        {isLgUp ? (
+          desktopOpen ? (
+            <aside
               data-cy="assistant-panel"
-              aria-describedby="assistant-panel-description"
-              className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-ns-bg text-ns-ink shadow-ns-xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right motion-reduce:animate-none md:inset-y-0 md:left-auto md:right-0 md:w-[29rem] md:border-l md:border-ns-border"
+              aria-label="Story assistant workspace"
+              className="relative h-full min-h-0 shrink-0 border-l border-ns-border bg-ns-bg text-ns-ink shadow-[-16px_0_40px_rgba(52,42,31,0.045)]"
+              style={{ width: `${dockWidth}px` }}
             >
-              <header className="relative shrink-0 overflow-hidden border-b border-ns-border bg-ns-surface px-4 pb-3 pt-[max(0.9rem,env(safe-area-inset-top))]">
-                <div className="pointer-events-none absolute -right-12 -top-16 h-32 w-32 rounded-full bg-ns-accent-subtle blur-2xl" />
-                <div className="relative flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-ns-accent text-white shadow-ns-sm">
-                        <Sparkles className="h-3.5 w-3.5" />
-                      </span>
-                      <Dialog.Title className="font-heading text-xl font-semibold text-ns-ink">
-                        Story assistant
-                      </Dialog.Title>
-                    </div>
-                    <Dialog.Description
-                      id="assistant-panel-description"
-                      className="mt-1.5 font-ui text-[11px] leading-4 text-ns-ink-muted"
-                    >
-                      {EDITOR_ACTIONS_PRESENTED
-                        ? "Knows your story · only changes words you highlight, and always asks first"
-                        : "Knows your story · reads along, never changes your writing"}
-                    </Dialog.Description>
-                  </div>
-                  <Dialog.Close asChild>
-                    <button
-                      type="button"
-                      aria-label="Close story assistant"
-                      data-cy="assistant-close"
-                      className="rounded-full border border-ns-border bg-ns-elevated p-2 text-ns-ink-muted shadow-ns-sm transition-colors hover:bg-ns-surface-hover hover:text-ns-ink"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </Dialog.Close>
-                </div>
-                <ThreadControlsRow
+              <button
+                type="button"
+                role="separator"
+                aria-label="Resize story assistant"
+                aria-orientation="vertical"
+                aria-valuemin={MIN_DOCK_WIDTH}
+                aria-valuemax={MAX_DOCK_WIDTH}
+                aria-valuenow={Math.round(dockWidth)}
+                onPointerDown={beginResize}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowLeft") {
+                    event.preventDefault();
+                    setDockWidth((width) => clampDockWidth(width + 24));
+                  }
+                  if (event.key === "ArrowRight") {
+                    event.preventDefault();
+                    setDockWidth((width) => clampDockWidth(width - 24));
+                  }
+                }}
+                className="group absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize touch-none outline-none focus-visible:ring-2 focus-visible:ring-ns-accent"
+              >
+                <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-ns-accent/40 group-focus-visible:bg-ns-accent" />
+              </button>
+              <AssistantSurface
+                docked
+                onClose={() => setDesktopOpen(false)}
+                session={threadSession}
+                target={target}
+                activeTitle={activeTitle}
+                onSelect={onSelect}
+              />
+            </aside>
+          ) : (
+            <aside className="flex h-full w-12 shrink-0 flex-col items-center border-l border-ns-border bg-ns-surface py-3 text-ns-ink">
+              <button
+                type="button"
+                data-cy="open-chat"
+                onClick={() => setDesktopOpen(true)}
+                aria-label="Open story assistant"
+                title="Open story assistant"
+                className="group flex h-9 w-9 items-center justify-center rounded-ns-lg border border-ns-border bg-ns-elevated text-ns-accent shadow-ns-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-ns-accent hover:shadow-ns motion-reduce:transform-none"
+              >
+                <PanelRightOpen className="h-4 w-4" />
+              </button>
+              <span className="mt-4 select-none font-ui text-[9px] font-semibold uppercase tracking-[0.18em] text-ns-ink-muted [writing-mode:vertical-rl]">
+                Assistant
+              </span>
+            </aside>
+          )
+        ) : (
+          <Dialog.Root open={mobileOpen} onOpenChange={setMobileOpen}>
+            <Dialog.Trigger asChild>
+              <button
+                type="button"
+                data-cy="open-chat"
+                className="fixed bottom-24 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-ns-accent text-white shadow-ns-lg transition-all duration-200 hover:-translate-y-0.5 hover:bg-ns-accent-hover active:scale-95 motion-reduce:transform-none motion-reduce:transition-none md:right-6"
+                aria-label="Open story assistant"
+                title="Story assistant"
+              >
+                <MessageCircle className="h-5 w-5" />
+              </button>
+            </Dialog.Trigger>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
+              <Dialog.Content
+                data-cy="assistant-panel"
+                aria-describedby="assistant-panel-description"
+                className="fixed inset-0 z-50 overflow-hidden bg-ns-bg text-ns-ink shadow-ns-xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right motion-reduce:animate-none"
+              >
+                <AssistantSurface
+                  docked={false}
+                  onClose={() => setMobileOpen(false)}
                   session={threadSession}
                   target={target}
                   activeTitle={activeTitle}
                   onSelect={onSelect}
                 />
-              </header>
-
-              <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
-                <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto scroll-smooth bg-[radial-gradient(circle_at_top_right,var(--ns-accent-subtle),transparent_34%)] motion-reduce:scroll-auto">
-                  <EmptyAssistant />
-                  <ThreadPrimitive.Messages
-                    components={{ Message: AssistantMessage }}
-                  />
-                  <ThreadPrimitive.ViewportFooter className="sticky bottom-3 flex justify-center">
-                    <ThreadPrimitive.ScrollToBottom
-                      aria-label="Scroll to latest message"
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-ns-border bg-ns-elevated text-ns-ink-secondary shadow-ns transition-colors hover:text-ns-accent"
-                    >
-                      <ArrowDown className="h-3.5 w-3.5" />
-                    </ThreadPrimitive.ScrollToBottom>
-                  </ThreadPrimitive.ViewportFooter>
-                </ThreadPrimitive.Viewport>
-                <Composer />
-              </ThreadPrimitive.Root>
-            </Dialog.Content>
-          </Dialog.Portal>
-        </Dialog.Root>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
+        )}
       </AssistantPanelContext.Provider>
     </AssistantRuntimeProvider>
+  );
+}
+
+function AssistantSurface({
+  docked,
+  onClose,
+  session,
+  target,
+  activeTitle,
+  onSelect,
+}: {
+  docked: boolean;
+  onClose: () => void;
+  session: AssistantThreadSession;
+  target: ConversationTarget;
+  activeTitle: string | null;
+  onSelect: (target: ConversationTarget) => void;
+}) {
+  const description = EDITOR_ACTIONS_PRESENTED
+    ? "Reads with you · previews every change before it reaches the manuscript"
+    : "Knows your story · reads along without changing your writing";
+
+  return (
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-ns-bg">
+      <header className="relative shrink-0 overflow-hidden border-b border-ns-border bg-ns-surface px-4 pb-3 pt-[max(0.9rem,env(safe-area-inset-top))]">
+        <div className="pointer-events-none absolute -right-12 -top-16 h-32 w-32 rounded-full bg-ns-accent-subtle blur-2xl" />
+        <div className="relative flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-ns-accent text-white shadow-ns-sm">
+                <Sparkles className="h-3.5 w-3.5" />
+              </span>
+              {docked ? (
+                <h2
+                  id="assistant-panel-title"
+                  className="font-heading text-xl font-semibold text-ns-ink"
+                >
+                  Story assistant
+                </h2>
+              ) : (
+                <Dialog.Title
+                  id="assistant-panel-title"
+                  className="font-heading text-xl font-semibold text-ns-ink"
+                >
+                  Story assistant
+                </Dialog.Title>
+              )}
+            </div>
+            {docked ? (
+              <p className="mt-1.5 font-ui text-[11px] leading-4 text-ns-ink-muted">
+                {description}
+              </p>
+            ) : (
+              <Dialog.Description
+                id="assistant-panel-description"
+                className="mt-1.5 font-ui text-[11px] leading-4 text-ns-ink-muted"
+              >
+                {description}
+              </Dialog.Description>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={
+              docked ? "Collapse story assistant" : "Close story assistant"
+            }
+            data-cy="assistant-close"
+            className="rounded-full border border-ns-border bg-ns-elevated p-2 text-ns-ink-muted shadow-ns-sm transition-colors hover:bg-ns-surface-hover hover:text-ns-ink"
+          >
+            {docked ? (
+              <PanelRightClose className="h-4 w-4" />
+            ) : (
+              <X className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+        <ThreadControlsRow
+          session={session}
+          target={target}
+          activeTitle={activeTitle}
+          onSelect={onSelect}
+        />
+      </header>
+
+      <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
+        <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto scroll-smooth bg-[radial-gradient(circle_at_top_right,var(--ns-accent-subtle),transparent_34%)] motion-reduce:scroll-auto">
+          <EmptyAssistant />
+          <ThreadPrimitive.Messages
+            components={{ Message: AssistantMessage }}
+          />
+          <ThreadPrimitive.ViewportFooter className="sticky bottom-3 flex justify-center">
+            <ThreadPrimitive.ScrollToBottom
+              aria-label="Scroll to latest message"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-ns-border bg-ns-elevated text-ns-ink-secondary shadow-ns transition-colors hover:text-ns-accent"
+            >
+              <ArrowDown className="h-3.5 w-3.5" />
+            </ThreadPrimitive.ScrollToBottom>
+          </ThreadPrimitive.ViewportFooter>
+        </ThreadPrimitive.Viewport>
+        <Composer />
+      </ThreadPrimitive.Root>
+    </section>
   );
 }

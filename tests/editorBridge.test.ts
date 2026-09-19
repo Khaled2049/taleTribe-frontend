@@ -72,6 +72,35 @@ describe("EditorBridgeStore", () => {
     expect(bridge.getActiveChapterTitle()).toBe("Arrival");
   });
 
+  it("retains a valid selection when focus collapses and clears it after an edit", () => {
+    const fake = fakeEditor("Hello brave world", 7, 12);
+    const bridge = new EditorBridgeStore("story-1");
+    const registration = bridge.register({
+      storyId: "story-1",
+      chapterId: "chapter-1",
+      editor: fake.editor,
+      getChapterTitle: () => "Arrival",
+      getPersistedRevision: () => 3,
+      getDirty: () => false,
+      flushAndWait: async () => 3,
+    });
+    fake.connect(registration.transaction);
+
+    fake.editor.view.dispatch(
+      fake.editor.state.tr.setSelection(
+        TextSelection.create(fake.editor.state.doc, 1),
+      ),
+    );
+    expect(bridge.getSnapshot()?.selection).toEqual({
+      from: 7,
+      to: 12,
+      text: "brave",
+    });
+
+    fake.editor.view.dispatch(fake.editor.state.tr.insertText("Suddenly, ", 1));
+    expect(bridge.getSnapshot()?.selection).toBeNull();
+  });
+
   it("applies one exact replacement and waits for its guarded save", async () => {
     const fake = fakeEditor("Hello brave world", 7, 12);
     const bridge = new EditorBridgeStore("story-1");

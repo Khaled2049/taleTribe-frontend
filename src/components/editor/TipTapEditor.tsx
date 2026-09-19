@@ -72,6 +72,12 @@ import {
   TaskListExtension,
   TaskItemExtension,
 } from "@/components/editor/TaskListExtensions";
+import {
+  AssistantDiffExtension,
+  assistantDiffPluginKey,
+  assistantSelectionPluginKey,
+} from "@/components/editor/AssistantDiffExtension";
+import { useAssistantProposal } from "@/components/chat/AssistantProposalContext";
 
 const CHARACTER_LIMIT = 50000;
 const wordCountCache = new WeakMap<PMNode, number>();
@@ -133,6 +139,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   onOpenCoWrite,
 }) => {
   const { requireAuth } = useDemoMode();
+  const assistantProposal = useAssistantProposal();
   // Keep a ref so plugins always read the current ids without stale closure
   const uploadContextRef = useRef({ userId, storyId, chapterId });
   const editorRef = useRef<Editor | null>(null);
@@ -342,6 +349,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       CodeBlockExtension,
       TaskListExtension,
       TaskItemExtension,
+      AssistantDiffExtension,
       Markdown,
     ],
     content: initialContent,
@@ -354,7 +362,19 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     onTransaction: ({ transaction }) => {
       onTransactionRef.current?.(transaction);
     },
-    onBlur: () => {
+    onFocus: ({ editor }) => {
+      editor.view.dispatch(
+        editor.state.tr.setMeta(assistantSelectionPluginKey, null),
+      );
+    },
+    onBlur: ({ editor }) => {
+      const { from, to } = editor.state.selection;
+      editor.view.dispatch(
+        editor.state.tr.setMeta(
+          assistantSelectionPluginKey,
+          from < to ? { from, to } : null,
+        ),
+      );
       // Flush a pending debounced save the moment the user clicks away.
       onBlurRef.current?.();
     },
@@ -381,6 +401,16 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   useEffect(() => {
     if (onEditorReady) onEditorReady(editor);
   }, [editor, onEditorReady]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.view.dispatch(
+      editor.state.tr.setMeta(
+        assistantDiffPluginKey,
+        assistantProposal?.preview?.proposal ?? null,
+      ),
+    );
+  }, [assistantProposal?.preview?.proposal, editor]);
 
   if (!editor) return null;
 
@@ -444,6 +474,62 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           </button>
         </div>
       </BubbleMenu>
+
+      {assistantProposal?.preview && (
+        <div
+          data-cy="assistant-manuscript-preview"
+          role="status"
+          className="shrink-0 border-y border-ns-border bg-[linear-gradient(90deg,rgba(22,163,74,0.07),var(--ns-elevated)_42%,rgba(185,28,28,0.055))] px-4 py-2.5 text-ns-ink shadow-[0_8px_24px_rgba(52,42,31,0.035)] sm:px-6"
+        >
+          <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-ui text-[10px] font-bold uppercase tracking-[0.15em] text-ns-accent">
+                Draft preview · manuscript unchanged
+              </p>
+              <p className="mt-0.5 truncate font-heading text-sm text-ns-ink">
+                {assistantProposal.preview.proposal.summary}
+              </p>
+            </div>
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                data-cy="assistant-manuscript-apply"
+                disabled={!assistantProposal.preview.canApply}
+                onClick={assistantProposal.preview.apply}
+                className="rounded-ns bg-ns-accent px-3 py-1.5 font-ui text-[11px] font-semibold text-white shadow-ns-sm transition-colors hover:bg-ns-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {assistantProposal.preview.busy ? "Applying…" : "Apply & save"}
+              </button>
+              <button
+                type="button"
+                onClick={assistantProposal.preview.reject}
+                disabled={assistantProposal.preview.busy}
+                className="rounded-ns border border-ns-border-strong bg-ns-elevated px-2.5 py-1.5 font-ui text-[11px] font-semibold text-ns-ink-secondary transition-colors hover:bg-ns-surface-hover disabled:opacity-40"
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={assistantProposal.preview.askForRevision}
+                disabled={assistantProposal.preview.busy}
+                className="hidden rounded-ns px-2 py-1.5 font-ui text-[11px] text-ns-accent transition-colors hover:bg-ns-accent-subtle disabled:opacity-40 sm:block"
+              >
+                Ask for a change
+              </button>
+            </div>
+          </div>
+          <p className="mx-auto mt-1.5 hidden w-full max-w-4xl font-ui text-[10px] text-ns-ink-muted sm:block">
+            <span className="text-emerald-700 dark:text-emerald-300">
+              Green is new
+            </span>
+            {" · "}
+            <span className="text-red-700 line-through dark:text-red-300">
+              red is removed
+            </span>
+            {" · Nothing changes until you apply."}
+          </p>
+        </div>
+      )}
 
       <div className="w-full flex-1 bg-ns-elevated text-ns-ink transition-colors">
         <div className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-10 lg:px-16">

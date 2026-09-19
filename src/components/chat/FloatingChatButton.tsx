@@ -11,10 +11,10 @@ interface FloatingChatButtonProps {
 /**
  * Mounts the story assistant for the current story.
  *
- * The panel owns its own trigger and open state, so this is only a placement
- * and story-resolution boundary. It belongs to the mounted story workspace
- * rather than the editor, so closing the dialog or switching tabs preserves
- * the settled messages of the current story.
+ * The assistant owns its responsive dock/dialog state, so this remains a
+ * placement and story-resolution boundary. It belongs to the mounted story
+ * workspace rather than the editor, preserving the current story's runtime
+ * while writers move between workspace tabs.
  */
 export const FloatingChatButton: React.FC<FloatingChatButtonProps> = ({
   storyId: propStoryId,
@@ -27,7 +27,7 @@ export const FloatingChatButton: React.FC<FloatingChatButtonProps> = ({
   return (
     <Suspense
       fallback={
-        <div className="fixed bottom-24 right-4 z-30 h-11 w-11 animate-pulse rounded-full bg-ns-surface motion-reduce:animate-none md:right-6" />
+        <div className="fixed bottom-24 right-4 z-30 h-11 w-11 animate-pulse rounded-full bg-ns-surface motion-reduce:animate-none lg:static lg:h-full lg:w-[28rem] lg:shrink-0 lg:rounded-none lg:border-l lg:border-ns-border" />
       }
     >
       <AssistantPanel key={currentStoryId} storyId={currentStoryId} />
