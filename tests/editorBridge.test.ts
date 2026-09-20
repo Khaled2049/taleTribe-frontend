@@ -146,6 +146,78 @@ describe("EditorBridgeStore", () => {
     });
   });
 
+  it("reports a flushed buffer as clean even while React dirty state lags", async () => {
+    const fake = fakeEditor("Hello brave world", 7, 12);
+    const bridge = new EditorBridgeStore("story-1");
+    let stateRevision = 3;
+    const registration = bridge.register({
+      storyId: "story-1",
+      chapterId: "chapter-1",
+      editor: fake.editor,
+      getChapterTitle: () => "Arrival",
+      getPersistedRevision: () => stateRevision,
+      getDirty: () => true,
+      flushAndWait: async () => 4,
+    });
+    fake.connect(registration.transaction);
+
+    expect(bridge.getSnapshot()).toMatchObject({ dirty: true });
+
+    const prepared = await bridge.prepareSnapshot();
+    expect(prepared).toMatchObject({
+      dirty: false,
+      persistedRevision: 4,
+      selection: { from: 7, to: 12, text: "brave" },
+    });
+
+    stateRevision = 4;
+    expect(bridge.getSnapshot()).toMatchObject({
+      dirty: false,
+      persistedRevision: 4,
+    });
+  });
+
+  it("returns to dirty once the writer edits after a flush", async () => {
+    const fake = fakeEditor("Hello brave world", 7, 12);
+    const bridge = new EditorBridgeStore("story-1");
+    const registration = bridge.register({
+      storyId: "story-1",
+      chapterId: "chapter-1",
+      editor: fake.editor,
+      getChapterTitle: () => "Arrival",
+      getPersistedRevision: () => 3,
+      getDirty: () => true,
+      flushAndWait: async () => 4,
+    });
+    fake.connect(registration.transaction);
+
+    expect(await bridge.prepareSnapshot()).toMatchObject({ dirty: false });
+    fake.editor.view.dispatch(fake.editor.state.tr.insertText("Now ", 1));
+    expect(bridge.getSnapshot()).toMatchObject({ dirty: true });
+  });
+
+  it("keeps a failed flush dirty so agents refuses to propose", async () => {
+    const fake = fakeEditor("Hello brave world", 7, 12);
+    const bridge = new EditorBridgeStore("story-1");
+    const registration = bridge.register({
+      storyId: "story-1",
+      chapterId: "chapter-1",
+      editor: fake.editor,
+      getChapterTitle: () => "Arrival",
+      getPersistedRevision: () => 3,
+      getDirty: () => true,
+      flushAndWait: async () => {
+        throw new Error("offline");
+      },
+    });
+    fake.connect(registration.transaction);
+
+    expect(await bridge.prepareSnapshot()).toMatchObject({
+      dirty: true,
+      persistedRevision: 3,
+    });
+  });
+
   it("bounds the editor window and clears the exact registered session", () => {
     const fake = fakeEditor("x".repeat(9_000));
     const bridge = new EditorBridgeStore("story-1");
