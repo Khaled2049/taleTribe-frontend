@@ -62,6 +62,7 @@ import {
   type Capability,
   type ProposeEditorEditArgs,
 } from "@novelsync/assistant-contracts";
+import { AssistantMarkdown } from "@/components/chat/AssistantMarkdown";
 import {
   useEditorBridge,
   useEditorBridgeSnapshot,
@@ -78,7 +79,11 @@ import {
   conversationKey,
   type ConversationTarget,
 } from "./assistantHistory";
-import { AssistantThreadControls } from "./AssistantThreadControls";
+import {
+  AssistantNewChatRow,
+  AssistantThreadList,
+} from "./AssistantThreadList";
+import { AssistantTabs, type AssistantTab } from "./AssistantTabs";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useAssistantProposal } from "./AssistantProposalContext";
 
@@ -692,17 +697,14 @@ function ApplyEditorEditCard({
 
 function PlainTextPart({ text }: TextMessagePartProps) {
   const role = useAuiState((state) => state.message.role);
-  return (
-    <p
-      className={`whitespace-pre-wrap ${
-        role === "user"
-          ? "font-ui text-sm leading-6 text-ns-bg"
-          : "text-[15px] leading-7 text-ns-ink"
-      }`}
-    >
-      {text}
-    </p>
-  );
+  if (role === "user") {
+    return (
+      <p className="whitespace-pre-wrap font-ui text-sm leading-6 text-ns-bg">
+        {text}
+      </p>
+    );
+  }
+  return <AssistantMarkdown text={text} />;
 }
 
 function StorySource({ title, providerMetadata }: SourceMessagePartProps) {
@@ -1063,6 +1065,10 @@ function EmptyAssistant() {
             </ThreadPrimitive.Suggestion>
           ))}
         </div>
+        <p className="mt-6 font-ui text-[10px] leading-4 text-ns-ink-muted">
+          Enter to send · Shift+Enter for a new line · This story only · Every
+          chat is saved
+        </p>
       </div>
     </ThreadPrimitive.Empty>
   );
@@ -1070,7 +1076,7 @@ function EmptyAssistant() {
 
 function Composer() {
   return (
-    <div className="border-t border-ns-border bg-ns-elevated/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+    <>
       <ComposerPrimitive.Root className="rounded-ns-xl border border-ns-border-strong bg-ns-bg p-2 shadow-ns-sm focus-within:border-ns-accent focus-within:ring-2 focus-within:ring-[var(--ns-ring)]">
         <ComposerPrimitive.Input
           autoFocus
@@ -1081,11 +1087,7 @@ function Composer() {
           maxRows={5}
           className="block max-h-32 min-h-11 w-full resize-none bg-transparent px-2 py-2 font-ui text-sm leading-6 text-ns-ink outline-none placeholder:text-ns-ink-muted"
         />
-        <div className="flex items-center justify-between gap-3 px-1 pb-0.5">
-          <p className="font-ui text-[10px] text-ns-ink-muted">
-            Enter to send · Shift+Enter for a new line · {HELP_COMMAND} for what
-            I can do
-          </p>
+        <div className="flex items-center justify-end gap-3 px-1 pb-0.5">
           <ThreadPrimitive.If running={false}>
             <ComposerPrimitive.Send
               aria-label="Send message"
@@ -1107,10 +1109,7 @@ function Composer() {
           </ThreadPrimitive.If>
         </div>
       </ComposerPrimitive.Root>
-      <p className="mt-2 text-center font-ui text-[9px] tracking-wide text-ns-ink-muted">
-        Current story only · Conversation saved
-      </p>
-    </div>
+    </>
   );
 }
 
@@ -1133,16 +1132,27 @@ export default function AssistantPanel({ storyId }: { storyId: string }) {
   );
 }
 
-function ThreadControlsRow(props: {
-  session: AssistantThreadSession;
-  target: ConversationTarget;
+function AssistantFooter({
+  tab,
+  activeTitle,
+  target,
+  onSelect,
+}: {
+  tab: AssistantTab;
   activeTitle: string | null;
+  target: ConversationTarget;
   onSelect: (target: ConversationTarget) => void;
 }) {
   const running = useAuiState((state) => state.thread.isRunning);
   return (
-    <div className="relative">
-      <AssistantThreadControls {...props} disabled={running} />
+    <div className="shrink-0 border-t border-ns-border bg-ns-elevated/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5 backdrop-blur">
+      <AssistantNewChatRow
+        activeTitle={activeTitle}
+        target={target}
+        disabled={running}
+        onSelect={onSelect}
+      />
+      {tab === "chat" ? <Composer /> : null}
     </div>
   );
 }
@@ -1395,47 +1405,39 @@ function AssistantSurface({
   activeTitle: string | null;
   onSelect: (target: ConversationTarget) => void;
 }) {
+  const [tab, setTab] = useState<AssistantTab>("chat");
   const description = EDITOR_ACTIONS_PRESENTED
     ? "Reads with you · previews every change before it reaches the manuscript"
     : "Knows your story · reads along without changing your writing";
 
+  const selectAndReturn = (next: ConversationTarget) => {
+    setTab("chat");
+    onSelect(next);
+  };
+
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-ns-bg">
-      <header className="relative shrink-0 overflow-hidden border-b border-ns-border bg-ns-surface px-4 pb-3 pt-[max(0.9rem,env(safe-area-inset-top))]">
+      <header className="relative shrink-0 overflow-hidden border-b border-ns-border bg-ns-surface px-4 pb-2.5 pt-[max(0.8rem,env(safe-area-inset-top))]">
         <div className="pointer-events-none absolute -right-12 -top-16 h-32 w-32 rounded-full bg-ns-accent-subtle blur-2xl" />
-        <div className="relative flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-ns-accent text-white shadow-ns-sm">
-                <Sparkles className="h-3.5 w-3.5" />
-              </span>
-              {docked ? (
-                <h2
-                  id="assistant-panel-title"
-                  className="font-heading text-xl font-semibold text-ns-ink"
-                >
-                  Story assistant
-                </h2>
-              ) : (
-                <Dialog.Title
-                  id="assistant-panel-title"
-                  className="font-heading text-xl font-semibold text-ns-ink"
-                >
-                  Story assistant
-                </Dialog.Title>
-              )}
-            </div>
+        <div className="relative flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ns-accent text-white shadow-ns-sm">
+              <Sparkles className="h-3 w-3" />
+            </span>
             {docked ? (
-              <p className="mt-1.5 font-ui text-[11px] leading-4 text-ns-ink-muted">
-                {description}
-              </p>
-            ) : (
-              <Dialog.Description
-                id="assistant-panel-description"
-                className="mt-1.5 font-ui text-[11px] leading-4 text-ns-ink-muted"
+              <h2
+                id="assistant-panel-title"
+                className="truncate font-heading text-lg font-semibold text-ns-ink"
               >
-                {description}
-              </Dialog.Description>
+                Story assistant
+              </h2>
+            ) : (
+              <Dialog.Title
+                id="assistant-panel-title"
+                className="truncate font-heading text-lg font-semibold text-ns-ink"
+              >
+                Story assistant
+              </Dialog.Title>
             )}
           </div>
           <button
@@ -1445,7 +1447,7 @@ function AssistantSurface({
               docked ? "Collapse story assistant" : "Close story assistant"
             }
             data-cy="assistant-close"
-            className="rounded-full border border-ns-border bg-ns-elevated p-2 text-ns-ink-muted shadow-ns-sm transition-colors hover:bg-ns-surface-hover hover:text-ns-ink"
+            className="shrink-0 rounded-full p-1.5 text-ns-ink-muted transition-colors hover:bg-ns-surface-hover hover:text-ns-ink"
           >
             {docked ? (
               <PanelRightClose className="h-4 w-4" />
@@ -1454,16 +1456,25 @@ function AssistantSurface({
             )}
           </button>
         </div>
-        <ThreadControlsRow
-          session={session}
-          target={target}
-          activeTitle={activeTitle}
-          onSelect={onSelect}
-        />
+        {docked ? null : (
+          <Dialog.Description
+            id="assistant-panel-description"
+            className="sr-only"
+          >
+            {description}
+          </Dialog.Description>
+        )}
+        <div className="relative">
+          <AssistantTabs value={tab} onChange={setTab} />
+        </div>
       </header>
 
       <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
-        <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto scroll-smooth bg-[radial-gradient(circle_at_top_right,var(--ns-accent-subtle),transparent_34%)] motion-reduce:scroll-auto">
+        <ThreadPrimitive.Viewport
+          className={`relative flex-1 overflow-y-auto scroll-smooth bg-[radial-gradient(circle_at_top_right,var(--ns-accent-subtle),transparent_34%)] motion-reduce:scroll-auto ${
+            tab === "chat" ? "" : "hidden"
+          }`}
+        >
           <EmptyAssistant />
           <ThreadPrimitive.Messages
             components={{ Message: AssistantMessage }}
@@ -1477,7 +1488,19 @@ function AssistantSurface({
             </ThreadPrimitive.ScrollToBottom>
           </ThreadPrimitive.ViewportFooter>
         </ThreadPrimitive.Viewport>
-        <Composer />
+        {tab === "history" ? (
+          <AssistantThreadList
+            session={session}
+            target={target}
+            onSelect={selectAndReturn}
+          />
+        ) : null}
+        <AssistantFooter
+          tab={tab}
+          activeTitle={activeTitle}
+          target={target}
+          onSelect={selectAndReturn}
+        />
       </ThreadPrimitive.Root>
     </section>
   );
