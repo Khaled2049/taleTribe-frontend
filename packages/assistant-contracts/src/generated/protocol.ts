@@ -475,7 +475,7 @@ export const CAPABILITIES: readonly Capability[] = [
     "title": "List your cast, places and plot lines",
     "summary": "Pull the roster of characters, places or plot threads you have recorded for this story.",
     "example": "List the characters in this story.",
-    "limits": "Up to 20 at a time; I tell you when a roster is cut short."
+    "limits": "Up to 20 at a time; I page through the rest, and I tell you when a roster is cut short."
   },
   {
     "id": "entity_detail",
