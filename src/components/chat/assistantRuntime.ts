@@ -1,8 +1,4 @@
-import type {
-  ChatModelAdapter,
-  ChatModelRunResult,
-  ThreadMessage,
-} from "@assistant-ui/react";
+import type { ChatModelAdapter, ThreadMessage } from "@assistant-ui/react";
 import {
   applyEvent,
   AssistantStreamError,
@@ -98,17 +94,6 @@ export function editorContinuationForMessage(
   }) as EditorContinuation;
 }
 
-function preservePausedParts(
-  result: ChatModelRunResult,
-  message: ThreadMessage,
-): ChatModelRunResult {
-  if (message.role !== "assistant") return result;
-  return {
-    ...result,
-    content: [...message.content, ...(result.content ?? [])],
-  };
-}
-
 function safeRuntimeFailure(error: unknown): AssistantFailure {
   if (error instanceof AssistantRequestError) return error.failure;
   if (error instanceof AssistantStreamError) {
@@ -169,10 +154,11 @@ export function createAssistantAdapter({
           { continuation },
         )) {
           state = applyEvent(state, event);
-          const result = toAssistantRunResult(state);
-          yield continuation
-            ? preservePausedParts(result, currentMessage)
-            : result;
+          // LocalRuntime already prepends the message's pre-run content to
+          // every result it receives, so a resumed run must yield only its own
+          // parts. Re-adding them here duplicates each paused toolCallId and
+          // useResources throws on the collision.
+          yield toAssistantRunResult(state);
 
           // Approval events that do not reference a known started tool remain
           // unsupported and stop before any browser-side action can occur.

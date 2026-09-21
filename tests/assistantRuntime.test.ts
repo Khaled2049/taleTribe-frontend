@@ -204,6 +204,70 @@ describe("local /help command", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it("yields only its own parts when resuming, so paused tool calls stay unique", async () => {
+    const frames = [
+      '{"v":1,"runId":"run-2","seq":0,"type":"run.started"}',
+      '{"v":1,"runId":"run-2","seq":1,"type":"approval.resolved","approvalId":"approval-1","approved":true}',
+      '{"v":1,"runId":"run-2","seq":2,"type":"text.done","part":{"type":"text","text":"Applied and saved in the current chapter."}}',
+      '{"v":1,"runId":"run-2","seq":3,"type":"run.completed","finishReason":"stop"}',
+    ];
+    const fetcher = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              for (const frame of frames) {
+                controller.enqueue(
+                  new TextEncoder().encode(`data: ${frame}\n\n`),
+                );
+              }
+              controller.close();
+            },
+          }),
+          { status: 200 },
+        ),
+    ) as unknown as typeof fetch;
+    const ledger = new EditorActionLedger();
+    ledger.resolve("approval-1", {
+      decision: "applied",
+      result: {
+        status: "saved",
+        chapterId: "chapter-1",
+        documentVersion: 8,
+        persistedRevision: 4,
+      },
+    });
+    const adapter = createAssistantAdapter({
+      storyId: "story-1",
+      activeRequest: { current: null },
+      actionLedger: ledger,
+      editsEnabled: true,
+      transport: {
+        endpoint: "/assistant-run/assistantRun",
+        getIdToken: async () => "firebase-token",
+        fetcher,
+      },
+    });
+
+    const paused = pausedMessage();
+    const results = await runAdapter(adapter, "apply it", paused);
+
+    for (const result of results) {
+      const ids = (result.content ?? [])
+        .filter((part) => part.type === "tool-call")
+        .map((part) => (part as { toolCallId: string }).toolCallId);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids).not.toContain("proposal-call");
+      expect(ids).not.toContain("apply-1");
+    }
+    expect(results.at(-1)?.content).toContainEqual(
+      expect.objectContaining({
+        type: "text",
+        text: "Applied and saved in the current chapter.",
+      }),
+    );
+  });
+
   it("resumes an approval rather than reading it as a command", async () => {
     const fetcher = vi.fn(
       async () =>

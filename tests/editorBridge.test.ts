@@ -72,6 +72,35 @@ describe("EditorBridgeStore", () => {
     expect(bridge.getActiveChapterTitle()).toBe("Arrival");
   });
 
+  it("retains a valid selection when focus collapses and clears it after an edit", () => {
+    const fake = fakeEditor("Hello brave world", 7, 12);
+    const bridge = new EditorBridgeStore("story-1");
+    const registration = bridge.register({
+      storyId: "story-1",
+      chapterId: "chapter-1",
+      editor: fake.editor,
+      getChapterTitle: () => "Arrival",
+      getPersistedRevision: () => 3,
+      getDirty: () => false,
+      flushAndWait: async () => 3,
+    });
+    fake.connect(registration.transaction);
+
+    fake.editor.view.dispatch(
+      fake.editor.state.tr.setSelection(
+        TextSelection.create(fake.editor.state.doc, 1),
+      ),
+    );
+    expect(bridge.getSnapshot()?.selection).toEqual({
+      from: 7,
+      to: 12,
+      text: "brave",
+    });
+
+    fake.editor.view.dispatch(fake.editor.state.tr.insertText("Suddenly, ", 1));
+    expect(bridge.getSnapshot()?.selection).toBeNull();
+  });
+
   it("applies one exact replacement and waits for its guarded save", async () => {
     const fake = fakeEditor("Hello brave world", 7, 12);
     const bridge = new EditorBridgeStore("story-1");
@@ -114,6 +143,78 @@ describe("EditorBridgeStore", () => {
       chapterId: "chapter-1",
       documentVersion: 1,
       persistedRevision: 4,
+    });
+  });
+
+  it("reports a flushed buffer as clean even while React dirty state lags", async () => {
+    const fake = fakeEditor("Hello brave world", 7, 12);
+    const bridge = new EditorBridgeStore("story-1");
+    let stateRevision = 3;
+    const registration = bridge.register({
+      storyId: "story-1",
+      chapterId: "chapter-1",
+      editor: fake.editor,
+      getChapterTitle: () => "Arrival",
+      getPersistedRevision: () => stateRevision,
+      getDirty: () => true,
+      flushAndWait: async () => 4,
+    });
+    fake.connect(registration.transaction);
+
+    expect(bridge.getSnapshot()).toMatchObject({ dirty: true });
+
+    const prepared = await bridge.prepareSnapshot();
+    expect(prepared).toMatchObject({
+      dirty: false,
+      persistedRevision: 4,
+      selection: { from: 7, to: 12, text: "brave" },
+    });
+
+    stateRevision = 4;
+    expect(bridge.getSnapshot()).toMatchObject({
+      dirty: false,
+      persistedRevision: 4,
+    });
+  });
+
+  it("returns to dirty once the writer edits after a flush", async () => {
+    const fake = fakeEditor("Hello brave world", 7, 12);
+    const bridge = new EditorBridgeStore("story-1");
+    const registration = bridge.register({
+      storyId: "story-1",
+      chapterId: "chapter-1",
+      editor: fake.editor,
+      getChapterTitle: () => "Arrival",
+      getPersistedRevision: () => 3,
+      getDirty: () => true,
+      flushAndWait: async () => 4,
+    });
+    fake.connect(registration.transaction);
+
+    expect(await bridge.prepareSnapshot()).toMatchObject({ dirty: false });
+    fake.editor.view.dispatch(fake.editor.state.tr.insertText("Now ", 1));
+    expect(bridge.getSnapshot()).toMatchObject({ dirty: true });
+  });
+
+  it("keeps a failed flush dirty so agents refuses to propose", async () => {
+    const fake = fakeEditor("Hello brave world", 7, 12);
+    const bridge = new EditorBridgeStore("story-1");
+    const registration = bridge.register({
+      storyId: "story-1",
+      chapterId: "chapter-1",
+      editor: fake.editor,
+      getChapterTitle: () => "Arrival",
+      getPersistedRevision: () => 3,
+      getDirty: () => true,
+      flushAndWait: async () => {
+        throw new Error("offline");
+      },
+    });
+    fake.connect(registration.transaction);
+
+    expect(await bridge.prepareSnapshot()).toMatchObject({
+      dirty: true,
+      persistedRevision: 3,
     });
   });
 

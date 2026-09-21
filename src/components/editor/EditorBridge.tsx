@@ -42,7 +42,31 @@ type EditorSession = {
   getDirty: () => boolean;
   flushAndWait: () => Promise<number | undefined>;
   documentVersion: number;
+  lastSelection: {
+    from: number;
+    to: number;
+    text: string;
+  } | null;
+  savedDocumentVersion: number | null;
+  savedRevision: number | undefined;
 };
+
+function markSaved(session: EditorSession, revision: number | undefined) {
+  session.savedDocumentVersion = session.documentVersion;
+  if (revision !== undefined) session.savedRevision = revision;
+}
+
+function sessionDirty(session: EditorSession) {
+  if (session.savedDocumentVersion === session.documentVersion) return false;
+  return session.getDirty();
+}
+
+function sessionRevision(session: EditorSession) {
+  const fromState = session.getPersistedRevision();
+  if (session.savedRevision === undefined) return fromState ?? null;
+  if (fromState === undefined) return session.savedRevision;
+  return Math.max(fromState, session.savedRevision);
+}
 
 function selectedText(editor: Editor, from: number, to: number): string {
   return editor.state.doc.textBetween(from, to, "\n\n", "\ufffc");
@@ -77,26 +101,38 @@ function editorWindow(editor: Editor, selectionText: string | null) {
   };
 }
 
-function snapshot(session: EditorSession): AssistantEditorContext {
+function retainedSelection(session: EditorSession) {
   const { from, to } = session.editor.state.selection;
   const selectionEligible = isSupportedSelection(session.editor, from, to);
-  const text = selectionEligible
+  const currentText = selectionEligible
     ? selectedText(session.editor, from, to)
-    : null;
+    : "";
+  if (selectionEligible && currentText) {
+    session.lastSelection = { from, to, text: currentText };
+    return session.lastSelection;
+  }
+
+  const retained = session.lastSelection;
+  if (
+    retained &&
+    isSupportedSelection(session.editor, retained.from, retained.to) &&
+    selectedText(session.editor, retained.from, retained.to) === retained.text
+  ) {
+    return retained;
+  }
+  session.lastSelection = null;
+  return null;
+}
+
+function snapshot(session: EditorSession): AssistantEditorContext {
+  const selection = retainedSelection(session);
   return {
     chapterId: session.chapterId,
-    persistedRevision: session.getPersistedRevision() ?? null,
+    persistedRevision: sessionRevision(session),
     documentVersion: session.documentVersion,
-    selection:
-      selectionEligible && text
-        ? {
-            from,
-            to,
-            text,
-          }
-        : null,
-    buffer: editorWindow(session.editor, text),
-    dirty: session.getDirty(),
+    selection,
+    buffer: editorWindow(session.editor, selection?.text ?? null),
+    dirty: sessionDirty(session),
   };
 }
 
@@ -119,14 +155,33 @@ export class EditorBridgeStore {
     this.listeners.forEach((listener) => listener());
   }
 
-  register(session: Omit<EditorSession, "documentVersion">) {
-    const registered: EditorSession = { ...session, documentVersion: 0 };
+  register(
+    session: Omit<
+      EditorSession,
+      | "documentVersion"
+      | "lastSelection"
+      | "savedDocumentVersion"
+      | "savedRevision"
+    >,
+  ) {
+    const registered: EditorSession = {
+      ...session,
+      documentVersion: 0,
+      lastSelection: null,
+      savedDocumentVersion: null,
+      savedRevision: undefined,
+    };
+    retainedSelection(registered);
     this.active = registered;
     this.emit();
     return {
       transaction: (transaction: Transaction) => {
         if (this.active !== registered) return;
-        if (transaction.docChanged) registered.documentVersion += 1;
+        if (transaction.docChanged) {
+          registered.documentVersion += 1;
+          registered.lastSelection = null;
+        }
+        retainedSelection(registered);
         this.emit();
       },
       revisionChanged: () => {
@@ -152,10 +207,13 @@ export class EditorBridgeStore {
   async prepareSnapshot(): Promise<AssistantEditorContext | null> {
     const active = this.active;
     if (!active || active.storyId !== this.storyId) return null;
-    if (active.getDirty()) {
+    if (sessionDirty(active)) {
       try {
-        await active.flushAndWait();
-        if (this.active === active) this.emit();
+        const revision = await active.flushAndWait();
+        if (this.active === active) {
+          markSaved(active, revision);
+          this.emit();
+        }
       } catch {
         // A dirty snapshot remains useful to read. Agents refuses to turn it
         // into an applicable proposal until saving succeeds.
@@ -207,7 +265,7 @@ export class EditorBridgeStore {
           !check.ok && check.reason.startsWith("stale") ? "stale" : "invalid",
         chapterId: proposal.chapterId,
         documentVersion: active?.documentVersion ?? 0,
-        persistedRevision: active?.getPersistedRevision() ?? null,
+        persistedRevision: active ? sessionRevision(active) : null,
       };
     }
 
@@ -217,7 +275,7 @@ export class EditorBridgeStore {
         status: "invalid",
         chapterId: proposal.chapterId,
         documentVersion: active.documentVersion,
-        persistedRevision: active.getPersistedRevision() ?? null,
+        persistedRevision: sessionRevision(active),
       };
     }
     const before = active.editor.state.doc;
@@ -231,18 +289,18 @@ export class EditorBridgeStore {
         status: "invalid",
         chapterId: proposal.chapterId,
         documentVersion: active.documentVersion,
-        persistedRevision: active.getPersistedRevision() ?? null,
+        persistedRevision: sessionRevision(active),
       };
     }
 
     try {
       const persistedRevision = await active.flushAndWait();
+      if (this.active === active) markSaved(active, persistedRevision);
       return {
         status: "saved",
         chapterId: active.chapterId,
         documentVersion: active.documentVersion,
-        persistedRevision:
-          persistedRevision ?? active.getPersistedRevision() ?? null,
+        persistedRevision: persistedRevision ?? sessionRevision(active),
       };
     } catch (error) {
       return {
@@ -252,7 +310,7 @@ export class EditorBridgeStore {
             : "applied_local_save_failed",
         chapterId: active.chapterId,
         documentVersion: active.documentVersion,
-        persistedRevision: active.getPersistedRevision() ?? null,
+        persistedRevision: sessionRevision(active),
       };
     }
   }
