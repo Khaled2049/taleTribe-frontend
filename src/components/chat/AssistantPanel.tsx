@@ -1199,10 +1199,9 @@ function AssistantConversation({
       live = false;
     };
   }, [threadSession]);
-  const endpoint =
-    import.meta.env.VITE_ASSISTANT_RUN_FIREBASE === "true"
-      ? getFunctionUrl("assistantRun")
-      : "/assistant-run/assistantRun";
+  const endpoint = import.meta.env.DEV
+    ? "/assistant-run/assistantRun"
+    : getFunctionUrl("assistantRun");
   const adapter = useMemo(
     () =>
       createAssistantAdapter({
