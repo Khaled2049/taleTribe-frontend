@@ -33,6 +33,7 @@ const SubmissionCard: React.FC<SubmissionCardProps> = ({
   rank,
 }) => {
   const blockedByLimit = atVoteLimit && !selected;
+  const readable = submission.storyId !== "";
   return (
     <article className="group border-b border-ns-border py-6 flex items-start gap-5">
       {submission.coverImageUrl ? (
@@ -59,12 +60,16 @@ const SubmissionCard: React.FC<SubmissionCardProps> = ({
         )}
 
         <h3 className="font-heading text-xl md:text-2xl font-light text-ns-ink leading-tight">
-          <Link
-            to={`/story/${submission.storyId}`}
-            className="hover:text-ns-accent transition-colors"
-          >
-            {submission.storyTitle}
-          </Link>
+          {readable ? (
+            <Link
+              to={`/story/${submission.storyId}`}
+              className="hover:text-ns-accent transition-colors"
+            >
+              {submission.storyTitle}
+            </Link>
+          ) : (
+            submission.storyTitle
+          )}
         </h3>
 
         <p className="font-ui text-[10px] tracking-[0.14em] uppercase text-ns-ink-muted mt-1">
@@ -82,12 +87,18 @@ const SubmissionCard: React.FC<SubmissionCardProps> = ({
       </div>
 
       <div className="shrink-0 flex flex-col items-end gap-2">
-        <Link
-          to={`/story/${submission.storyId}`}
-          className="font-ui text-[10px] font-semibold tracking-[0.12em] uppercase text-ns-ink-muted hover:text-ns-ink transition-colors"
-        >
-          Read
-        </Link>
+        {readable ? (
+          <Link
+            to={`/story/${submission.storyId}`}
+            className="font-ui text-[10px] font-semibold tracking-[0.12em] uppercase text-ns-ink-muted hover:text-ns-ink transition-colors"
+          >
+            Read
+          </Link>
+        ) : (
+          <span className="font-ui text-[10px] font-semibold tracking-[0.12em] uppercase text-ns-ink-muted/60">
+            Story removed
+          </span>
+        )}
 
         {canVote && (
           <button
