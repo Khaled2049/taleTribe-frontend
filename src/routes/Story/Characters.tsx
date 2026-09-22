@@ -3,7 +3,6 @@ import { Character, CharacterRelationship } from "@novelsync/story-data-client";
 import AddCharacterModal from "@/components/story/characters/AddCharacterModal";
 import { storageService } from "@/services/StorageService";
 import { useParams } from "react-router-dom";
-import { useDemoMode } from "@/contexts/DemoModeContext";
 import { SlideOverPanel } from "@/components/common";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { toast } from "sonner";
@@ -80,7 +79,6 @@ const Field: React.FC<{
 
 const Characters: React.FC = () => {
   const { storyId } = useParams<{ storyId: string }>();
-  const { isDemo, requireAuth } = useDemoMode();
   const { isLgUp } = useBreakpoint();
 
   const {
@@ -264,7 +262,7 @@ const Characters: React.FC = () => {
       !(draft?.relationships ?? []).some((r) => r.characterId === c.id),
   );
 
-  if (!storyId && !isDemo) {
+  if (!storyId) {
     return (
       <div className="h-full flex items-center justify-center">
         <p className="font-ui text-sm text-ns-ink-muted">
@@ -289,9 +287,7 @@ const Characters: React.FC = () => {
           )}
         </div>
         <button
-          onClick={() => {
-            if (requireAuth()) setIsAddModalOpen(true);
-          }}
+          onClick={() => setIsAddModalOpen(true)}
           data-cy="add-character"
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ns-accent text-white font-ui text-xs font-medium rounded-ns hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150"
         >
@@ -395,7 +391,6 @@ const Characters: React.FC = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (!requireAuth()) return;
                             handleCharacterClick(c);
                             setTimeout(() => {
                               setDraft({ ...c });
@@ -410,7 +405,7 @@ const Characters: React.FC = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (requireAuth()) handleDeleteCharacter(c.id);
+                            handleDeleteCharacter(c.id);
                           }}
                           className="p-1.5 rounded text-ns-ink-muted hover:text-ns-destructive hover:bg-ns-elevated transition-all duration-150"
                           aria-label="Delete character"
@@ -573,9 +568,7 @@ const Characters: React.FC = () => {
                       </>
                     ) : (
                       <button
-                        onClick={() => {
-                          if (requireAuth()) startEditing();
-                        }}
+                        onClick={startEditing}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface hover:text-ns-ink active:scale-[0.97] transition-all duration-150"
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -785,10 +778,9 @@ const Characters: React.FC = () => {
                 {!editing && (
                   <div className="pt-2 border-t border-ns-border">
                     <button
-                      onClick={() => {
-                        if (requireAuth())
-                          handleDeleteCharacter(selectedCharacter.id);
-                      }}
+                      onClick={() =>
+                        handleDeleteCharacter(selectedCharacter.id)
+                      }
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns font-ui text-xs text-ns-destructive border border-ns-destructive/20 hover:bg-ns-destructive/5 hover:border-ns-destructive/40 active:scale-[0.97] transition-all duration-150"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

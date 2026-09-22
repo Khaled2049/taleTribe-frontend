@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Compass } from "lucide-react";
-import { FaBook } from "react-icons/fa";
 import type { RecommendationItem } from "@/cloudFunctions/recommendations";
 import { getApiErrorMessage } from "@/cloudFunctions";
 import { useRecommendationExplanation } from "@/hooks/queries/useRecommendationQueries";
+import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 
 interface RecommendationCardProps {
   item: RecommendationItem;
@@ -44,9 +44,8 @@ export default function RecommendationCard({
   return (
     <article className="group">
       <div className="book-perspective mx-auto max-w-[130px]">
-        {/* No generated cover art here: a story without a cover gets the same
-            book mark the catalog grid gives it (`StoryCover`), so one story
-            does not change appearance between the shelf and the grid. */}
+        {/* Coverless stories keep the same deterministic typographic jacket on
+            every shelf, without persisting or inventing generated artwork. */}
         <div className="book-cover relative aspect-[2/3] overflow-hidden rounded-ns mb-2 bg-ns-surface">
           <Link
             to={`/story/${item.story_id}`}
@@ -62,9 +61,7 @@ export default function RecommendationCard({
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <FaBook className="text-4xl text-ns-ink-muted opacity-30" />
-              </div>
+              <BookCoverFallback title={item.title} author={item.author} />
             )}
           </Link>
 

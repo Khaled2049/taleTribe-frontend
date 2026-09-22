@@ -7,6 +7,7 @@ import { googleBookToBook, storyToBook } from "@/utils/bookMapping";
 import BookSearch from "@/components/common/BookSearch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import {
   Dialog,
   DialogContent,
@@ -24,10 +25,12 @@ interface BookPickerProps {
 const BookThumb = ({
   thumbnail,
   title,
+  author,
   className = "w-10 h-14",
 }: {
   thumbnail?: string;
   title: string;
+  author?: string;
   className?: string;
 }) =>
   thumbnail ? (
@@ -38,12 +41,9 @@ const BookThumb = ({
     />
   ) : (
     <div
-      className={`${className} shrink-0 rounded-ns bg-ns-surface border border-ns-border flex items-center justify-center`}
-      aria-hidden="true"
+      className={`${className} shrink-0 overflow-hidden rounded-ns border border-ns-border shadow-ns-sm`}
     >
-      <span className="font-heading text-lg text-ns-ink-muted">
-        {title.charAt(0).toUpperCase()}
-      </span>
+      <BookCoverFallback title={title} author={author} size="tiny" />
     </div>
   );
 
@@ -62,6 +62,7 @@ const StoryRow = ({
     <BookThumb
       thumbnail={story.thumbnailUrl || story.coverImageUrl}
       title={story.title}
+      author={story.author}
     />
     <div className="flex-1 min-w-0">
       <p className="font-heading text-base text-ns-ink truncate group-hover:text-ns-accent transition-colors">
@@ -117,6 +118,7 @@ export const BookPicker = ({
           <BookThumb
             thumbnail={selected.volumeInfo.imageLinks?.thumbnail}
             title={selected.volumeInfo.title}
+            author={selected.volumeInfo.authors?.join(", ")}
             className="w-9 h-12"
           />
           <div className="flex-1 min-w-0">

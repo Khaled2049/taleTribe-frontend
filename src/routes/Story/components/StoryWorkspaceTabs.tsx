@@ -2,7 +2,6 @@ import { Layers, MapPin, PenLine, Users } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 interface StoryWorkspaceTabsProps {
-  basePath: "/create" | "/try";
   storyId?: string;
   className?: string;
 }
@@ -14,21 +13,12 @@ const NAV_ITEMS = [
   { label: "Places", segment: "places", icon: MapPin, end: false },
 ] as const;
 
-function buildTo(
-  basePath: "/create" | "/try",
-  storyId: string | undefined,
-  segment: string,
-) {
-  if (basePath === "/try") {
-    return segment ? `/try/${segment}` : "/try";
-  }
-
+function buildTo(storyId: string | undefined, segment: string) {
   const root = storyId ? `/create/${storyId}` : "/create";
   return segment ? `${root}/${segment}` : root;
 }
 
 export function StoryWorkspaceTabs({
-  basePath,
   storyId,
   className = "",
 }: StoryWorkspaceTabsProps) {
@@ -39,7 +29,7 @@ export function StoryWorkspaceTabs({
       {NAV_ITEMS.map(({ label, segment, icon: Icon, end }) => (
         <NavLink
           key={label}
-          to={buildTo(basePath, storyId, segment)}
+          to={buildTo(storyId, segment)}
           end={end}
           data-cy={`tab-${segment || "editor"}`}
           className={({ isActive }) =>

@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { APP_NAME } from "@/config/seo";
 import StoriesHeader from "@/components/story/StoriesHeader";
+import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import { AuthorName } from "@/components/common";
 import { StoryMetadata } from "@novelsync/story-data-client";
 import { usePublishedStories } from "@/hooks/queries/useStoryQueries";
@@ -61,15 +62,15 @@ const MIN_SEARCH_LENGTH = 2;
 const RECOMMENDATIONS_ENABLED =
   import.meta.env.VITE_RECOMMENDATIONS_ENABLED !== "false";
 
-const StoryCover: React.FC<{ src?: string; alt: string }> = ({ src, alt }) => {
+const StoryCover: React.FC<{
+  src?: string;
+  title: string;
+  author?: string;
+}> = ({ src, title, author }) => {
   const [loaded, setLoaded] = useState(false);
 
   if (!src) {
-    return (
-      <div className="w-full h-full flex items-center justify-center">
-        <FaBook className="text-4xl text-ns-ink-muted opacity-30" />
-      </div>
-    );
+    return <BookCoverFallback title={title} author={author} />;
   }
 
   return (
@@ -79,7 +80,7 @@ const StoryCover: React.FC<{ src?: string; alt: string }> = ({ src, alt }) => {
       )}
       <img
         src={src}
-        alt={alt}
+        alt={title}
         loading="lazy"
         decoding="async"
         onLoad={() => setLoaded(true)}
@@ -521,9 +522,11 @@ const AllStories: React.FC = () => {
                                 className="w-full h-full object-cover"
                               />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <FaBook className="text-ns-ink-muted opacity-30 text-sm" />
-                              </div>
+                              <BookCoverFallback
+                                title={story.title}
+                                author={story.author}
+                                size="tiny"
+                              />
                             )}
                           </div>
 
@@ -600,7 +603,8 @@ const AllStories: React.FC = () => {
                             <div className="book-cover relative aspect-[2/3] rounded-ns overflow-hidden mb-2 bg-ns-surface">
                               <StoryCover
                                 src={story.thumbnailUrl || story.coverImageUrl}
-                                alt={story.title}
+                                title={story.title}
+                                author={story.author}
                               />
                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors duration-300 flex flex-col justify-between p-2 opacity-0 group-hover:opacity-100">
                                 <p className="text-white text-[10px] line-clamp-3 leading-relaxed font-body">

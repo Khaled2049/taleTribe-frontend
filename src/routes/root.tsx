@@ -127,18 +127,6 @@ export default function HomePage() {
                     aria-hidden="true"
                   />
                 </Link>
-                <Link
-                  to="/try"
-                  className="group inline-flex items-center gap-2 border-b border-ns-border-strong pb-1 font-ui text-sm font-medium text-ns-ink-secondary no-underline transition-colors duration-200 hover:border-ns-teal hover:text-ns-teal"
-                >
-                  Explore the editor
-                  <span
-                    className="transition-transform duration-200 group-hover:translate-x-0.5"
-                    aria-hidden="true"
-                  >
-                    ↗
-                  </span>
-                </Link>
               </div>
 
               <p className="mt-6 font-ui text-[0.7rem] tracking-wide text-ns-ink-muted">

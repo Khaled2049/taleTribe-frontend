@@ -46,9 +46,8 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useAuthContext } from "../../contexts/AuthContext";
-import { useDemoMode } from "@/contexts/DemoModeContext";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
-import { Chapter, Story } from "@novelsync/story-data-client";
+import { Chapter } from "@novelsync/story-data-client";
 
 // Import components
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
@@ -92,29 +91,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/queries/queryKeys";
 import { useEditorBridge } from "@/components/editor/EditorBridge";
 
-const DEMO_STORY: Story = {
-  id: "demo",
-  title: "My Story",
-  description: "",
-  userId: "",
-  isPublished: false,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  chapterCount: 1,
-  author: "You",
-  views: 0,
-  likes: 0,
-};
-
-const DEMO_CHAPTER: Chapter = {
-  id: "demo-chapter",
-  title: "Chapter 1",
-  content: "<p>Start writing your story here…</p>",
-  order: 0,
-  wordCount: 0,
-  userId: "",
-};
-
 function splitValidationError(sections: DocumentSection[]): string | null {
   if (sections.length < 2) {
     return "Add another top-level heading before splitting.";
@@ -138,7 +114,6 @@ function splitValidationError(sections: DocumentSection[]): string | null {
 }
 
 export function SimpleEditor() {
-  const { isDemo, requireAuth } = useDemoMode();
   const { storyId } = useParams<{ storyId: string }>();
   const [searchParams] = useSearchParams();
   const location = useLocation();
@@ -297,7 +272,6 @@ export function SimpleEditor() {
   const performSave = useCallback(
     async (content: string) => {
       let persistedRevision = state.currentChapter?.revision;
-      if (isDemo) return persistedRevision;
       if (!state.story) {
         throw new Error("No story selected");
       }
@@ -343,7 +317,6 @@ export function SimpleEditor() {
       state.storyDescription,
       state.metadataChanged,
       actions,
-      isDemo,
     ],
   );
 
@@ -412,16 +385,10 @@ export function SimpleEditor() {
 
   // Load story on component mount
   useEffect(() => {
-    if (isDemo) {
-      actions.loadStory(DEMO_STORY, [DEMO_CHAPTER], DEMO_CHAPTER, {
-        leftSidebarOpen: isLgUp,
-      });
-      return;
-    }
     if (storyId) {
       loadStory(storyId);
     }
-  }, [storyId, user, loadStory, isDemo, actions, isLgUp]);
+  }, [storyId, user, loadStory]);
 
   // The shelf renders a chapter count derived server-side, so adding or
   // removing a chapter here makes its cached list wrong. The query is not
@@ -436,7 +403,6 @@ export function SimpleEditor() {
 
   // Handle new chapter creation
   const handleNewChapter = async () => {
-    if (!requireAuth()) return;
     if (!state.story) return;
 
     if (isDirty) {
@@ -545,7 +511,6 @@ export function SimpleEditor() {
   };
 
   const handleSplitRequest = async () => {
-    if (!requireAuth()) return;
     if (isDirty) {
       await forceSave();
     }
@@ -561,7 +526,6 @@ export function SimpleEditor() {
 
   // Summarize the current chapter and persist the summary.
   const handleSummarizeChapter = async () => {
-    if (!requireAuth()) return;
     if (!state.story || !state.currentChapter) return;
 
     if (isDirty) {
@@ -597,7 +561,6 @@ export function SimpleEditor() {
 
   // Handle publishing
   const handlePublish = async () => {
-    if (!requireAuth()) return;
     if (!state.story) return;
 
     if (isDirty) {
@@ -726,7 +689,7 @@ export function SimpleEditor() {
 
   // Confirm chapter deletion
   const confirmChapterDelete = async () => {
-    if (isDemo || !state.story || !chapterToDelete) return;
+    if (!state.story || !chapterToDelete) return;
 
     try {
       const chapter = state.chapters.find(
@@ -1364,9 +1327,7 @@ export function SimpleEditor() {
                       <span className="hidden lg:inline">Focus</span>
                     </button>
                     <button
-                      onClick={() => {
-                        if (requireAuth()) openCoWrite();
-                      }}
+                      onClick={openCoWrite}
                       title="Co-Write with AI"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink hover:border-ns-border-strong active:scale-[0.97] transition-all duration-150 whitespace-nowrap"
                     >
@@ -1416,10 +1377,7 @@ export function SimpleEditor() {
                   <div className="flex items-center justify-end flex-shrink-0">
                     <button
                       onClick={() => setPublishDialogOpen(true)}
-                      disabled={isPublishing || isDemo}
-                      title={
-                        isDemo ? "Sign in to publish your story" : undefined
-                      }
+                      disabled={isPublishing}
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns font-ui text-xs font-medium active:scale-[0.97] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap ${
                         isPublished
                           ? "bg-ns-destructive text-white hover:bg-ns-destructive-hover"
@@ -1463,9 +1421,7 @@ export function SimpleEditor() {
                       <Maximize2 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => {
-                        if (requireAuth()) openCoWrite();
-                      }}
+                      onClick={openCoWrite}
                       className="inline-flex justify-center rounded-ns border border-ns-border px-2 py-1.5 text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
                       aria-label="Open Co-Write"
                     >
@@ -1497,10 +1453,7 @@ export function SimpleEditor() {
                     </button>
                     <button
                       onClick={() => setPublishDialogOpen(true)}
-                      disabled={isPublishing || isDemo}
-                      title={
-                        isDemo ? "Sign in to publish your story" : undefined
-                      }
+                      disabled={isPublishing}
                       className={`inline-flex justify-center rounded-ns px-2 py-1.5 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                         isPublished
                           ? "bg-ns-destructive hover:bg-ns-destructive-hover"

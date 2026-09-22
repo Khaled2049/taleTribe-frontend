@@ -37,7 +37,6 @@ import {
 } from "@/hooks/queries/usePlotQueries";
 import { useParams } from "react-router-dom";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useDemoMode } from "@/contexts/DemoModeContext";
 
 /** Inline grid edits coalesce into one write per event after this idle gap. */
 const INLINE_SAVE_DEBOUNCE_MS = 600;
@@ -45,7 +44,6 @@ const INLINE_SAVE_DEBOUNCE_MS = 600;
 const PlotTimeline: React.FC = () => {
   const { storyId } = useParams<{ storyId: string }>();
   const { user } = useAuthContext();
-  const { requireAuth } = useDemoMode();
   const queryClient = useQueryClient();
 
   const { data: rawPlotLines } = usePlots(storyId);
@@ -296,9 +294,7 @@ const PlotTimeline: React.FC = () => {
         <div className="w-px h-5 bg-ns-border hidden sm:block" />
 
         <button
-          onClick={() => {
-            if (requireAuth()) addPlotLine();
-          }}
+          onClick={addPlotLine}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ns-accent text-white font-ui text-xs font-medium rounded-ns hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150"
         >
           <PlusCircle className="w-3.5 h-3.5" />
@@ -348,9 +344,7 @@ const PlotTimeline: React.FC = () => {
                 </p>
               </div>
               <button
-                onClick={() => {
-                  if (requireAuth()) addPlotLine();
-                }}
+                onClick={addPlotLine}
                 className="mt-1 inline-flex items-center gap-1.5 px-4 py-2 bg-ns-accent text-white font-ui text-sm font-medium rounded-ns hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150 shadow-ns-sm"
               >
                 <PlusCircle className="w-4 h-4" />
@@ -422,9 +416,7 @@ const PlotTimeline: React.FC = () => {
                         updateEventInline(activePlotLine.id, ev)
                       }
                       onDeleteEvent={(id) => deleteEvent(activePlotLine.id, id)}
-                      onAddEvent={() => {
-                        if (requireAuth()) addEvent(activePlotLine.id);
-                      }}
+                      onAddEvent={() => addEvent(activePlotLine.id)}
                       onOpenEditor={(ev) =>
                         openEditEventModal(activePlotLine.id, ev)
                       }

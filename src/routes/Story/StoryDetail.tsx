@@ -18,6 +18,7 @@ import { ChapterReader } from "./components/reader/ChapterReader";
 import { useUserWalletAddress } from "@/hooks/useUserWalletAddress";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { AuthorName } from "@/components/common";
+import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import { getAbsoluteUrl } from "@/config/seo";
 import { readingHistoryRepo } from "@novelsync/story-data-client";
 
@@ -633,11 +634,11 @@ const StoryDetail: React.FC = () => {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-ns-elevated flex items-center justify-center">
-                    <span className="font-heading italic text-3xl text-ns-ink-muted opacity-40">
-                      {state.story.title.charAt(0)}
-                    </span>
-                  </div>
+                  <BookCoverFallback
+                    title={state.story.title}
+                    author={state.story.author}
+                    size="large"
+                  />
                 )}
               </div>
 

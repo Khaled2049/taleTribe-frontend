@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, FileText, LockKeyhole } from "lucide-react";
+import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -161,7 +162,11 @@ const SubmissionPicker: React.FC<SubmissionPickerProps> = ({
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          <FileText className="h-4 w-4" />
+                          <BookCoverFallback
+                            title={story.title}
+                            author={story.author}
+                            size="tiny"
+                          />
                         )}
                       </div>
                       <div className="min-w-0 flex-1">

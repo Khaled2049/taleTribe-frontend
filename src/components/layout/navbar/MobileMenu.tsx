@@ -233,13 +233,6 @@ const MobileMenu = ({ isOpen, onClose }: MobileMenuProps) => {
                   >
                     Sign in
                   </button>
-                  <Link
-                    to="/try"
-                    onClick={onClose}
-                    className="block w-full px-4 py-2 text-center font-ui text-sm text-ns-ink-secondary transition-colors hover:text-ns-accent"
-                  >
-                    Explore the editor
-                  </Link>
                 </div>
 
                 <nav aria-label="Discover">

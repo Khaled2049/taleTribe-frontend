@@ -18,6 +18,7 @@ import {
   useRecentlyRead,
   useClearReadingHistory,
 } from "@/hooks/queries/useUserQueries";
+import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 
 const RowSkeleton = () => (
   <div className="flex gap-4 py-6 border-b border-ns-border animate-pulse">
@@ -396,11 +397,11 @@ const UserStories = () => {
                                 className="w-full h-full object-cover"
                               />
                             ) : (
-                              <div className="w-full h-full bg-ns-elevated flex items-center justify-center">
-                                <span className="font-heading italic text-2xl text-ns-ink-muted opacity-30">
-                                  {item.storyTitle.charAt(0)}
-                                </span>
-                              </div>
+                              <BookCoverFallback
+                                title={item.storyTitle}
+                                author={item.storyAuthor}
+                                size="small"
+                              />
                             )}
                           </div>
 

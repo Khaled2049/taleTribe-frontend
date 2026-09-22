@@ -6,7 +6,6 @@ import React, {
   useState,
 } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
-import { useDemoMode } from "@/contexts/DemoModeContext";
 import { BubbleMenu } from "@tiptap/react/menus";
 import Document from "@tiptap/extension-document";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -138,7 +137,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   onTransaction,
   onOpenCoWrite,
 }) => {
-  const { requireAuth } = useDemoMode();
   const assistantProposal = useAssistantProposal();
   // Keep a ref so plugins always read the current ids without stale closure
   const uploadContextRef = useRef({ userId, storyId, chapterId });
@@ -282,22 +280,15 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           Suggestion({
             editor: editorInstance,
             ...slashCommandSuggestion(
-              async () => {
-                if (requireAuth())
-                  await fetchNextLineSuggestions(editorInstance);
-              },
-              () => {
-                if (requireAuth()) openImagePrompt();
-              },
-              () => {
-                if (requireAuth()) onOpenCoWrite?.();
-              },
+              async () => fetchNextLineSuggestions(editorInstance),
+              openImagePrompt,
+              () => onOpenCoWrite?.(),
             ),
           }),
         ];
       },
     });
-  }, [fetchNextLineSuggestions, openImagePrompt, onOpenCoWrite, requireAuth]);
+  }, [fetchNextLineSuggestions, openImagePrompt, onOpenCoWrite]);
 
   // ── Editor instance ────────────────────────────────────────────────────────
 
@@ -426,9 +417,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       >
         <div className="flex items-center gap-1 bg-black p-1">
           <button
-            onClick={() => {
-              if (requireAuth()) handleTextEnhancement("expand");
-            }}
+            onClick={() => handleTextEnhancement("expand")}
             disabled={isEnhancing}
             className="px-3 py-2 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
             title="Expand text with more detail"
@@ -442,9 +431,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           </button>
 
           <button
-            onClick={() => {
-              if (requireAuth()) handleTextEnhancement("dialogue");
-            }}
+            onClick={() => handleTextEnhancement("dialogue")}
             disabled={isEnhancing}
             className="px-3 py-2 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
             title="Improve dialogue quality"
@@ -458,9 +445,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           </button>
 
           <button
-            onClick={() => {
-              if (requireAuth()) handleTextEnhancement("rewrite");
-            }}
+            onClick={() => handleTextEnhancement("rewrite")}
             disabled={isEnhancing}
             className="px-3 py-2 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
             title="Rewrite with different phrasing"

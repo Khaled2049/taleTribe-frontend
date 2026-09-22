@@ -144,9 +144,9 @@ Server data goes through React Query. One hook file per domain
 silently stops working.
 
 Zustand holds the rest: `authStore` (the signed-in user's profile),
-`themeStore`, `readerSettingsStore`, `focusModeStore`, `demoStore`. Only
-preferences persist — never auth. The assistant transcript is not in a store at
-all; `useLocalRuntime` owns it inside `AssistantPanel`.
+`themeStore`, `readerSettingsStore`, and `focusModeStore`. Only preferences
+persist — never auth. The assistant transcript is not in a store at all;
+`useLocalRuntime` owns it inside `AssistantPanel`.
 
 ---
 
@@ -155,13 +155,12 @@ all; `useLocalRuntime` owns it inside `AssistantPanel`.
 Three places where the name will mislead you. All three are real and none are
 scheduled to change today.
 
-**`src/contexts/` contains no contexts.** Not one of the six files calls
+**`src/contexts/` contains no contexts.** Not one of the four files calls
 `createContext`. `HelmetProvider` and `Web3Provider` are three-line wrappers
 around third-party providers (react-helmet-async, wagmi). `AuthContext`,
-`ThemeContext` and `ChatContext` are ~15-line selector hooks over Zustand
-stores. `DemoModeProvider` renders `<>{children}</>` and flips a store flag on
-mount. So `useAuthContext()` does not read a context, and there is no
-`AuthProvider` in the tree.
+and `ThemeContext` are small selector hooks over Zustand stores. So
+`useAuthContext()` does not read a context, and there is no `AuthProvider` in
+the tree.
 
 **`authStore` is mostly a profile store.** Of its members, only the identity part
 is auth; `hydrateUser`, `followUser`, `unfollowUser` and `updateProfile` are

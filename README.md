@@ -10,7 +10,6 @@ publishing and reading, discovering new voices, and building a community around
 the work.
 
 [Visit TheTaleTribe](https://thetaletribe.com) ·
-[Try the editor](https://thetaletribe.com/try) ·
 [Report an issue](https://github.com/Khaled2049/taleTribe-frontend/issues)
 
 ![An open notebook on a writer's desk](public/images/landing/hero-editorial.png)
@@ -135,9 +134,8 @@ cp .env.example .env.local
 yarn dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). The demo writing workspace
-is available at `/try`; features backed by other services require those
-services to be running and configured.
+Open [http://localhost:5173](http://localhost:5173). Features backed by other
+services require those services to be running and configured.
 
 Update `.env.local` with your own Firebase public configuration and any local
 service URLs you need. Values prefixed with `VITE_` are bundled into the client,

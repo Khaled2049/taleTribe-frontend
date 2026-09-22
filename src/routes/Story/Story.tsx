@@ -54,11 +54,7 @@ const Story = () => {
 
       <div className="flex-1 overflow-hidden min-w-0 flex flex-col">
         {!focusMode && (
-          <StoryWorkspaceTabs
-            basePath="/create"
-            storyId={storyId}
-            className="lg:hidden"
-          />
+          <StoryWorkspaceTabs storyId={storyId} className="lg:hidden" />
         )}
         <main className="h-full overflow-hidden min-h-0">
           <Outlet />

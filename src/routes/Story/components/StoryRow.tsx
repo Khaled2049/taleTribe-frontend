@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { FaImage, FaUpload, FaMagic, FaTimes } from "react-icons/fa";
+import { FaUpload, FaMagic, FaTimes } from "react-icons/fa";
 import {
   Eye,
   Heart,
@@ -24,6 +24,7 @@ import {
   toEpubFilename,
   downloadBlob,
 } from "@/utils/epubExport";
+import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 
 interface StoryRowProps {
   story: StoryMetadata & {
@@ -219,13 +220,17 @@ export const StoryRow = ({
                   ? () => setShowImagePanel(!showImagePanel)
                   : undefined
               }
-              className={`w-12 h-[68px] bg-ns-surface rounded border border-ns-border flex flex-col items-center justify-center text-ns-ink-muted ${
+              className={`w-12 h-[68px] rounded overflow-hidden border border-ns-border shadow-ns-sm ${
                 onImageUpdate
-                  ? "cursor-pointer hover:bg-ns-surface-hover transition-colors"
+                  ? "cursor-pointer transition-opacity hover:opacity-90"
                   : ""
               }`}
             >
-              <FaImage className="w-4 h-4" />
+              <BookCoverFallback
+                title={story.title}
+                author={story.author}
+                size="small"
+              />
             </div>
           )}
 

@@ -3,7 +3,6 @@ import { Place } from "@novelsync/story-data-client";
 import AddPlaceModal from "@/components/story/places/AddPlaceModal";
 import { storageService } from "@/services/StorageService";
 import { useParams } from "react-router-dom";
-import { useDemoMode } from "@/contexts/DemoModeContext";
 import { SlideOverPanel } from "@/components/common";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { toast } from "sonner";
@@ -60,7 +59,6 @@ const Field: React.FC<{
 
 const Places: React.FC = () => {
   const { storyId } = useParams<{ storyId: string }>();
-  const { isDemo, requireAuth } = useDemoMode();
   const { isLgUp } = useBreakpoint();
 
   const {
@@ -192,7 +190,7 @@ const Places: React.FC = () => {
   const place = editing ? draft : selectedPlace;
   const imageSrc = imagePreview ?? place?.imageUrl ?? null;
 
-  if (!storyId && !isDemo) {
+  if (!storyId) {
     return (
       <div className="h-full flex items-center justify-center">
         <p className="font-ui text-sm text-ns-ink-muted">
@@ -217,9 +215,7 @@ const Places: React.FC = () => {
           )}
         </div>
         <button
-          onClick={() => {
-            if (requireAuth()) setIsAddModalOpen(true);
-          }}
+          onClick={() => setIsAddModalOpen(true)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ns-accent text-white font-ui text-xs font-medium rounded-ns hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150"
         >
           <MapPinPlus className="w-3.5 h-3.5" />
@@ -322,7 +318,6 @@ const Places: React.FC = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (!requireAuth()) return;
                             handlePlaceClick(p);
                             setTimeout(() => {
                               setDraft({ ...p });
@@ -337,7 +332,6 @@ const Places: React.FC = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (!requireAuth()) return;
                             handleDeletePlace(p.id);
                           }}
                           className="p-1.5 rounded text-ns-ink-muted hover:text-ns-destructive hover:bg-ns-elevated transition-all duration-150"
@@ -468,9 +462,7 @@ const Places: React.FC = () => {
                       </>
                     ) : (
                       <button
-                        onClick={() => {
-                          if (requireAuth()) startEditing();
-                        }}
+                        onClick={startEditing}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface hover:text-ns-ink active:scale-[0.97] transition-all duration-150"
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -556,9 +548,7 @@ const Places: React.FC = () => {
                 {!editing && (
                   <div className="pt-2 border-t border-ns-border">
                     <button
-                      onClick={() => {
-                        if (requireAuth()) handleDeletePlace(selectedPlace.id);
-                      }}
+                      onClick={() => handleDeletePlace(selectedPlace.id)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns font-ui text-xs text-ns-destructive border border-ns-destructive/20 hover:bg-ns-destructive/5 hover:border-ns-destructive/40 active:scale-[0.97] transition-all duration-150"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

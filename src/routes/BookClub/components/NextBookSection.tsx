@@ -4,6 +4,7 @@ import { IBookOfTheMonth, IClub, IPoll } from "@/types/IClub";
 import { bookClubRepo } from "../bookClubRepo";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -270,8 +271,16 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
                             className="w-8 h-11 object-cover rounded-ns shadow-ns-sm shrink-0"
                           />
                         ) : (
-                          <span className="w-8 h-11 shrink-0 rounded-ns bg-ns-surface border border-ns-border flex items-center justify-center font-heading text-sm text-ns-ink-muted">
-                            {option.text.charAt(0).toUpperCase()}
+                          <span className="h-11 w-8 shrink-0 overflow-hidden rounded-ns border border-ns-border shadow-ns-sm">
+                            <BookCoverFallback
+                              title={
+                                option.bookData?.volumeInfo.title ?? option.text
+                              }
+                              author={option.bookData?.volumeInfo.authors?.join(
+                                ", ",
+                              )}
+                              size="tiny"
+                            />
                           </span>
                         )}
                         <span className="flex-1 min-w-0">

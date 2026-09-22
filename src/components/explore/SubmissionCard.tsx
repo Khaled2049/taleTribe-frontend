@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { ICompetitionSubmission } from "@/types/ICompetitionSubmission";
+import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 
 interface SubmissionCardProps {
   submission: ICompetitionSubmission;
@@ -41,7 +42,13 @@ const SubmissionCard: React.FC<SubmissionCardProps> = ({
           className="w-16 h-24 object-cover shrink-0 rounded-ns bg-ns-surface"
         />
       ) : (
-        <div className="w-16 h-24 shrink-0 rounded-ns bg-ns-surface" />
+        <div className="h-24 w-16 shrink-0 overflow-hidden rounded-ns shadow-ns-sm">
+          <BookCoverFallback
+            title={submission.storyTitle}
+            author={submission.storyAuthorName ?? "Anonymous"}
+            size="small"
+          />
+        </div>
       )}
 
       <div className="flex-1 min-w-0">

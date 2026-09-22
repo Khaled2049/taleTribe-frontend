@@ -18,6 +18,7 @@ import { BookPickerDialog } from "@/components/common/BookPicker";
 import { hasBook } from "@/utils/bookMapping";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import {
   Dialog,
   DialogContent,
@@ -227,13 +228,11 @@ const BookClubDetails: React.FC = () => {
                     className="w-24 sm:w-32 aspect-[2/3] object-cover rounded-ns-lg shadow-ns-xl ring-1 ring-ns-border/40 shrink-0"
                   />
                 ) : (
-                  <div
-                    className="w-24 sm:w-32 aspect-[2/3] shrink-0 rounded-ns-lg bg-ns-surface border border-ns-border flex items-center justify-center"
-                    aria-hidden="true"
-                  >
-                    <span className="font-heading text-4xl text-ns-ink-muted">
-                      {book.volumeInfo.title.charAt(0).toUpperCase()}
-                    </span>
+                  <div className="w-24 sm:w-32 aspect-[2/3] shrink-0 overflow-hidden rounded-ns-lg border border-ns-border shadow-ns-xl">
+                    <BookCoverFallback
+                      title={book.volumeInfo.title}
+                      author={book.volumeInfo.authors?.join(", ")}
+                    />
                   </div>
                 )}
 

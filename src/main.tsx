@@ -49,8 +49,6 @@ const HowCompetitionsWork = lazy(
 );
 
 const HelpSupport = lazy(() => import("./routes/Help/HelpSupport"));
-const DemoEditorPage = lazy(() => import("./routes/Demo/DemoEditorPage"));
-const DemoEditorIndex = lazy(() => import("./routes/Demo/DemoEditorIndex"));
 const PublicUserProfile = lazy(
   () => import("./routes/Profile/PublicUserProfile"),
 );
@@ -345,48 +343,6 @@ const router = createBrowserRouter([
             <StoryDetail />
           </Suspense>
         ),
-      },
-      {
-        path: "/try",
-        element: (
-          <Suspense fallback={<LoadingFallback />}>
-            <DemoEditorPage />
-          </Suspense>
-        ),
-        children: [
-          {
-            index: true,
-            element: (
-              <Suspense fallback={<LoadingFallback />}>
-                <DemoEditorIndex />
-              </Suspense>
-            ),
-          },
-          {
-            path: "characters",
-            element: (
-              <Suspense fallback={<LoadingFallback />}>
-                <Characters />
-              </Suspense>
-            ),
-          },
-          {
-            path: "plot",
-            element: (
-              <Suspense fallback={<LoadingFallback />}>
-                <Plot />
-              </Suspense>
-            ),
-          },
-          {
-            path: "places",
-            element: (
-              <Suspense fallback={<LoadingFallback />}>
-                <Places />
-              </Suspense>
-            ),
-          },
-        ],
       },
     ],
   },

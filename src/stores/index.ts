@@ -6,7 +6,6 @@
  * - Persist preferences only (theme, reader settings), never auth or chat data.
  */
 export * from "./authStore";
-export * from "./demoStore";
 export * from "./focusModeStore";
 export * from "./readerSettingsStore";
 export * from "./themeStore";
