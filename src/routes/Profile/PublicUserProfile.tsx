@@ -8,6 +8,7 @@ import {
   Camera,
   Loader2,
   MapPin,
+  PenLine,
   User,
   UserX,
 } from "lucide-react";
@@ -138,133 +139,159 @@ const PublicUserProfile: React.FC = () => {
   return (
     <div className="min-h-screen bg-ns-bg">
       <SEOHead title={`@${username}'s profile`} noindex />
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
-        {/* ── Header ── */}
-        <header className="pb-8 border-b border-ns-border animate-ns-fade-in">
-          {/* Avatar on top */}
-          <div className="w-28 h-28 sm:w-32 sm:h-32 mx-auto">
-            <div className="relative w-full h-full rounded-full bg-ns-surface border border-ns-border shadow-ns-sm overflow-hidden flex items-center justify-center group cursor-default">
-              {photoURL ? (
-                <img
-                  src={photoURL}
-                  alt={username}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <User className="w-12 h-12 text-ns-ink-muted" />
-              )}
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+        <header className="relative animate-ns-fade-in overflow-hidden border-b border-ns-border pb-10 sm:pb-12">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-ns-accent-subtle blur-3xl"
+          />
 
-              {isSelf && (
-                <>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="hidden"
-                    onChange={handlePhotoSelected}
+          <div className="relative grid gap-7 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center sm:gap-9">
+            <div>
+              <div className="group relative mx-auto flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border border-ns-border bg-ns-surface shadow-ns-sm sm:mx-0 sm:h-32 sm:w-32">
+                {photoURL ? (
+                  <img
+                    src={photoURL}
+                    alt={username}
+                    className="h-full w-full object-cover"
                   />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={photoUploading}
-                    aria-label="Change profile photo"
-                    className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity disabled:cursor-not-allowed"
+                ) : (
+                  <User className="h-11 w-11 text-ns-ink-muted" />
+                )}
+
+                {isSelf && (
+                  <>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={handlePhotoSelected}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={photoUploading}
+                      aria-label="Change profile photo"
+                      className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed"
+                    >
+                      {photoUploading ? (
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      ) : (
+                        <Camera className="h-6 w-6" />
+                      )}
+                    </button>
+                    <span className="pointer-events-none absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-ns-bg bg-ns-accent text-white transition-transform group-hover:scale-0">
+                      {photoUploading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Camera className="h-3.5 w-3.5" />
+                      )}
+                    </span>
+                  </>
+                )}
+              </div>
+              {isSelf && photoError && (
+                <p className="mt-3 text-center font-ui text-xs text-ns-destructive sm:text-left">
+                  {photoError}
+                </p>
+              )}
+            </div>
+
+            <div className="min-w-0 text-center sm:text-left">
+              <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.2em] text-ns-accent">
+                {isSelf ? "Your public profile" : "TheTaleTribe writer"}
+              </p>
+              <h1 className="mt-3 break-words font-heading text-[2.7rem] font-light leading-[0.95] text-ns-ink sm:text-6xl">
+                <span className="text-ns-ink-muted">@</span>
+                {username}
+              </h1>
+              {fullName && (
+                <p className="mt-3 font-body text-lg text-ns-ink-secondary">
+                  {fullName}
+                </p>
+              )}
+
+              {metaItems.length > 0 && (
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 sm:justify-start">
+                  {metaItems.map(({ icon: Icon, label }) => (
+                    <span
+                      key={label}
+                      className="inline-flex items-center gap-1.5 font-ui text-xs text-ns-ink-secondary"
+                    >
+                      <Icon className="h-3.5 w-3.5 text-ns-ink-muted" />
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {!isSelf && userId && (
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
+                  <FollowButton targetId={userId} />
+                  <Link
+                    to={`/guestbook/${userId}`}
+                    className="group inline-flex items-center gap-2 border-b border-ns-border py-2 font-ui text-[13px] font-medium text-ns-ink no-underline transition-colors hover:border-ns-accent hover:text-ns-accent"
                   >
-                    {photoUploading ? (
-                      <Loader2 className="w-6 h-6 animate-spin" />
-                    ) : (
-                      <Camera className="w-6 h-6" />
-                    )}
-                  </button>
-                </>
+                    <BookMarked className="h-3.5 w-3.5 text-ns-ink-muted" />
+                    {`Sign @${username}'s guestbook`}
+                    <ArrowRight className="h-3.5 w-3.5 text-ns-ink-muted transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                </div>
               )}
             </div>
           </div>
 
-          {isSelf && photoError && (
-            <p className="mt-2 text-center text-xs font-ui text-ns-destructive">
-              {photoError}
-            </p>
-          )}
-
-          {/* Identity */}
-          <div className="flex items-baseline gap-3 flex-wrap mt-5">
-            <h1 className="font-heading text-3xl sm:text-4xl text-ns-ink leading-none">
-              @{username}
-            </h1>
-            {fullName && (
-              <span className="font-body text-base text-ns-ink-secondary">
-                {fullName}
-              </span>
-            )}
-          </div>
-
-          {metaItems.length > 0 && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3">
-              {metaItems.map(({ icon: Icon, label }) => (
-                <span
-                  key={label}
-                  className="inline-flex items-center gap-1.5 font-ui text-[13px] text-ns-ink-secondary"
-                >
-                  <Icon className="w-3.5 h-3.5 text-ns-ink-muted" />
-                  {label}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {!isSelf && userId && (
-            <div className="mt-5">
-              <FollowButton targetId={userId} />
-            </div>
-          )}
-
-          {!isSelf && userId && (
-            <Link
-              to={`/guestbook/${userId}`}
-              className="group mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-ns border border-ns-border bg-ns-surface font-ui text-[13px] font-medium text-ns-ink no-underline hover:border-ns-border-strong hover:bg-ns-surface-hover transition-colors"
-            >
-              <BookMarked className="w-3.5 h-3.5 text-ns-ink-muted" />
-              {`Sign @${username}'s guestbook`}
-              <ArrowRight className="w-3.5 h-3.5 text-ns-ink-muted group-hover:translate-x-0.5 transition-transform" />
-            </Link>
-          )}
-
-          {/* Bio / details below */}
           {isSelf ? (
-            <div className="mt-6 space-y-4">
-              <EditableField
-                label="Username"
-                value={username || ""}
-                onSave={(v) => updateProfile({ username: v })}
-                placeholder="your_username"
-                maxLength={20}
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
+            <section className="mt-10 grid gap-7 border-t border-ns-border pt-9 lg:grid-cols-[minmax(11rem,0.34fr)_minmax(0,1fr)] lg:gap-14">
+              <div>
+                <div className="flex items-center gap-2 font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-ns-accent">
+                  <PenLine className="h-3.5 w-3.5" />
+                  Byline
+                </div>
+                <h2 className="mt-3 font-heading text-[1.85rem] font-medium leading-none text-ns-ink">
+                  Public identity
+                </h2>
+                <p className="mt-3 max-w-xs font-body text-sm leading-relaxed text-ns-ink-secondary">
+                  Shape the name and details readers see alongside your work.
+                  Select any line to edit it.
+                </p>
+              </div>
+
+              <div className="grid min-w-0 gap-x-8 gap-y-7 sm:grid-cols-2">
+                <EditableField
+                  className="sm:col-span-2"
+                  label="Username"
+                  prefix="@"
+                  hint="Your unique public handle across stories and community spaces."
+                  value={username || ""}
+                  onSave={(v) => updateProfile({ username: v })}
+                  placeholder="your_username"
+                  maxLength={20}
+                />
                 <EditableField
                   label="First name"
                   value={firstName || ""}
                   onSave={(v) => updateProfile({ firstName: v })}
-                  placeholder="First name"
+                  placeholder="Add your first name"
                   maxLength={50}
                 />
                 <EditableField
                   label="Last name"
                   value={lastName || ""}
                   onSave={(v) => updateProfile({ lastName: v })}
-                  placeholder="Last name"
+                  placeholder="Add your last name"
                   maxLength={50}
                 />
-              </div>
-              <EditableField
-                label="Bio"
-                value={bio || ""}
-                onSave={(v) => updateProfile({ bio: v })}
-                placeholder="Write something about yourself…"
-                multiline
-                maxLength={300}
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
+                <EditableField
+                  className="sm:col-span-2"
+                  label="Bio"
+                  value={bio || ""}
+                  onSave={(v) => updateProfile({ bio: v })}
+                  placeholder="Tell readers who you are and what draws you to writing…"
+                  multiline
+                  maxLength={300}
+                />
                 <EditableField
                   label="Occupation"
                   value={occupation || ""}
@@ -279,29 +306,35 @@ const PublicUserProfile: React.FC = () => {
                   placeholder="Where are you based?"
                   maxLength={50}
                 />
+                <EditableField
+                  className="sm:col-span-2"
+                  label="What I write about"
+                  value={writingInterests || ""}
+                  onSave={(v) => updateProfile({ writingInterests: v })}
+                  placeholder="Themes, genres, questions, or worlds you return to…"
+                  multiline
+                  maxLength={200}
+                />
               </div>
-              <EditableField
-                label="What I write about"
-                value={writingInterests || ""}
-                onSave={(v) => updateProfile({ writingInterests: v })}
-                placeholder="What do you want to write about?"
-                multiline
-                maxLength={200}
-              />
-            </div>
+            </section>
           ) : (
-            <div className="mt-6 space-y-2 max-w-prose">
-              {profile.bio && (
-                <p className="font-body text-[15px] text-ns-ink-secondary leading-relaxed">
-                  {profile.bio}
-                </p>
-              )}
-              {writingInterests && (
-                <p className="font-body text-[13px] text-ns-ink-muted leading-relaxed">
-                  Writes about: {writingInterests}
-                </p>
-              )}
-            </div>
+            (profile.bio || writingInterests) && (
+              <div className="mt-9 max-w-2xl border-t border-ns-border pt-7">
+                {profile.bio && (
+                  <p className="font-body text-[17px] leading-relaxed text-ns-ink-secondary">
+                    {profile.bio}
+                  </p>
+                )}
+                {writingInterests && (
+                  <p className="mt-4 font-ui text-xs leading-relaxed text-ns-ink-muted">
+                    <span className="mr-2 font-semibold uppercase tracking-[0.12em] text-ns-accent">
+                      Writes about
+                    </span>
+                    {writingInterests}
+                  </p>
+                )}
+              </div>
+            )
           )}
         </header>
 
@@ -309,7 +342,10 @@ const PublicUserProfile: React.FC = () => {
         {isSelf && (
           <Suspense
             fallback={
-              <div className="mt-6 h-40 rounded-ns-xl border border-ns-border animate-pulse bg-ns-surface" />
+              <div className="mt-10 grid gap-7 border-y border-ns-border py-11 lg:grid-cols-[minmax(11rem,0.34fr)_minmax(0,1fr)] lg:gap-14">
+                <div className="h-24 animate-pulse bg-ns-surface" />
+                <div className="h-40 animate-pulse bg-ns-surface" />
+              </div>
             }
           >
             <OwnerSettings />
