@@ -116,13 +116,19 @@ export async function getUserAiSettings(
     const settings = doc.data()?.aiSettings;
     if (!settings?.encryptedApiKey) return null;
 
+    const provider = canonicalProvider(settings.provider);
+    if (!provider) {
+      logger.warn("Ignoring AI settings with an unsupported provider", { uid });
+      return null;
+    }
+
     const apiKey = decryptApiKey(
       settings.encryptedApiKey,
       settings.iv,
       settings.authTag,
     );
     return {
-      provider: canonicalProvider(settings.provider),
+      provider,
       api_key: apiKey,
       model: settings.model || undefined,
     };
@@ -138,7 +144,8 @@ export async function getAiSettingsSummary(
   const db = getFirestore();
   const snapshot = await db.collection("users").doc(uid).get();
   const settings = snapshot.data()?.aiSettings;
-  if (!settings?.encryptedApiKey) {
+  const provider = canonicalProvider(settings?.provider);
+  if (!settings?.encryptedApiKey || !provider) {
     return {
       active: false,
       provider: null,
@@ -150,7 +157,7 @@ export async function getAiSettingsSummary(
   const timestamp = settings.validatedAt;
   return {
     active: true,
-    provider: canonicalProvider(settings.provider),
+    provider,
     model: typeof settings.model === "string" && settings.model ? settings.model : null,
     keyHint: typeof settings.keyHint === "string" ? settings.keyHint : null,
     validatedAt:
@@ -162,10 +169,11 @@ export async function getAiSettingsSummary(
 
 export function canonicalProvider(
   provider: unknown,
-): ProviderConfig["provider"] {
+): ProviderConfig["provider"] | null {
   if (provider === "claude" || provider === "anthropic") return "anthropic";
   if (provider === "openai") return "openai";
-  return "gemini";
+  if (provider === "gemini") return "gemini";
+  return null;
 }
 
 export async function setUserAiSettings(
