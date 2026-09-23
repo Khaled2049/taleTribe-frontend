@@ -241,9 +241,16 @@ jobs:
       - name: Deploy
         run: |
           firebase deploy \
-            --only hosting,functions,firestore:rules,firestore:indexes,storage \
+            --only hosting,functions,firestore:rules,storage \
             --project=${{ env.PROJECT_ID }} \
             --force
+
+      - name: Deploy Firestore indexes without deleting unlisted overrides
+        run: |
+          firebase deploy \
+            --only firestore:indexes \
+            --project=${{ env.PROJECT_ID }} \
+            --non-interactive
 
       - name: Wait for deployment to stabilize
         run: sleep 10
