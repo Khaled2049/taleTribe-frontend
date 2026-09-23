@@ -1,7 +1,7 @@
 // Shared AI provider / model config used by the Settings page and the
 // signup wizard's optional BYOK step.
 
-export type ProviderKey = "gemini" | "claude" | "openai";
+export type ProviderKey = "gemini" | "anthropic" | "openai";
 
 export interface ProviderMeta {
   label: string;
@@ -19,7 +19,7 @@ export const PROVIDERS: Record<ProviderKey, ProviderMeta> = {
     border: "border-blue-500/40",
     bg: "bg-blue-500/5",
   },
-  claude: {
+  anthropic: {
     label: "Claude",
     description: "Anthropic's Claude — nuanced, literary",
     accent: "text-purple-500",
@@ -40,7 +40,7 @@ export const MODELS: Record<ProviderKey, { value: string; label: string }[]> = {
     { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash — Fast" },
     { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro — Quality" },
   ],
-  claude: [
+  anthropic: [
     { value: "claude-haiku-4-5-20251001", label: "Claude Haiku — Fast" },
     { value: "claude-sonnet-4-6", label: "Claude Sonnet — Balanced" },
     { value: "claude-opus-4-7", label: "Claude Opus — Quality" },
