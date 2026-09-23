@@ -1,18 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
-  Bot,
-  Check,
   CheckCircle2,
   ChevronDown,
   Eye,
   EyeOff,
-  KeyRound,
   Loader2,
   LockKeyhole,
-  ShieldCheck,
-  Trash2,
-  Zap,
 } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
@@ -29,12 +23,17 @@ import {
   type AiSettingsSummary,
 } from "@/cloudFunctions/aiSettings";
 import {
-  AI_SETTINGS_COPY,
   PLATFORM_AI_DAILY_LIMIT,
   getPlatformAiRemaining,
   getTodayPlatformAiUsage,
 } from "@/config/aiQuota";
 import { MODELS, PROVIDERS, type ProviderKey } from "@/config/aiProviders";
+import {
+  FIELD_LABEL,
+  Segmented,
+  SettingsPanel,
+  StatusDot,
+} from "@/routes/Profile/SettingsPanel";
 
 interface QuotaSnapshot {
   aiUsage: number;
@@ -89,7 +88,6 @@ const AiSettings = () => {
       catalog.providers[0],
     [catalog, provider],
   );
-  const selectedModel = providerEntry?.models.find((item) => item.id === model);
   const effectiveAiUsage = quotaSnapshot?.aiUsage ?? user?.aiUsage;
   const effectiveLastAiUsageDate =
     quotaSnapshot?.lastAiUsageDate ?? user?.lastAiUsageDate;
@@ -106,6 +104,8 @@ const AiSettings = () => {
       ? Math.min(100, Math.round((usedToday / PLATFORM_AI_DAILY_LIMIT) * 100))
       : 0;
   const remainingPercent = 100 - usagePercent;
+  const hasSavedKeyForProvider =
+    settings.active && settings.provider === provider;
   const automaticModel = providerEntry?.models.find(
     (item) => item.id === providerEntry.default_model,
   );
@@ -183,8 +183,7 @@ const AiSettings = () => {
   };
 
   const handleSave = async () => {
-    const canReuseSavedKey = settings.active && settings.provider === provider;
-    if (!apiKey.trim() && !canReuseSavedKey) {
+    if (!apiKey.trim() && !hasSavedKeyForProvider) {
       setSaveState("error");
       setMessage("Enter an API key for this provider.");
       return;
@@ -207,7 +206,7 @@ const AiSettings = () => {
       setSettings(next);
       setApiKey("");
       setSaveState("saved");
-      setMessage("Connection verified and saved.");
+      setMessage("Verified and saved.");
     } catch (error) {
       setSaveState("error");
       setMessage(
@@ -226,7 +225,7 @@ const AiSettings = () => {
       setSettings(EMPTY_SETTINGS);
       setApiKey("");
       setSaveState("idle");
-      setMessage("Switched back to TheTaleTribe AI.");
+      setMessage("Disconnected. Using TTT AI.");
     } catch (error) {
       setSaveState("error");
       setMessage(
@@ -240,279 +239,179 @@ const AiSettings = () => {
   };
 
   return (
-    <section className="grid gap-7 border-b border-ns-border py-9 lg:grid-cols-[minmax(11rem,0.34fr)_minmax(0,1fr)] lg:gap-14 lg:py-11">
-      <header>
-        <div className="flex items-center gap-2 font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-ns-accent">
-          <Bot className="h-3.5 w-3.5" />
-          Intelligence
-        </div>
-        <h2 className="mt-3 font-heading text-[1.85rem] font-medium leading-none text-ns-ink">
-          AI provider
-        </h2>
-        <p className="mt-3 max-w-xs font-body text-sm leading-relaxed text-ns-ink-secondary">
-          Choose the model that helps shape your stories. Use the house account
-          or connect your own key.
-        </p>
-        <div className="mt-4 flex items-center gap-2 font-ui text-[11px] font-semibold uppercase tracking-[0.08em] text-ns-ink-muted">
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${settings.active ? "bg-ns-success" : "bg-ns-accent"}`}
-          />
+    <SettingsPanel
+      title="Provider"
+      meta={
+        <StatusDot tone={loading ? "idle" : "ok"}>
           {loading
-            ? "Checking status"
+            ? "Checking"
             : settings.active
-              ? "Own key connected"
-              : "Platform AI"}
-        </div>
-      </header>
+              ? `Your ${connectedProvider?.label ?? "key"}`
+              : "TTT AI"}
+        </StatusDot>
+      }
+    >
+      <Segmented
+        label="AI provider"
+        value={provider}
+        options={catalog.providers.map((item) => ({
+          value: item.id,
+          label: item.label,
+        }))}
+        onChange={selectProvider}
+        disabled={loading || isBusy}
+      />
 
-      <div className="min-w-0">
-        <div
-          className="flex gap-6 overflow-x-auto border-b border-ns-border"
-          role="radiogroup"
-          aria-label="AI provider"
-        >
-          {catalog.providers.map((item) => {
-            const active = item.id === provider;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                disabled={loading || isBusy}
-                onClick={() => selectProvider(item.id)}
-                className={`group relative flex shrink-0 items-center gap-2.5 pb-3 font-ui text-sm font-semibold transition-colors disabled:cursor-wait disabled:opacity-50 ${active ? "text-ns-ink" : "text-ns-ink-muted hover:text-ns-ink"}`}
-              >
-                <span
-                  className={`flex h-7 w-7 items-center justify-center rounded-full font-heading text-sm transition-colors ${active ? "bg-ns-accent text-white" : "bg-ns-surface text-ns-ink-secondary group-hover:bg-ns-surface-hover"}`}
-                >
-                  {active ? (
-                    <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-                  ) : (
-                    item.label.charAt(0)
-                  )}
-                </span>
-                {item.label}
-                {active && (
-                  <span className="absolute inset-x-0 -bottom-px h-0.5 bg-ns-accent" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="mt-5 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
-          <p className="font-body text-[15px] text-ns-ink-secondary">
-            {providerEntry?.description}
-          </p>
-          <span className="shrink-0 font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-ns-ink-muted">
-            {providerEntry?.models.length ?? 0} models available
-          </span>
-        </div>
-
-        <div className="mt-5 grid gap-5 md:grid-cols-2">
-          <label className="block" htmlFor="ai-provider-model">
-            <span className="mb-2 block font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-ns-ink-muted">
-              Model
-            </span>
-            <div className="relative">
-              <select
-                id="ai-provider-model"
-                value={model}
-                onChange={(event) => {
-                  setModel(event.target.value);
-                  setSaveState("idle");
-                  setMessage("");
-                }}
-                disabled={loading || isBusy}
-                className="h-11 w-full appearance-none border-0 border-b border-ns-border bg-transparent px-0 pr-8 font-ui text-sm text-ns-ink outline-none transition-colors focus:border-ns-accent focus:ring-0 disabled:cursor-wait disabled:opacity-50 dark:[color-scheme:dark]"
-              >
-                <option value="">
-                  Automatic ·{" "}
-                  {automaticModel?.label ?? providerEntry?.default_model}
-                </option>
-                {providerEntry?.models.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 text-ns-ink-muted" />
-            </div>
-            <span className="mt-2 block min-h-5 font-body text-xs leading-relaxed text-ns-ink-muted">
-              {selectedModel?.description ||
-                `${automaticModel?.label ?? "The provider default"} will be selected automatically.`}
-            </span>
-          </label>
-
-          <label className="block" htmlFor="ai-provider-key">
-            <span className="mb-2 block font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-ns-ink-muted">
-              API key
-            </span>
-            <div className="relative border-b border-ns-border focus-within:border-ns-accent">
-              <KeyRound className="pointer-events-none absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2 text-ns-ink-muted" />
-              <Input
-                id="ai-provider-key"
-                type={showKey ? "text" : "password"}
-                value={apiKey}
-                onChange={(event) => {
-                  setApiKey(event.target.value);
-                  setSaveState("idle");
-                  setMessage("");
-                }}
-                placeholder={
-                  settings.active && settings.provider === provider
-                    ? `Saved key ••••${settings.keyHint ?? ""}`
-                    : `Paste your ${providerEntry?.label ?? "provider"} key`
-                }
-                className="h-11 rounded-none border-0 bg-transparent pl-7 pr-10 font-mono text-[13px] shadow-none focus-visible:border-0 focus-visible:ring-0"
-                autoComplete="off"
-                disabled={isBusy}
-              />
-              <button
-                type="button"
-                onClick={() => setShowKey((value) => !value)}
-                className="absolute inset-y-0 right-0 flex w-9 items-center justify-end text-ns-ink-muted transition-colors hover:text-ns-ink"
-                aria-label={showKey ? "Hide API key" : "Show API key"}
-              >
-                {showKey ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-            <span className="mt-2 block min-h-5 font-body text-xs leading-relaxed text-ns-ink-muted">
-              {settings.active && settings.provider === provider
-                ? "Leave blank to keep your saved key while changing models."
-                : "Encrypted before storage and never shown again."}
-            </span>
-          </label>
-        </div>
-
-        <div className="mt-6 border-y border-ns-border py-4">
-          {settings.active ? (
-            <div className="grid gap-4 sm:grid-cols-4">
-              <div>
-                <span className="font-ui text-[9px] font-semibold uppercase tracking-[0.14em] text-ns-ink-muted">
-                  Routing
-                </span>
-                <p className="mt-1 font-ui text-sm font-semibold text-ns-success">
-                  Direct
-                </p>
-              </div>
-              <div>
-                <span className="font-ui text-[9px] font-semibold uppercase tracking-[0.14em] text-ns-ink-muted">
-                  Provider
-                </span>
-                <p className="mt-1 font-ui text-sm text-ns-ink">
-                  {connectedProvider?.label ?? settings.provider}
-                </p>
-              </div>
-              <div>
-                <span className="font-ui text-[9px] font-semibold uppercase tracking-[0.14em] text-ns-ink-muted">
-                  Model
-                </span>
-                <p className="mt-1 truncate font-ui text-sm text-ns-ink">
-                  {settings.model ?? "Automatic"}
-                </p>
-              </div>
-              <div>
-                <span className="font-ui text-[9px] font-semibold uppercase tracking-[0.14em] text-ns-ink-muted">
-                  Key
-                </span>
-                <p className="mt-1 font-mono text-sm text-ns-ink">
-                  •••• {settings.keyHint ?? "saved"}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-ns-accent">
-                  <Zap className="h-4 w-4" />
-                  <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em]">
-                    Included allowance
-                  </span>
-                </div>
-                <p className="mt-2 font-heading text-3xl leading-none text-ns-ink">
-                  {requestsRemaining}
-                  <span className="ml-1.5 font-body text-sm text-ns-ink-muted">
-                    of {PLATFORM_AI_DAILY_LIMIT} requests left
-                  </span>
-                </p>
-              </div>
-              <div className="w-full sm:max-w-56">
-                <div className="h-1 overflow-hidden rounded-full bg-ns-border">
-                  <div
-                    className="h-full rounded-full bg-ns-accent transition-[width] duration-500"
-                    style={{ width: `${remainingPercent}%` }}
-                  />
-                </div>
-                <p className="mt-2 text-right font-ui text-[10px] uppercase tracking-[0.1em] text-ns-ink-muted">
-                  Resets midnight UTC
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {message && (
-          <div
-            role="status"
-            aria-live="polite"
-            className={`mt-4 flex items-start gap-2 font-ui text-sm ${saveState === "error" ? "text-ns-destructive" : "text-ns-success"}`}
-          >
-            {saveState === "error" ? (
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            ) : (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-            )}
-            <span>{message}</span>
-          </div>
-        )}
-
-        <div className="mt-5 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="flex max-w-sm items-start gap-2 font-body text-xs leading-relaxed text-ns-ink-muted">
-            <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ns-accent" />
-            Keys are encrypted at rest and sent only to the selected provider.{" "}
-            {settings.active
-              ? AI_SETTINGS_COPY.byokNoLimitHint
-              : AI_SETTINGS_COPY.platformResetHint}
-            {validatedDate ? ` Last verified ${validatedDate}.` : ""}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            {settings.active && (
-              <Button
-                variant="ghost"
-                onClick={handleRemove}
-                disabled={isBusy}
-                className="gap-2 text-ns-destructive hover:bg-transparent hover:text-ns-destructive-hover"
-              >
-                {removeState === "removing" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                Disconnect
-              </Button>
-            )}
-            <Button
-              onClick={handleSave}
-              disabled={isBusy || loading}
-              className="gap-2 px-5"
+      <div className="mt-6 space-y-5">
+        <label className="block" htmlFor="ai-provider-model">
+          <span className={FIELD_LABEL}>Model</span>
+          <div className="relative">
+            <select
+              id="ai-provider-model"
+              value={model}
+              onChange={(event) => {
+                setModel(event.target.value);
+                setSaveState("idle");
+                setMessage("");
+              }}
+              disabled={loading || isBusy}
+              className="h-10 w-full appearance-none border-0 border-b border-ns-border bg-transparent px-0 pr-8 font-ui text-sm text-ns-ink outline-none transition-colors focus:border-ns-accent focus:ring-0 disabled:cursor-wait disabled:opacity-50 dark:[color-scheme:dark]"
             >
-              {saveState === "saving" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ShieldCheck className="h-4 w-4" />
-              )}
-              {saveState === "saving" ? "Testing connection…" : "Test & save"}
-            </Button>
+              <option value="">
+                Automatic ·{" "}
+                {automaticModel?.label ?? providerEntry?.default_model}
+              </option>
+              {providerEntry?.models.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 text-ns-ink-muted" />
           </div>
+        </label>
+
+        <label className="block" htmlFor="ai-provider-key">
+          <span className={FIELD_LABEL}>API key</span>
+          <div className="relative border-b border-ns-border transition-colors focus-within:border-ns-accent">
+            <Input
+              id="ai-provider-key"
+              type={showKey ? "text" : "password"}
+              value={apiKey}
+              onChange={(event) => {
+                setApiKey(event.target.value);
+                setSaveState("idle");
+                setMessage("");
+              }}
+              placeholder={
+                hasSavedKeyForProvider
+                  ? `Saved ••••${settings.keyHint ?? ""}`
+                  : `Paste ${providerEntry?.label ?? "provider"} key`
+              }
+              className="h-10 rounded-none border-0 bg-transparent px-0 pr-9 font-mono text-[13px] shadow-none focus-visible:border-0 focus-visible:ring-0"
+              autoComplete="off"
+              disabled={isBusy}
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey((value) => !value)}
+              className="absolute inset-y-0 right-0 flex w-8 items-center justify-end text-ns-ink-muted transition-colors hover:text-ns-ink"
+              aria-label={showKey ? "Hide API key" : "Show API key"}
+            >
+              {showKey ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        </label>
+      </div>
+
+      <div className="mt-6">
+        {settings.active ? (
+          <p className="font-ui text-xs text-ns-ink-secondary">
+            {connectedProvider?.label ?? settings.provider} ·{" "}
+            {settings.model ?? "Automatic"} ·{" "}
+            <span className="font-mono">••••{settings.keyHint ?? ""}</span>
+            {validatedDate && (
+              <span className="text-ns-ink-muted">
+                {" "}
+                · verified {validatedDate}
+              </span>
+            )}
+          </p>
+        ) : (
+          <>
+            <div className="flex items-baseline justify-between gap-4 font-ui text-xs">
+              <span className="text-ns-ink-secondary">
+                <span className="font-semibold tabular-nums text-ns-ink">
+                  {requestsRemaining}
+                </span>
+                /{PLATFORM_AI_DAILY_LIMIT} requests left today
+              </span>
+              <span className="text-ns-ink-muted">Resets 00:00 UTC</span>
+            </div>
+            <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-ns-border">
+              <div
+                className="h-full rounded-full bg-ns-accent transition-[width] duration-500"
+                style={{ width: `${remainingPercent}%` }}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      {message && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`mt-4 flex items-start gap-2 font-ui text-xs ${saveState === "error" ? "text-ns-destructive" : "text-ns-success"}`}
+        >
+          {saveState === "error" ? (
+            <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" />
+          )}
+          <span>{message}</span>
+        </div>
+      )}
+
+      <div className="mt-6 flex items-center justify-between gap-4">
+        <span className="flex items-center gap-1.5 font-ui text-[11px] text-ns-ink-muted">
+          <LockKeyhole className="h-3 w-3" />
+          Encrypted at rest
+        </span>
+        <div className="flex items-center gap-1">
+          {settings.active && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRemove}
+              disabled={isBusy}
+              className="text-ns-ink-muted hover:bg-transparent hover:text-ns-destructive"
+            >
+              {removeState === "removing" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                "Disconnect"
+              )}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={isBusy || loading}
+            className="gap-2 px-4"
+          >
+            {saveState === "saving" && (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            )}
+            {saveState === "saving" ? "Testing…" : "Test & save"}
+          </Button>
         </div>
       </div>
-    </section>
+    </SettingsPanel>
   );
 };
 

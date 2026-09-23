@@ -8,7 +8,6 @@ import {
   Camera,
   Loader2,
   MapPin,
-  PenLine,
   User,
   UserX,
 } from "lucide-react";
@@ -136,6 +135,66 @@ const PublicUserProfile: React.FC = () => {
       : null,
   ].filter(Boolean) as { icon: React.ElementType; label: string }[];
 
+  const identityFields = (
+    <div className="grid gap-x-6 gap-y-6 sm:grid-cols-2">
+      <EditableField
+        className="sm:col-span-2"
+        label="Username"
+        prefix="@"
+        value={username || ""}
+        onSave={(v) => updateProfile({ username: v })}
+        placeholder="username"
+        maxLength={20}
+      />
+      <EditableField
+        label="First name"
+        value={firstName || ""}
+        onSave={(v) => updateProfile({ firstName: v })}
+        placeholder="First name"
+        maxLength={50}
+      />
+      <EditableField
+        label="Last name"
+        value={lastName || ""}
+        onSave={(v) => updateProfile({ lastName: v })}
+        placeholder="Last name"
+        maxLength={50}
+      />
+      <EditableField
+        className="sm:col-span-2"
+        label="Bio"
+        value={bio || ""}
+        onSave={(v) => updateProfile({ bio: v })}
+        placeholder="A line or two about you"
+        multiline
+        maxLength={300}
+      />
+      <EditableField
+        label="Occupation"
+        value={occupation || ""}
+        onSave={(v) => updateProfile({ occupation: v })}
+        placeholder="Occupation"
+        maxLength={50}
+      />
+      <EditableField
+        label="Location"
+        value={location || ""}
+        onSave={(v) => updateProfile({ location: v })}
+        placeholder="Location"
+        maxLength={50}
+      />
+      <EditableField
+        className="sm:col-span-2"
+        label="Writes about"
+        value={writingInterests || ""}
+        onSave={(v) => updateProfile({ writingInterests: v })}
+        placeholder="Genres, themes, worlds"
+        multiline
+        maxLength={200}
+      />
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-ns-bg">
       <SEOHead title={`@${username}'s profile`} noindex />
@@ -148,47 +207,51 @@ const PublicUserProfile: React.FC = () => {
 
           <div className="relative grid gap-7 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center sm:gap-9">
             <div>
-              <div className="group relative mx-auto flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border border-ns-border bg-ns-surface shadow-ns-sm sm:mx-0 sm:h-32 sm:w-32">
-                {photoURL ? (
-                  <img
-                    src={photoURL}
-                    alt={username}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <User className="h-11 w-11 text-ns-ink-muted" />
-                )}
-
-                {isSelf && (
-                  <>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={handlePhotoSelected}
+              <div className="group relative mx-auto h-28 w-28 sm:mx-0 sm:h-32 sm:w-32">
+                <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-ns-border bg-ns-surface shadow-ns-sm">
+                  {photoURL ? (
+                    <img
+                      src={photoURL}
+                      alt={username}
+                      className="h-full w-full object-cover"
                     />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={photoUploading}
-                      aria-label="Change profile photo"
-                      className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed"
-                    >
-                      {photoUploading ? (
-                        <Loader2 className="h-6 w-6 animate-spin" />
-                      ) : (
-                        <Camera className="h-6 w-6" />
-                      )}
-                    </button>
-                    <span className="pointer-events-none absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-ns-bg bg-ns-accent text-white transition-transform group-hover:scale-0">
-                      {photoUploading ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Camera className="h-3.5 w-3.5" />
-                      )}
-                    </span>
-                  </>
+                  ) : (
+                    <User className="h-11 w-11 text-ns-ink-muted" />
+                  )}
+
+                  {isSelf && (
+                    <>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={handlePhotoSelected}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={photoUploading}
+                        aria-label="Change profile photo"
+                        className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed"
+                      >
+                        {photoUploading ? (
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                        ) : (
+                          <Camera className="h-6 w-6" />
+                        )}
+                      </button>
+                    </>
+                  )}
+                </div>
+                {isSelf && (
+                  <span className="pointer-events-none absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-ns-bg bg-ns-accent text-white transition-transform group-hover:scale-0">
+                    {photoUploading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Camera className="h-3.5 w-3.5" />
+                    )}
+                  </span>
                 )}
               </div>
               {isSelf && photoError && (
@@ -242,113 +305,35 @@ const PublicUserProfile: React.FC = () => {
             </div>
           </div>
 
-          {isSelf ? (
-            <section className="mt-10 grid gap-7 border-t border-ns-border pt-9 lg:grid-cols-[minmax(11rem,0.34fr)_minmax(0,1fr)] lg:gap-14">
-              <div>
-                <div className="flex items-center gap-2 font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-ns-accent">
-                  <PenLine className="h-3.5 w-3.5" />
-                  Byline
-                </div>
-                <h2 className="mt-3 font-heading text-[1.85rem] font-medium leading-none text-ns-ink">
-                  Public identity
-                </h2>
-                <p className="mt-3 max-w-xs font-body text-sm leading-relaxed text-ns-ink-secondary">
-                  Shape the name and details readers see alongside your work.
-                  Select any line to edit it.
+          {!isSelf && (profile.bio || writingInterests) && (
+            <div className="mt-9 max-w-2xl border-t border-ns-border pt-7">
+              {profile.bio && (
+                <p className="font-body text-[17px] leading-relaxed text-ns-ink-secondary">
+                  {profile.bio}
                 </p>
-              </div>
-
-              <div className="grid min-w-0 gap-x-8 gap-y-7 sm:grid-cols-2">
-                <EditableField
-                  className="sm:col-span-2"
-                  label="Username"
-                  prefix="@"
-                  hint="Your unique public handle across stories and community spaces."
-                  value={username || ""}
-                  onSave={(v) => updateProfile({ username: v })}
-                  placeholder="your_username"
-                  maxLength={20}
-                />
-                <EditableField
-                  label="First name"
-                  value={firstName || ""}
-                  onSave={(v) => updateProfile({ firstName: v })}
-                  placeholder="Add your first name"
-                  maxLength={50}
-                />
-                <EditableField
-                  label="Last name"
-                  value={lastName || ""}
-                  onSave={(v) => updateProfile({ lastName: v })}
-                  placeholder="Add your last name"
-                  maxLength={50}
-                />
-                <EditableField
-                  className="sm:col-span-2"
-                  label="Bio"
-                  value={bio || ""}
-                  onSave={(v) => updateProfile({ bio: v })}
-                  placeholder="Tell readers who you are and what draws you to writing…"
-                  multiline
-                  maxLength={300}
-                />
-                <EditableField
-                  label="Occupation"
-                  value={occupation || ""}
-                  onSave={(v) => updateProfile({ occupation: v })}
-                  placeholder="What do you do?"
-                  maxLength={50}
-                />
-                <EditableField
-                  label="Location"
-                  value={location || ""}
-                  onSave={(v) => updateProfile({ location: v })}
-                  placeholder="Where are you based?"
-                  maxLength={50}
-                />
-                <EditableField
-                  className="sm:col-span-2"
-                  label="What I write about"
-                  value={writingInterests || ""}
-                  onSave={(v) => updateProfile({ writingInterests: v })}
-                  placeholder="Themes, genres, questions, or worlds you return to…"
-                  multiline
-                  maxLength={200}
-                />
-              </div>
-            </section>
-          ) : (
-            (profile.bio || writingInterests) && (
-              <div className="mt-9 max-w-2xl border-t border-ns-border pt-7">
-                {profile.bio && (
-                  <p className="font-body text-[17px] leading-relaxed text-ns-ink-secondary">
-                    {profile.bio}
-                  </p>
-                )}
-                {writingInterests && (
-                  <p className="mt-4 font-ui text-xs leading-relaxed text-ns-ink-muted">
-                    <span className="mr-2 font-semibold uppercase tracking-[0.12em] text-ns-accent">
-                      Writes about
-                    </span>
-                    {writingInterests}
-                  </p>
-                )}
-              </div>
-            )
+              )}
+              {writingInterests && (
+                <p className="mt-4 font-ui text-xs leading-relaxed text-ns-ink-muted">
+                  <span className="mr-2 font-semibold uppercase tracking-[0.12em] text-ns-accent">
+                    Writes about
+                  </span>
+                  {writingInterests}
+                </p>
+              )}
+            </div>
           )}
         </header>
 
-        {/* Owner-only settings — hidden from other viewers */}
         {isSelf && (
           <Suspense
             fallback={
-              <div className="mt-10 grid gap-7 border-y border-ns-border py-11 lg:grid-cols-[minmax(11rem,0.34fr)_minmax(0,1fr)] lg:gap-14">
-                <div className="h-24 animate-pulse bg-ns-surface" />
-                <div className="h-40 animate-pulse bg-ns-surface" />
+              <div className="mt-12 grid gap-12 lg:grid-cols-2 lg:gap-16">
+                <div className="h-96 animate-pulse rounded-ns bg-ns-surface" />
+                <div className="h-96 animate-pulse rounded-ns bg-ns-surface" />
               </div>
             }
           >
-            <OwnerSettings />
+            <OwnerSettings identity={identityFields} />
           </Suspense>
         )}
       </div>

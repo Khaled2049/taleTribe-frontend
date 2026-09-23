@@ -14,7 +14,7 @@ import { TALE_DECIMALS, TALE_SYMBOL, type MinorUnits } from "@/types/IToken";
  * inline span used elsewhere) but needs its own layout, so it isn't reused
  * directly.
  */
-export function SidebarBalanceCard({ bare = false }: { bare?: boolean }) {
+export function SidebarBalanceCard() {
   const { user } = useAuthContext();
   const userId = user?.uid;
   const { data, isLoading } = useTokenBalanceQuery(userId);
@@ -57,31 +57,20 @@ export function SidebarBalanceCard({ bare = false }: { bare?: boolean }) {
   };
 
   return (
-    <div
-      className={
-        bare
-          ? "flex flex-col gap-4 border-y border-ns-border py-5 sm:flex-row sm:items-end sm:justify-between"
-          : "flex flex-col gap-2 rounded-ns-lg border border-ns-border bg-ns-elevated p-4"
-      }
-    >
-      <div>
-        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-ns-ink-muted">
-          Your balance
+    <div className="flex items-end justify-between gap-4">
+      <div className="flex items-baseline gap-1.5">
+        <span className="font-heading text-3xl font-light leading-none text-ns-ink tabular-nums">
+          {isLoading || !wholeAmount ? "—" : wholeAmount}
         </span>
-        <div className="mt-2 flex items-baseline gap-1.5">
-          <span className="font-heading text-[30px] leading-none text-ns-ink tabular-nums">
-            {isLoading || !wholeAmount ? "—" : wholeAmount}
-          </span>
-          <span className="font-ui text-sm font-semibold text-ns-gold-bright">
-            {symbol}
-          </span>
-        </div>
+        <span className="font-ui text-xs font-semibold text-ns-gold-bright">
+          {symbol}
+        </span>
       </div>
       <button
         type="button"
         onClick={handleClaim}
         disabled={claimFaucet.isPending}
-        className="self-start font-ui text-xs font-semibold text-ns-accent transition-colors hover:text-ns-accent-hover disabled:opacity-40"
+        className="font-ui text-xs font-semibold text-ns-accent transition-colors hover:text-ns-accent-hover disabled:opacity-40"
       >
         {claimFaucet.isPending ? "Claiming…" : "Claim daily"}
       </button>
