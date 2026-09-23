@@ -57,15 +57,12 @@ export function SidebarBalanceCard() {
   };
 
   return (
-    <div className="flex flex-col gap-2 rounded-ns-lg border border-ns-border bg-ns-elevated p-4">
-      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-ns-ink-muted">
-        Your balance
-      </span>
+    <div className="flex items-end justify-between gap-4">
       <div className="flex items-baseline gap-1.5">
-        <span className="font-heading text-[30px] leading-none text-ns-ink tabular-nums">
+        <span className="font-heading text-3xl font-light leading-none text-ns-ink tabular-nums">
           {isLoading || !wholeAmount ? "—" : wholeAmount}
         </span>
-        <span className="font-ui text-sm font-semibold text-ns-gold-bright">
+        <span className="font-ui text-xs font-semibold text-ns-gold-bright">
           {symbol}
         </span>
       </div>
@@ -73,7 +70,7 @@ export function SidebarBalanceCard() {
         type="button"
         onClick={handleClaim}
         disabled={claimFaucet.isPending}
-        className="self-start font-ui text-xs font-semibold text-ns-accent hover:text-ns-accent-hover disabled:opacity-40 transition-colors"
+        className="font-ui text-xs font-semibold text-ns-accent transition-colors hover:text-ns-accent-hover disabled:opacity-40"
       >
         {claimFaucet.isPending ? "Claiming…" : "Claim daily"}
       </button>

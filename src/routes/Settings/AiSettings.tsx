@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Bot,
-  Key,
-  Zap,
-  CheckCircle2,
   AlertCircle,
-  Loader2,
-  Trash2,
+  CheckCircle2,
+  ChevronDown,
   Eye,
   EyeOff,
+  Loader2,
+  LockKeyhole,
 } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
@@ -17,83 +15,150 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { firestore } from "@novelsync/platform-auth";
 import {
   deleteAiSettings,
+  getAiProviderCatalog,
+  getAiSettings,
   saveAiSettings,
-  validateAiKey,
+  type AiProvider,
+  type AiProviderCatalog,
+  type AiSettingsSummary,
 } from "@/cloudFunctions/aiSettings";
 import {
-  AI_SETTINGS_COPY,
   PLATFORM_AI_DAILY_LIMIT,
   getPlatformAiRemaining,
   getTodayPlatformAiUsage,
 } from "@/config/aiQuota";
-import { PROVIDERS, MODELS, type ProviderKey } from "@/config/aiProviders";
+import { MODELS, PROVIDERS, type ProviderKey } from "@/config/aiProviders";
+import {
+  FIELD_LABEL,
+  Segmented,
+  SettingsPanel,
+  StatusDot,
+} from "@/routes/Profile/SettingsPanel";
 
 interface QuotaSnapshot {
   aiUsage: number;
   lastAiUsageDate: string;
 }
 
-// ── Component ──────────────────────────────────────────────────────────────
+const FALLBACK_CATALOG: AiProviderCatalog = {
+  version: 1,
+  providers: (Object.keys(PROVIDERS) as ProviderKey[]).map((id) => ({
+    id,
+    ...PROVIDERS[id],
+    default_model: MODELS[id][0].value,
+    models: MODELS[id].map((model) => ({
+      id: model.value,
+      label: model.label,
+      description: "",
+      tier: "standard",
+      capabilities: ["text"],
+    })),
+  })),
+};
+
+const EMPTY_SETTINGS: AiSettingsSummary = {
+  active: false,
+  provider: null,
+  model: null,
+  keyHint: null,
+  validatedAt: null,
+};
+
 const AiSettings = () => {
   const { user } = useAuthContext();
-
-  const [provider, setProvider] = useState<ProviderKey>("gemini");
-  const [model, setModel] = useState<string>(MODELS.gemini[0].value);
+  const [catalog, setCatalog] = useState(FALLBACK_CATALOG);
+  const [settings, setSettings] = useState<AiSettingsSummary>(EMPTY_SETTINGS);
+  const [provider, setProvider] = useState<AiProvider>("gemini");
+  const [model, setModel] = useState<string>("");
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
-
-  const [testState, setTestState] = useState<
-    "idle" | "testing" | "ok" | "fail"
-  >("idle");
-  const [testError, setTestError] = useState("");
-
+  const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const [removeState, setRemoveState] = useState<"idle" | "removing">("idle");
-
-  // Track local BYOK status (mirrors user.hasCustomAiProvider but updated on save/remove)
-  const [isActive, setIsActive] = useState(!!user?.hasCustomAiProvider);
+  const [message, setMessage] = useState("");
   const [quotaSnapshot, setQuotaSnapshot] = useState<QuotaSnapshot | null>(
     null,
   );
 
+  const providerEntry = useMemo(
+    () =>
+      catalog.providers.find((item) => item.id === provider) ??
+      catalog.providers[0],
+    [catalog, provider],
+  );
   const effectiveAiUsage = quotaSnapshot?.aiUsage ?? user?.aiUsage;
   const effectiveLastAiUsageDate =
     quotaSnapshot?.lastAiUsageDate ?? user?.lastAiUsageDate;
-  const usedToday = useMemo(
-    () => getTodayPlatformAiUsage(effectiveAiUsage, effectiveLastAiUsageDate),
-    [effectiveAiUsage, effectiveLastAiUsageDate],
+  const usedToday = getTodayPlatformAiUsage(
+    effectiveAiUsage,
+    effectiveLastAiUsageDate,
   );
-  const requestsRemaining = useMemo(
-    () => getPlatformAiRemaining(effectiveAiUsage, effectiveLastAiUsageDate),
-    [effectiveAiUsage, effectiveLastAiUsageDate],
+  const requestsRemaining = getPlatformAiRemaining(
+    effectiveAiUsage,
+    effectiveLastAiUsageDate,
   );
-  const usagePercent = useMemo(() => {
-    if (PLATFORM_AI_DAILY_LIMIT <= 0) return 0;
-    return Math.min(
-      100,
-      Math.round((usedToday / PLATFORM_AI_DAILY_LIMIT) * 100),
+  const usagePercent =
+    PLATFORM_AI_DAILY_LIMIT > 0
+      ? Math.min(100, Math.round((usedToday / PLATFORM_AI_DAILY_LIMIT) * 100))
+      : 0;
+  const remainingPercent = 100 - usagePercent;
+  const hasSavedKeyForProvider =
+    settings.active && settings.provider === provider;
+  const automaticModel = providerEntry?.models.find(
+    (item) => item.id === providerEntry.default_model,
+  );
+  const connectedProvider = catalog.providers.find(
+    (item) => item.id === settings.provider,
+  );
+  const isBusy = saveState === "saving" || removeState === "removing";
+  const validatedAt = settings.validatedAt
+    ? new Date(settings.validatedAt)
+    : null;
+  const validatedDate =
+    validatedAt && !Number.isNaN(validatedAt.getTime())
+      ? new Intl.DateTimeFormat(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }).format(validatedAt)
+      : null;
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.allSettled([getAiProviderCatalog(), getAiSettings()]).then(
+      (results) => {
+        if (!mounted) return;
+        const [catalogResult, settingsResult] = results;
+        const nextCatalog =
+          catalogResult.status === "fulfilled"
+            ? catalogResult.value
+            : FALLBACK_CATALOG;
+        const nextSettings =
+          settingsResult.status === "fulfilled"
+            ? settingsResult.value
+            : EMPTY_SETTINGS;
+        setCatalog(nextCatalog);
+        setSettings(nextSettings);
+        const nextProvider =
+          nextSettings.provider ?? nextCatalog.providers[0]?.id ?? "gemini";
+        setProvider(nextProvider);
+        setModel(nextSettings.model ?? "");
+        setLoading(false);
+      },
     );
-  }, [usedToday]);
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
-    setIsActive(!!user?.hasCustomAiProvider);
-  }, [user?.hasCustomAiProvider]);
-
-  useEffect(() => {
-    if (!user?.uid) {
-      setQuotaSnapshot(null);
-      return;
-    }
-
-    let isMounted = true;
-    const refreshQuotaSnapshot = async () => {
-      try {
-        const userRef = doc(firestore, "users", user.uid);
-        const snapshot = await getDoc(userRef);
-        if (!snapshot.exists() || !isMounted) return;
-
+    if (!user?.uid) return;
+    let mounted = true;
+    getDoc(doc(firestore, "users", user.uid))
+      .then((snapshot) => {
+        if (!mounted || !snapshot.exists()) return;
         const data = snapshot.data();
         setQuotaSnapshot({
           aiUsage: typeof data.aiUsage === "number" ? data.aiUsage : 0,
@@ -102,313 +167,251 @@ const AiSettings = () => {
               ? data.lastAiUsageDate
               : "",
         });
-      } catch (error) {
-        console.error("Failed to refresh AI usage snapshot:", error);
-      }
-    };
-
-    refreshQuotaSnapshot();
+      })
+      .catch(() => undefined);
     return () => {
-      isMounted = false;
+      mounted = false;
     };
   }, [user?.uid]);
 
-  const handleProviderChange = (p: ProviderKey) => {
-    setProvider(p);
-    setModel(MODELS[p][0].value);
-    setTestState("idle");
-    setTestError("");
-  };
-
-  const handleTest = async () => {
-    if (!apiKey.trim()) return;
-    setTestState("testing");
-    setTestError("");
-    const { valid, error } = await validateAiKey(provider, apiKey.trim());
-    if (valid) {
-      setTestState("ok");
-    } else {
-      setTestState("fail");
-      setTestError(error || "Key validation failed");
-    }
+  const selectProvider = (nextProvider: AiProvider) => {
+    setProvider(nextProvider);
+    setModel("");
+    setApiKey("");
+    setSaveState("idle");
+    setMessage("");
   };
 
   const handleSave = async () => {
-    if (testState !== "ok") return;
+    if (!apiKey.trim() && !hasSavedKeyForProvider) {
+      setSaveState("error");
+      setMessage("Enter an API key for this provider.");
+      return;
+    }
     setSaveState("saving");
+    setMessage("");
     try {
       await saveAiSettings({
         provider,
-        apiKey: apiKey.trim(),
-        model: model || undefined,
+        apiKey: apiKey.trim() || undefined,
+        model: model || null,
       });
+      const next: AiSettingsSummary = {
+        active: true,
+        provider,
+        model: model || null,
+        keyHint: apiKey.trim() ? apiKey.trim().slice(-4) : settings.keyHint,
+        validatedAt: new Date().toISOString(),
+      };
+      setSettings(next);
+      setApiKey("");
       setSaveState("saved");
-      setIsActive(true);
-      setApiKey(""); // never keep in state after save
-      setTestState("idle");
-      setTimeout(() => setSaveState("idle"), 3000);
-    } catch {
+      setMessage("Verified and saved.");
+    } catch (error) {
       setSaveState("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not save this provider.",
+      );
     }
   };
 
   const handleRemove = async () => {
     setRemoveState("removing");
+    setMessage("");
     try {
       await deleteAiSettings();
-      setIsActive(false);
-      setTestState("idle");
+      setSettings(EMPTY_SETTINGS);
       setApiKey("");
+      setSaveState("idle");
+      setMessage("Disconnected. Using TTT AI.");
     } catch (error) {
-      console.error("Failed to remove AI settings:", error);
+      setSaveState("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not disconnect provider.",
+      );
     } finally {
       setRemoveState("idle");
     }
   };
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-black/10 dark:border-white/10 p-6 mb-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Bot className="w-6 h-6 text-dark-green dark:text-light-green" />
-        <h2 className="text-2xl font-semibold font-heading">AI Provider</h2>
+    <SettingsPanel
+      title="Provider"
+      meta={
+        <StatusDot tone={loading ? "idle" : "ok"}>
+          {loading
+            ? "Checking"
+            : settings.active
+              ? `Your ${connectedProvider?.label ?? "key"}`
+              : "TTT AI"}
+        </StatusDot>
+      }
+    >
+      <Segmented
+        label="AI provider"
+        value={provider}
+        options={catalog.providers.map((item) => ({
+          value: item.id,
+          label: item.label,
+        }))}
+        onChange={selectProvider}
+        disabled={loading || isBusy}
+      />
+
+      <div className="mt-6 space-y-5">
+        <label className="block" htmlFor="ai-provider-model">
+          <span className={FIELD_LABEL}>Model</span>
+          <div className="relative">
+            <select
+              id="ai-provider-model"
+              value={model}
+              onChange={(event) => {
+                setModel(event.target.value);
+                setSaveState("idle");
+                setMessage("");
+              }}
+              disabled={loading || isBusy}
+              className="h-10 w-full appearance-none border-0 border-b border-ns-border bg-transparent px-0 pr-8 font-ui text-sm text-ns-ink outline-none transition-colors focus:border-ns-accent focus:ring-0 disabled:cursor-wait disabled:opacity-50 dark:[color-scheme:dark]"
+            >
+              <option value="">
+                Automatic ·{" "}
+                {automaticModel?.label ?? providerEntry?.default_model}
+              </option>
+              {providerEntry?.models.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 text-ns-ink-muted" />
+          </div>
+        </label>
+
+        <label className="block" htmlFor="ai-provider-key">
+          <span className={FIELD_LABEL}>API key</span>
+          <div className="relative border-b border-ns-border transition-colors focus-within:border-ns-accent">
+            <Input
+              id="ai-provider-key"
+              type={showKey ? "text" : "password"}
+              value={apiKey}
+              onChange={(event) => {
+                setApiKey(event.target.value);
+                setSaveState("idle");
+                setMessage("");
+              }}
+              placeholder={
+                hasSavedKeyForProvider
+                  ? `Saved ••••${settings.keyHint ?? ""}`
+                  : `Paste ${providerEntry?.label ?? "provider"} key`
+              }
+              className="h-10 rounded-none border-0 bg-transparent px-0 pr-9 font-mono text-[13px] shadow-none focus-visible:border-0 focus-visible:ring-0"
+              autoComplete="off"
+              disabled={isBusy}
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey((value) => !value)}
+              className="absolute inset-y-0 right-0 flex w-8 items-center justify-end text-ns-ink-muted transition-colors hover:text-ns-ink"
+              aria-label={showKey ? "Hide API key" : "Show API key"}
+            >
+              {showKey ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        </label>
       </div>
 
-      {/* Current status */}
-      <div className="mb-6 p-4 rounded-lg border border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-black">
-        <p className="text-xs font-ui text-black/50 dark:text-white/50 uppercase tracking-wider mb-1">
-          Current Status
-        </p>
-        <p className="text-xs text-black/60 dark:text-white/60 font-body mb-3">
-          Choose TheTaleTribe&apos;s shared AI quota or connect your own provider
-          key.
-        </p>
-        {isActive ? (
-          <div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-dark-green dark:text-light-green shrink-0" />
-              <span className="text-sm font-body text-black dark:text-white">
-                Your{" "}
-                <span className="font-semibold capitalize">{provider}</span> key
-                {" — "}
-                billed by{" "}
-                <span className="font-semibold capitalize">{provider}</span>,
-                not TheTaleTribe
+      <div className="mt-6">
+        {settings.active ? (
+          <p className="font-ui text-xs text-ns-ink-secondary">
+            {connectedProvider?.label ?? settings.provider} ·{" "}
+            {settings.model ?? "Automatic"} ·{" "}
+            <span className="font-mono">••••{settings.keyHint ?? ""}</span>
+            {validatedDate && (
+              <span className="text-ns-ink-muted">
+                {" "}
+                · verified {validatedDate}
               </span>
-            </div>
-            <p className="mt-2 text-xs text-black/60 dark:text-white/60 font-body">
-              {AI_SETTINGS_COPY.byokNoLimitHint}
-            </p>
-          </div>
+            )}
+          </p>
         ) : (
-          <div>
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-black/40 dark:text-white/40 shrink-0" />
-              <span className="text-sm font-body text-black/70 dark:text-white/70">
-                {AI_SETTINGS_COPY.platformLabel} — {usedToday} of{" "}
-                {PLATFORM_AI_DAILY_LIMIT} requests used today
+          <>
+            <div className="flex items-baseline justify-between gap-4 font-ui text-xs">
+              <span className="text-ns-ink-secondary">
+                <span className="font-semibold tabular-nums text-ns-ink">
+                  {requestsRemaining}
+                </span>
+                /{PLATFORM_AI_DAILY_LIMIT} requests left today
               </span>
+              <span className="text-ns-ink-muted">Resets 00:00 UTC</span>
             </div>
-            <div className="mt-2 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+            <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-ns-border">
               <div
-                className="h-full bg-dark-green dark:bg-light-green transition-all"
-                style={{ width: `${usagePercent}%` }}
+                className="h-full rounded-full bg-ns-accent transition-[width] duration-500"
+                style={{ width: `${remainingPercent}%` }}
               />
             </div>
-            <p className="mt-2 text-xs text-black/60 dark:text-white/60 font-body">
-              {AI_SETTINGS_COPY.platformResetHint}
-            </p>
-            {requestsRemaining <= 0 ? (
-              <p className="mt-2 text-xs text-red-500 font-body">
-                Daily limit reached. Add your own API key below to keep using
-                AI, or try again after midnight UTC.
-              </p>
-            ) : (
-              <p className="mt-2 text-xs text-black/60 dark:text-white/60 font-body">
-                {requestsRemaining} requests remaining today.
-              </p>
-            )}
-          </div>
+          </>
         )}
       </div>
 
-      {/* Provider selector */}
-      <div className="mb-5">
-        <p className="text-sm font-ui font-medium text-black dark:text-white mb-3">
-          Select Provider
-        </p>
-        <div className="grid grid-cols-3 gap-3">
-          {(Object.keys(PROVIDERS) as ProviderKey[]).map((p) => {
-            const meta = PROVIDERS[p];
-            const selected = provider === p;
-            return (
-              <button
-                key={p}
-                onClick={() => handleProviderChange(p)}
-                className={[
-                  "relative flex flex-col items-start p-4 rounded-lg border text-left transition-all duration-150",
-                  selected
-                    ? `${meta.border} ${meta.bg} ring-1 ring-inset ${meta.border}`
-                    : "border-black/10 dark:border-white/10 hover:border-black/20 dark:hover:border-white/20 bg-neutral-50 dark:bg-black",
-                ].join(" ")}
-              >
-                {selected && (
-                  <span
-                    className={`absolute top-2 right-2 w-2 h-2 rounded-full ${meta.accent.replace("text-", "bg-")}`}
-                  />
-                )}
-                <span
-                  className={`text-sm font-semibold font-ui mb-0.5 ${selected ? meta.accent : "text-black dark:text-white"}`}
-                >
-                  {meta.label}
-                </span>
-                <span className="text-xs text-black/50 dark:text-white/50 font-body leading-tight">
-                  {meta.description}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Model selector */}
-      <div className="mb-5">
-        <label className="block text-sm font-ui font-medium text-black dark:text-white mb-2">
-          Model
-        </label>
-        <select
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          className="w-full px-3 py-2 text-sm rounded-lg border border-black/20 dark:border-white/20 bg-white dark:bg-neutral-800 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-dark-green dark:focus:ring-light-green font-body"
+      {message && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`mt-4 flex items-start gap-2 font-ui text-xs ${saveState === "error" ? "text-ns-destructive" : "text-ns-success"}`}
         >
-          {MODELS[provider].map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* API key input */}
-      <div className="mb-5">
-        <label className="block text-sm font-ui font-medium text-black dark:text-white mb-2">
-          API Key
-        </label>
-        <div className="relative">
-          <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black/40 dark:text-white/40" />
-          <Input
-            type={showKey ? "text" : "password"}
-            value={apiKey}
-            onChange={(e) => {
-              setApiKey(e.target.value);
-              setTestState("idle");
-              setTestError("");
-            }}
-            placeholder={
-              isActive
-                ? "Enter new key to replace existing"
-                : "Paste your API key here"
-            }
-            className="pl-9 pr-10 bg-white dark:bg-neutral-800 border-black/20 dark:border-white/20 text-black dark:text-white placeholder:text-black/30 dark:placeholder:text-white/30 font-body text-sm"
-          />
-          <button
-            type="button"
-            onClick={() => setShowKey((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 dark:text-white/40 hover:text-black/70 dark:hover:text-white/70"
-          >
-            {showKey ? (
-              <EyeOff className="w-4 h-4" />
-            ) : (
-              <Eye className="w-4 h-4" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Test connection */}
-      <div className="mb-5">
-        <Button
-          variant="outline"
-          onClick={handleTest}
-          disabled={!apiKey.trim() || testState === "testing"}
-          className="border-black/20 dark:border-white/20 bg-white dark:bg-neutral-800 text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-40"
-        >
-          {testState === "testing" ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : testState === "ok" ? (
-            <CheckCircle2 className="w-4 h-4 mr-2 text-dark-green dark:text-light-green" />
-          ) : testState === "fail" ? (
-            <AlertCircle className="w-4 h-4 mr-2 text-red-500" />
+          {saveState === "error" ? (
+            <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" />
           ) : (
-            <Zap className="w-4 h-4 mr-2" />
+            <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" />
           )}
-          {testState === "testing" ? "Testing..." : "Test Connection"}
-        </Button>
-
-        {testState === "ok" && (
-          <p className="mt-2 text-sm text-dark-green dark:text-light-green font-body">
-            Connection successful — key is valid.
-          </p>
-        )}
-        {testState === "fail" && (
-          <p className="mt-2 text-sm text-red-500 font-body">
-            {testError || "Connection failed. Check your key and try again."}
-          </p>
-        )}
-      </div>
-
-      {/* Save */}
-      <div className="flex items-center gap-3">
-        <Button
-          onClick={handleSave}
-          disabled={testState !== "ok" || saveState === "saving"}
-          className="bg-dark-green dark:bg-light-green text-white hover:bg-light-green dark:hover:bg-dark-green transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {saveState === "saving" && (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          )}
-          {saveState === "saving" ? "Saving..." : "Save Provider"}
-        </Button>
-
-        {saveState === "saved" && (
-          <span className="flex items-center gap-1.5 text-sm text-dark-green dark:text-light-green font-body">
-            <CheckCircle2 className="w-4 h-4" />
-            Saved — BYOK active
-          </span>
-        )}
-        {saveState === "error" && (
-          <span className="flex items-center gap-1.5 text-sm text-red-500 font-body">
-            <AlertCircle className="w-4 h-4" />
-            Save failed. Try again.
-          </span>
-        )}
-      </div>
-
-      {/* Remove */}
-      {isActive && (
-        <div className="mt-6 pt-5 border-t border-black/10 dark:border-white/10">
-          <p className="text-xs text-black/50 dark:text-white/50 font-body mb-3">
-            You&apos;ll return to TTT AI ({PLATFORM_AI_DAILY_LIMIT}{" "}
-            requests/day, resets at midnight UTC).
-          </p>
-          <Button
-            variant="outline"
-            onClick={handleRemove}
-            disabled={removeState === "removing"}
-            className="border-red-500/30 text-red-500 hover:bg-red-500/5 bg-transparent disabled:opacity-40"
-          >
-            {removeState === "removing" ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Trash2 className="w-4 h-4 mr-2" />
-            )}
-            {removeState === "removing"
-              ? "Removing..."
-              : "Remove Custom Provider"}
-          </Button>
+          <span>{message}</span>
         </div>
       )}
-    </div>
+
+      <div className="mt-6 flex items-center justify-between gap-4">
+        <span className="flex items-center gap-1.5 font-ui text-[11px] text-ns-ink-muted">
+          <LockKeyhole className="h-3 w-3" />
+          Encrypted at rest
+        </span>
+        <div className="flex items-center gap-1">
+          {settings.active && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRemove}
+              disabled={isBusy}
+              className="text-ns-ink-muted hover:bg-transparent hover:text-ns-destructive"
+            >
+              {removeState === "removing" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                "Disconnect"
+              )}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={isBusy || loading}
+            className="gap-2 px-4"
+          >
+            {saveState === "saving" && (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            )}
+            {saveState === "saving" ? "Testing…" : "Test & save"}
+          </Button>
+        </div>
+      </div>
+    </SettingsPanel>
   );
 };
 

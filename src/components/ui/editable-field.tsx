@@ -7,6 +7,8 @@ interface EditableFieldProps {
   value: string;
   onSave: (value: string) => Promise<void>;
   label: string;
+  prefix?: string;
+  hint?: string;
   placeholder?: string;
   multiline?: boolean;
   maxLength?: number;
@@ -17,11 +19,14 @@ export function EditableField({
   value,
   onSave,
   label,
+  prefix,
+  hint,
   placeholder = "Click to edit...",
   multiline = false,
   maxLength,
   className,
 }: EditableFieldProps) {
+  const inputId = React.useId();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
   const [isLoading, setIsLoading] = useState(false);
@@ -78,13 +83,17 @@ export function EditableField({
 
   if (isEditing) {
     return (
-      <div className={cn("space-y-1", className)}>
-        <label className="block text-xs font-medium font-ui uppercase tracking-wider text-ns-ink-muted">
+      <div className={cn("group", className)}>
+        <label
+          htmlFor={inputId}
+          className="block font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-ns-accent"
+        >
           {label}
         </label>
-        <div className="relative">
+        <div className="relative mt-2 border-b border-ns-accent pb-2">
           {multiline ? (
             <textarea
+              id={inputId}
               ref={inputRef as React.RefObject<HTMLTextAreaElement>}
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
@@ -92,104 +101,121 @@ export function EditableField({
               maxLength={maxLength}
               disabled={isLoading}
               className={cn(
-                "w-full min-h-[80px] px-3 py-2 text-sm rounded-ns",
-                "bg-ns-elevated",
-                "border border-ns-accent",
+                "min-h-[92px] w-full resize-none bg-transparent p-0 font-body text-[15px] leading-relaxed",
                 "text-ns-ink",
                 "placeholder:text-ns-ink-muted",
-                "focus:outline-none focus:ring-2 focus:ring-[var(--ns-ring)]",
+                "focus:outline-none focus:ring-0",
                 "disabled:opacity-50 disabled:cursor-not-allowed",
-                "resize-none",
               )}
               placeholder={placeholder}
             />
           ) : (
-            <input
-              ref={inputRef as React.RefObject<HTMLInputElement>}
-              type="text"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              maxLength={maxLength}
-              disabled={isLoading}
-              className={cn(
-                "w-full px-3 py-2 text-sm rounded-ns",
-                "bg-ns-elevated",
-                "border border-ns-accent",
-                "text-ns-ink",
-                "placeholder:text-ns-ink-muted",
-                "focus:outline-none focus:ring-2 focus:ring-[var(--ns-ring)]",
-                "disabled:opacity-50 disabled:cursor-not-allowed",
+            <div className="flex items-baseline">
+              {prefix && (
+                <span className="shrink-0 pr-0.5 font-body text-lg text-ns-ink-muted">
+                  {prefix}
+                </span>
               )}
-              placeholder={placeholder}
-            />
+              <input
+                id={inputId}
+                ref={inputRef as React.RefObject<HTMLInputElement>}
+                type="text"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                maxLength={maxLength}
+                disabled={isLoading}
+                className={cn(
+                  "min-w-0 flex-1 bg-transparent p-0 font-body text-lg",
+                  "text-ns-ink",
+                  "placeholder:text-ns-ink-muted",
+                  "focus:outline-none focus:ring-0",
+                  "disabled:cursor-not-allowed disabled:opacity-50",
+                )}
+                placeholder={placeholder}
+              />
+            </div>
           )}
-          <div className="flex items-center justify-between mt-2">
-            <div className="flex items-center gap-1">
+          <div className="mt-3 flex items-center justify-between gap-4">
+            <div className="min-w-0">
               {maxLength && (
-                <span className="text-xs text-ns-ink-muted">
+                <span className="font-ui text-[10px] tabular-nums text-ns-ink-muted">
                   {editValue.length}/{maxLength}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-3">
               {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin text-ns-accent" />
+                <span className="flex items-center gap-2 font-ui text-xs text-ns-ink-muted">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-ns-accent" />
+                  Saving
+                </span>
               ) : (
                 <>
                   <button
+                    type="button"
                     onClick={handleSave}
-                    className="p-1.5 rounded-ns hover:bg-ns-surface text-ns-accent transition-colors"
+                    className="flex items-center gap-1.5 font-ui text-xs font-semibold text-ns-accent transition-colors hover:text-ns-accent-hover"
                     title="Save (Enter)"
                   >
-                    <Check className="w-4 h-4" />
+                    <Check className="h-3.5 w-3.5" /> Save
                   </button>
                   <button
+                    type="button"
                     onClick={handleCancel}
-                    className="p-1.5 rounded-ns hover:bg-ns-surface text-ns-ink-muted transition-colors"
+                    className="flex items-center gap-1.5 font-ui text-xs text-ns-ink-muted transition-colors hover:text-ns-ink"
                     title="Cancel (Escape)"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="h-3.5 w-3.5" /> Cancel
                   </button>
                 </>
               )}
             </div>
           </div>
         </div>
-        {error && <p className="text-xs text-ns-destructive mt-1">{error}</p>}
+        {error && (
+          <p className="mt-2 font-ui text-xs text-ns-destructive">{error}</p>
+        )}
       </div>
     );
   }
 
   return (
-    <div className={cn("space-y-1", className)}>
-      <label className="block text-xs font-medium font-ui uppercase tracking-wider text-ns-ink-muted">
+    <div className={cn("group", className)}>
+      <span className="block font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-ns-ink-muted transition-colors group-hover:text-ns-accent">
         {label}
-      </label>
+      </span>
       <button
+        type="button"
         onClick={() => setIsEditing(true)}
+        aria-label={`Edit ${label.toLowerCase()}`}
         className={cn(
-          "w-full text-left px-3 py-2 rounded-ns",
-          "bg-ns-surface",
-          "border border-transparent",
-          "hover:border-ns-border-strong",
-          "hover:bg-ns-surface-hover",
-          "transition-all duration-200",
-          "group cursor-pointer",
+          "w-full cursor-pointer border-b border-ns-border py-2.5 text-left",
+          "transition-colors duration-200 hover:border-ns-accent",
         )}
       >
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start justify-between gap-4">
           <span
             className={cn(
-              "text-sm",
+              multiline
+                ? "font-body text-[15px] leading-relaxed"
+                : "font-body text-lg",
               value ? "text-ns-ink" : "text-ns-ink-muted italic",
             )}
           >
+            {prefix && value && (
+              <span className="text-ns-ink-muted">{prefix}</span>
+            )}
             {value || placeholder}
           </span>
-          <Pencil className="w-3.5 h-3.5 text-ns-ink-muted group-hover:text-ns-accent transition-colors flex-shrink-0 mt-0.5" />
+          <Pencil className="mt-1 h-3.5 w-3.5 shrink-0 text-ns-ink-muted transition-all group-hover:-translate-y-0.5 group-hover:text-ns-accent" />
         </div>
       </button>
+      {hint && (
+        <p className="mt-2 font-body text-xs leading-relaxed text-ns-ink-muted">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

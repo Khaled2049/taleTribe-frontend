@@ -24,6 +24,8 @@ export {
   saveAiSettings,
   deleteAiSettings,
   validateAiKey,
+  getAiProviderCatalog,
+  getAiSettings,
 } from "./endpoints/aiSettingsEndpoints";
 export { reserveStorageUpload } from "./endpoints/storageUploadEndpoints";
 export { getCreditBalance, purchaseCredits } from "./endpoints/creditEndpoints";

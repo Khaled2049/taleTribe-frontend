@@ -30,9 +30,17 @@ const ALGORITHM = "aes-256-gcm";
 const KEY_LEN = 32;
 
 export interface ProviderConfig {
-  provider: "gemini" | "claude" | "openai";
+  provider: "gemini" | "anthropic" | "openai";
   api_key: string;
   model?: string;
+}
+
+export interface AiSettingsSummary {
+  active: boolean;
+  provider: ProviderConfig["provider"] | null;
+  model: string | null;
+  keyHint: string | null;
+  validatedAt: string | null;
 }
 
 export interface AiAccessResult {
@@ -108,13 +116,19 @@ export async function getUserAiSettings(
     const settings = doc.data()?.aiSettings;
     if (!settings?.encryptedApiKey) return null;
 
+    const provider = canonicalProvider(settings.provider);
+    if (!provider) {
+      logger.warn("Ignoring AI settings with an unsupported provider", { uid });
+      return null;
+    }
+
     const apiKey = decryptApiKey(
       settings.encryptedApiKey,
       settings.iv,
       settings.authTag,
     );
     return {
-      provider: settings.provider,
+      provider,
       api_key: apiKey,
       model: settings.model || undefined,
     };
@@ -124,11 +138,49 @@ export async function getUserAiSettings(
   }
 }
 
+export async function getAiSettingsSummary(
+  uid: string,
+): Promise<AiSettingsSummary> {
+  const db = getFirestore();
+  const snapshot = await db.collection("users").doc(uid).get();
+  const settings = snapshot.data()?.aiSettings;
+  const provider = canonicalProvider(settings?.provider);
+  if (!settings?.encryptedApiKey || !provider) {
+    return {
+      active: false,
+      provider: null,
+      model: null,
+      keyHint: null,
+      validatedAt: null,
+    };
+  }
+  const timestamp = settings.validatedAt;
+  return {
+    active: true,
+    provider,
+    model: typeof settings.model === "string" && settings.model ? settings.model : null,
+    keyHint: typeof settings.keyHint === "string" ? settings.keyHint : null,
+    validatedAt:
+      timestamp && typeof timestamp.toDate === "function"
+        ? timestamp.toDate().toISOString()
+        : null,
+  };
+}
+
+export function canonicalProvider(
+  provider: unknown,
+): ProviderConfig["provider"] | null {
+  if (provider === "claude" || provider === "anthropic") return "anthropic";
+  if (provider === "openai") return "openai";
+  if (provider === "gemini") return "gemini";
+  return null;
+}
+
 export async function setUserAiSettings(
   uid: string,
-  provider: "gemini" | "claude" | "openai",
+  provider: ProviderConfig["provider"],
   apiKey: string,
-  model?: string,
+  model?: string | null,
 ): Promise<void> {
   const { ciphertext, iv, authTag } = encryptApiKey(apiKey);
   const db = getFirestore();
@@ -142,8 +194,10 @@ export async function setUserAiSettings(
           encryptedApiKey: ciphertext,
           iv,
           authTag,
+          keyHint: apiKey.slice(-4),
           model: model || null,
-          createdAt: FieldValue.serverTimestamp(),
+          validatedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         },
         hasCustomAiProvider: true,
       },
@@ -157,73 +211,6 @@ export async function deleteUserAiSettings(uid: string): Promise<void> {
     aiSettings: FieldValue.delete(),
     hasCustomAiProvider: false,
   });
-}
-
-// ---------------------------------------------------------------------------
-// Validate API key by making a minimal test call
-// ---------------------------------------------------------------------------
-
-export async function validateProviderKey(
-  provider: "gemini" | "claude" | "openai",
-  apiKey: string,
-): Promise<{ valid: boolean; error?: string }> {
-  try {
-    if (provider === "gemini") {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
-      );
-      if (!resp.ok) {
-        const body = await resp.text();
-        return {
-          valid: false,
-          error: `Gemini: ${resp.status} ${body.slice(0, 200)}`,
-        };
-      }
-      return { valid: true };
-    }
-
-    if (provider === "openai") {
-      const resp = await fetch("https://api.openai.com/v1/models", {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
-      if (!resp.ok) {
-        const body = await resp.text();
-        return {
-          valid: false,
-          error: `OpenAI: ${resp.status} ${body.slice(0, 200)}`,
-        };
-      }
-      return { valid: true };
-    }
-
-    if (provider === "claude") {
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 1,
-          messages: [{ role: "user", content: "hi" }],
-        }),
-      });
-      if (!resp.ok) {
-        const body = await resp.text();
-        return {
-          valid: false,
-          error: `Claude: ${resp.status} ${body.slice(0, 200)}`,
-        };
-      }
-      return { valid: true };
-    }
-
-    return { valid: false, error: `Unknown provider: ${provider}` };
-  } catch (error) {
-    return { valid: false, error: String(error) };
-  }
 }
 
 // ---------------------------------------------------------------------------
