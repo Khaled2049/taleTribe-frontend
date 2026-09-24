@@ -39,3 +39,7 @@ Out of scope (report to the appropriate project or vendor):
 - Social engineering, physical attacks, or denial-of-service against infrastructure you do not operate
 
 Thank you for helping keep TTT safe.
+
+## Private vulnerability reporting
+
+You can also use [GitHub private vulnerability reporting](https://github.com/Khaled2049/taleTribe-frontend/security/advisories/new). Repository code, dependencies, workflows, and deployment configuration are in scope. Include reproduction steps and the affected commit; redact credentials and personal data.

@@ -35,7 +35,7 @@ if (
   import.meta.env.VITE_USE_EMULATORS !== "false"
 ) {
   // Use a flag to prevent double connection (e.g., during hot reload)
-  const emulatorsConnected = (window as any).__FIREBASE_EMULATORS_CONNECTED__;
+  const emulatorsConnected = (window as Window & { __FIREBASE_EMULATORS_CONNECTED__?: boolean }).__FIREBASE_EMULATORS_CONNECTED__;
 
   if (!emulatorsConnected) {
     try {
@@ -55,7 +55,7 @@ if (
       // Connect Storage emulator (configured in firebase.json)
       connectStorageEmulator(storage, "127.0.0.1", 9199);
 
-      (window as any).__FIREBASE_EMULATORS_CONNECTED__ = true;
+      (window as Window & { __FIREBASE_EMULATORS_CONNECTED__?: boolean }).__FIREBASE_EMULATORS_CONNECTED__ = true;
       console.log("✅ Firebase Emulators connected successfully");
     } catch (error) {
       console.warn("⚠️ Failed to connect to Firebase Emulators:", error);

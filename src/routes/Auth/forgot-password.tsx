@@ -12,7 +12,7 @@ const ForgotPassword = () => {
 
   const { forgotPassword } = useFirebaseAuth();
 
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);

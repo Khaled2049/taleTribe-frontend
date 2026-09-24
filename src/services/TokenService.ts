@@ -36,23 +36,15 @@ export class TokenService {
    * yet. Call this once to seed, then let the snapshot listener take over.
    */
   async getBalance(): Promise<ITokenBalance> {
-    try {
-      return this.request<ITokenBalance>("/v1/me/token-balance");
-    } catch (error) {
-      throw error;
-    }
+    return this.request<ITokenBalance>("/v1/me/token-balance");
   }
 
   /** Claim the once-daily faucet. Throws with the server's message on 429. */
   async claimFaucet(): Promise<ITokenBalance & { granted: MinorUnits }> {
-    try {
-      return this.request<ITokenBalance & { granted: MinorUnits }>(
-        "/v1/me/token-faucet",
-        "POST",
-      );
-    } catch (error) {
-      throw error;
-    }
+    return this.request<ITokenBalance & { granted: MinorUnits }>(
+      "/v1/me/token-faucet",
+      "POST",
+    );
   }
 
   /** Zero balance for a user with no account document yet. */

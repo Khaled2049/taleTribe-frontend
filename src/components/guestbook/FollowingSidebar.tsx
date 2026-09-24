@@ -252,7 +252,10 @@ export const FollowingDrawer: React.FC<FollowingProps> = ({
               <Loader2 className="h-4 w-4 animate-spin text-ns-ink-muted" />
             </div>
           ) : (
-            <nav aria-label="People you follow" className="flex flex-col gap-0.5">
+            <nav
+              aria-label="People you follow"
+              className="flex flex-col gap-0.5"
+            >
               {people.map((person) => {
                 const active = person.uid === activeUserId;
                 return (

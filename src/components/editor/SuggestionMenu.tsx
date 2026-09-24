@@ -14,10 +14,13 @@ export const SuggestionMenu: React.FC<SuggestionMenuProps> = ({
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const insertSuggestion = (suggestion: string) => {
-    editor.chain().focus().insertContent(suggestion).run();
-    onClose();
-  };
+  const insertSuggestion = React.useCallback(
+    (suggestion: string) => {
+      editor.chain().focus().insertContent(suggestion).run();
+      onClose();
+    },
+    [editor, onClose],
+  );
 
   // Keyboard navigation
   React.useEffect(() => {
@@ -41,7 +44,7 @@ export const SuggestionMenu: React.FC<SuggestionMenuProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedIndex, suggestions]);
+  }, [selectedIndex, suggestions, insertSuggestion, onClose]);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

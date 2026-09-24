@@ -166,8 +166,13 @@ class StorageService {
     try {
       const storageRef = ref(storage, imageUrl);
       await deleteObject(storageRef);
-    } catch (error: any) {
-      if (error?.code !== "storage/object-not-found") {
+    } catch (error: unknown) {
+      if (!(
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "storage/object-not-found"
+      )) {
         console.warn("Could not delete old cover image:", error);
       }
     }

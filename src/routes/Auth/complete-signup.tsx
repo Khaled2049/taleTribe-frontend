@@ -186,7 +186,6 @@ const CompleteSignup: React.FC = () => {
     writingInterests,
     photoFile,
     walletAddress,
-    navigate,
   ]);
 
   const handleFinalSubmit = (e: React.FormEvent) => {

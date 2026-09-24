@@ -42,3 +42,6 @@ firebase-export-*/
 
 # Local story idea drafts and generated imports
 functions/story-ideas/
+
+# Temporary Workload Identity Federation credentials
+gha-creds-*.json
