@@ -6,7 +6,10 @@ interface SlashCommandMenuProps {
   command: (command: SlashCommand) => void;
 }
 
-const SlashCommandMenu = forwardRef((props: SlashCommandMenuProps, ref) => {
+const SlashCommandMenu = forwardRef<
+  { onKeyDown(props: { event: KeyboardEvent }): boolean },
+  SlashCommandMenuProps
+>((props, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {

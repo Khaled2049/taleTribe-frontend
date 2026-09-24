@@ -91,7 +91,9 @@ export function titleFromMessage(text: string): string | null {
 function userText(parts: unknown[]): string {
   return parts
     .map((part) =>
-      part && typeof part === "object" && (part as { type?: string }).type === "text"
+      part &&
+      typeof part === "object" &&
+      (part as { type?: string }).type === "text"
         ? ((part as { text?: string }).text ?? "")
         : "",
     )
@@ -300,11 +302,9 @@ export class AssistantThreadSession {
     const title = titleFromMessage(text);
     if (!title) return;
     try {
-      const renamed = await this.repository.updateThread(
-        this.storyId,
-        thread,
-        { title },
-      );
+      const renamed = await this.repository.updateThread(this.storyId, thread, {
+        title,
+      });
       this.thread = renamed;
       this.existing = Promise.resolve(renamed);
     } catch {

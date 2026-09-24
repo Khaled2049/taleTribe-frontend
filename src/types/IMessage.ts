@@ -3,7 +3,7 @@ export interface IMessage {
   content: string;
   sender: string;
   senderId: string;
-  timestamp?: any;
+  timestamp?: { toDate(): Date };
   hasSpoiler?: boolean;
   spoilerChapterRange?: {
     start: number;

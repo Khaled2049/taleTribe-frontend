@@ -444,7 +444,7 @@ const StoryDetail: React.FC = () => {
       if (state.currentChapter)
         readingHistoryRepo.saveProgress(id, state.currentChapter.id, percent);
     },
-    [id, user, state.currentChapterIndex],
+    [id, user, state.currentChapter],
   );
 
   // --- Comment Logic ---
@@ -542,7 +542,7 @@ const StoryDetail: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     const init = async () => {
-      let startIndex = 0;
+      const startIndex = 0;
       if (user) {
         const progress = await readingHistoryRepo.getProgress(id);
         resumeRef.current = progress;

@@ -27,101 +27,116 @@ const BookSearch: React.FC<BookSearchProps> = ({ onBookSelect }) => {
   const [error, setError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
-  const searchBooks = async (searchQuery: string) => {
-    if (!searchQuery.trim()) {
-      setBooks([]);
-      setError(null);
-      return;
-    }
-
-    // Check rate limits if user is authenticated
-    if (user) {
-      const rateLimitCheck = await rateLimitService.canSearchBooks(user.uid);
-      if (!rateLimitCheck.allowed) {
-        setError(rateLimitCheck.message || "Rate limit exceeded");
+  const searchBooks = useCallback(
+    async (searchQuery: string) => {
+      if (!searchQuery.trim()) {
         setBooks([]);
-        return;
-      }
-    }
-
-    try {
-      setIsSearching(true);
-      setError(null);
-      const response = await api.get<{ error?: string; items?: Book[] }>(
-        "/searchBooks",
-        {
-          params: {
-            q: searchQuery,
-            maxResults: 3,
-          },
-        },
-      );
-
-      // Check if response contains an error
-      if (response.data.error) {
-        setError(`Search error: ${response.data.error}`);
-        setBooks([]);
+        setError(null);
         return;
       }
 
-      // Google Books API returns { items: [...] }
-      setBooks(response.data.items || []);
-
-      // Increment search count if user is authenticated
+      // Check rate limits if user is authenticated
       if (user) {
-        await rateLimitService.incrementBookSearchCount(user.uid);
+        const rateLimitCheck = await rateLimitService.canSearchBooks(user.uid);
+        if (!rateLimitCheck.allowed) {
+          setError(rateLimitCheck.message || "Rate limit exceeded");
+          setBooks([]);
+          return;
+        }
       }
-    } catch (err: any) {
-      console.error("Error fetching books:", err);
 
-      // Provide detailed error messages
-      if (err.response) {
-        // Server responded with error status
-        const errorMessage =
-          err.response.data?.error ||
-          err.response.statusText ||
-          "Unknown error";
-        const status = err.response.status;
+      try {
+        setIsSearching(true);
+        setError(null);
+        const response = await api.get<{ error?: string; items?: Book[] }>(
+          "/searchBooks",
+          {
+            params: {
+              q: searchQuery,
+              maxResults: 3,
+            },
+          },
+        );
 
-        if (status === 500) {
-          // Most likely BOOKS_API_KEY is not configured
+        // Check if response contains an error
+        if (response.data.error) {
+          setError(`Search error: ${response.data.error}`);
+          setBooks([]);
+          return;
+        }
+
+        // Google Books API returns { items: [...] }
+        setBooks(response.data.items || []);
+
+        // Increment search count if user is authenticated
+        if (user) {
+          await rateLimitService.incrementBookSearchCount(user.uid);
+        }
+      } catch (caught: unknown) {
+        const err = caught as {
+          response?: {
+            data?: { error?: string };
+            statusText?: string;
+            status?: number;
+          };
+          request?: unknown;
+          message?: string;
+        };
+        console.error("Error fetching books:", err);
+
+        // Provide detailed error messages
+        if (err.response) {
+          // Server responded with error status
+          const errorMessage =
+            err.response.data?.error ||
+            err.response.statusText ||
+            "Unknown error";
+          const status = err.response.status;
+
+          if (status === 500) {
+            // Most likely BOOKS_API_KEY is not configured
+            setError(
+              errorMessage.includes("API key")
+                ? errorMessage
+                : "Server error: Books API key may not be configured. Please contact support.",
+            );
+          } else {
+            setError(`Search failed: ${errorMessage} (Status: ${status})`);
+          }
+        } else if (err.request) {
+          // Request was made but no response received
           setError(
-            errorMessage.includes("API key")
-              ? errorMessage
-              : "Server error: Books API key may not be configured. Please contact support.",
+            "Failed to connect to search service. Please check your connection.",
           );
         } else {
-          setError(`Search failed: ${errorMessage} (Status: ${status})`);
+          // Something else happened
+          setError(`Search error: ${err.message || "Unknown error"}`);
         }
-      } else if (err.request) {
-        // Request was made but no response received
-        setError(
-          "Failed to connect to search service. Please check your connection.",
-        );
-      } else {
-        // Something else happened
-        setError(`Search error: ${err.message || "Unknown error"}`);
+        setBooks([]);
+      } finally {
+        setIsSearching(false);
       }
-      setBooks([]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
+    },
+    [user],
+  );
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const debouncedSearch = useCallback((searchQuery: string) => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-    debounceTimerRef.current = setTimeout(() => {
-      if (searchQuery) {
-        searchBooks(searchQuery);
-      } else {
-        setBooks([]);
+  const debouncedSearch = useCallback(
+    (searchQuery: string) => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
       }
-    }, 300);
-  }, []);
+      debounceTimerRef.current = setTimeout(() => {
+        if (searchQuery) {
+          searchBooks(searchQuery);
+        } else {
+          setBooks([]);
+        }
+      }, 300);
+    },
+    [searchBooks],
+  );
 
   useEffect(() => {
     return () => {

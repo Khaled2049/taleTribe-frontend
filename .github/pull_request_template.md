@@ -1,35 +1,26 @@
 ## Summary
 
-<!-- What changed and why (1–3 bullets) -->
+<!-- What changed, and why? -->
 
--
+## Validation
 
-## Type of change
+- [ ] Tests added or updated where appropriate
+- [ ] Relevant local checks pass
+- [ ] I manually verified the affected flow
 
-- [ ] Bug fix
-- [ ] Feature
-- [ ] Security / rules / infra
-- [ ] Refactor / chore
+## Risk and rollout
 
-## Test plan
+- [ ] No migration, deploy, security, or compatibility impact
+- [ ] Impact/risk described below
 
-<!-- How you verified it -->
+## Checklist
 
-- [ ] `yarn lint`
-- [ ] `yarn build`
-- [ ] `cd functions && npm run build` (if Functions changed)
-- [ ] Manual:
+- [ ] PR is focused and ready for review
+- [ ] Documentation/configuration was updated if needed
+- [ ] No secrets or personal data were added
 
-## Security checklist
+## Service checks
 
-<!-- Check any that apply -->
-
-- [ ] N/A — no security-sensitive changes
-- [ ] No secrets in diff (`.env`, API keys, tokens, etc.)
-- [ ] `firestore.rules` / `storage.rules` reviewed (if changed)
-- [ ] Cloud Functions use `defineSecret()` for new secrets (if applicable)
-- [ ] Deploy notes: <!-- e.g. new GitHub Secret, rules deploy, terraform -->
-
-## Screenshots / notes
-
-<!-- Optional -->
+- [ ] `yarn lint`, `yarn test`, and `yarn build` pass
+- [ ] `cd functions && npm run build && npm test` passes if Functions changed
+- [ ] Firebase rules and secret declarations reviewed if affected

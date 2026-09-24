@@ -15,7 +15,7 @@
     "build:analyze": "tsc -b && vite build --mode analyze",
     "kill-ports": "test -x ../../kill-ports && ../../kill-ports || echo 'kill-ports moved to TheTaleTribe workspace root (it now stops story-data and creditProxy too). Run ./kill-ports from there.'",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "eslint src packages --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc -b",
     "preview": "vite preview",
     "start:agent": "cd python && python server.py",
@@ -29,7 +29,8 @@
     "assistant:contracts:generate": "yarn workspace @novelsync/assistant-contracts run generate",
     "assistant:contracts:check": "yarn workspace @novelsync/assistant-contracts run check",
     "test:watch": "vitest",
-    "test:rules": "vitest run --config vitest.rules.config.ts"
+    "test:rules": "vitest run --config vitest.rules.config.ts",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\""
   },
   "dependencies": {
     "@assistant-ui/react": "0.15.18",

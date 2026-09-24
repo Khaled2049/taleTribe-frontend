@@ -1,8 +1,8 @@
-import { Extension } from "@tiptap/core";
+import { Extension, type Editor, type Range } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
 import tippy, { Instance as TippyInstance } from "tippy.js";
 import { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
-import { PluginKey } from "@tiptap/pm/state";
+import { PluginKey, type EditorState } from "@tiptap/pm/state";
 import {
   type LucideIcon,
   MessageSquare,
@@ -16,11 +16,14 @@ import {
 } from "lucide-react";
 import SlashCommandMenu from "./SlashCommandMenu";
 
+type CommandContext = { editor: Editor; range: Range };
+type MenuHandle = { onKeyDown(props: { event: KeyboardEvent }): boolean };
+
 export interface SlashCommand {
   title: string;
   description: string;
   icon?: LucideIcon;
-  command: (props: any) => void;
+  command: (props: CommandContext) => void;
 }
 
 export const SlashCommandExtension = Extension.create({
@@ -31,10 +34,16 @@ export const SlashCommandExtension = Extension.create({
       suggestion: {
         char: "/",
         pluginKey: new PluginKey("slashCommand"),
-        command: ({ editor, range, props }: any) => {
+        command: ({
+          editor,
+          range,
+          props,
+        }: CommandContext & {
+          props: SlashCommand & { item?: SlashCommand };
+        }) => {
           props.command({ editor, range });
         },
-        allow: ({ state, range }: any) => {
+        allow: ({ state, range }: { state: EditorState; range: Range }) => {
           const $from = state.doc.resolve(range.from);
           const isAtStart =
             $from.parent.textContent.charAt(range.from - $from.start() - 1) ===
@@ -72,7 +81,7 @@ export const slashCommandSuggestion = (
         title: "Co-Write",
         description: "Open interactive storytelling panel",
         icon: MessageSquare,
-        command: ({ editor, range }: any) => {
+        command: ({ editor, range }: CommandContext) => {
           editor.chain().focus().deleteRange(range).run();
           onCoWrite();
         },
@@ -81,7 +90,7 @@ export const slashCommandSuggestion = (
         title: "Generate Next Line",
         description: "AI generates suggestions for the next line",
         icon: PenLine,
-        command: async ({ editor, range }: any) => {
+        command: async ({ editor, range }: CommandContext) => {
           editor.chain().focus().deleteRange(range).run();
           await onGenerateNextLine();
         },
@@ -90,7 +99,7 @@ export const slashCommandSuggestion = (
         title: "Generate Image",
         description: "AI generates an image from your description",
         icon: Image,
-        command: ({ editor, range }: any) => {
+        command: ({ editor, range }: CommandContext) => {
           editor.chain().focus().deleteRange(range).run();
           onGenerateImage();
         },
@@ -99,7 +108,7 @@ export const slashCommandSuggestion = (
         title: "Heading 1",
         description: "Large section heading",
         icon: Heading1,
-        command: ({ editor, range }: any) => {
+        command: ({ editor, range }: CommandContext) => {
           editor
             .chain()
             .focus()
@@ -112,7 +121,7 @@ export const slashCommandSuggestion = (
         title: "Heading 2",
         description: "Medium section heading",
         icon: Heading2,
-        command: ({ editor, range }: any) => {
+        command: ({ editor, range }: CommandContext) => {
           editor
             .chain()
             .focus()
@@ -125,7 +134,7 @@ export const slashCommandSuggestion = (
         title: "Bullet List",
         description: "Create a bullet list",
         icon: List,
-        command: ({ editor, range }: any) => {
+        command: ({ editor, range }: CommandContext) => {
           editor.chain().focus().deleteRange(range).toggleBulletList().run();
         },
       },
@@ -133,7 +142,7 @@ export const slashCommandSuggestion = (
         title: "Code Block",
         description: "Insert a code block with syntax highlighting",
         icon: Code,
-        command: ({ editor, range }: any) => {
+        command: ({ editor, range }: CommandContext) => {
           editor.chain().focus().deleteRange(range).toggleCodeBlock().run();
         },
       },
@@ -141,7 +150,7 @@ export const slashCommandSuggestion = (
         title: "Task List",
         description: "Create a checklist with checkboxes",
         icon: ListChecks,
-        command: ({ editor, range }: any) => {
+        command: ({ editor, range }: CommandContext) => {
           editor.chain().focus().deleteRange(range).toggleTaskList().run();
         },
       },
@@ -152,7 +161,11 @@ export const slashCommandSuggestion = (
     );
   },
 
-  command: ({ editor, range, props }: any) => {
+  command: ({
+    editor,
+    range,
+    props,
+  }: CommandContext & { props: SlashCommand & { item?: SlashCommand } }) => {
     // This is called when Enter is pressed or item is selected
     // props.item is the selected SlashCommand
     if (props.item && props.item.command) {
@@ -161,7 +174,7 @@ export const slashCommandSuggestion = (
   },
 
   render: () => {
-    let component: ReactRenderer<any>;
+    let component: ReactRenderer<MenuHandle>;
     let popup: TippyInstance[];
 
     return {
@@ -189,7 +202,7 @@ export const slashCommandSuggestion = (
         }
 
         popup = tippy("body", {
-          getReferenceClientRect: props.clientRect as any,
+          getReferenceClientRect: props.clientRect as () => DOMRect,
           appendTo: () => document.body,
           content: component.element,
           showOnCreate: true,
@@ -220,11 +233,11 @@ export const slashCommandSuggestion = (
         }
 
         popup[0].setProps({
-          getReferenceClientRect: props.clientRect as any,
+          getReferenceClientRect: props.clientRect as () => DOMRect,
         });
       },
 
-      onKeyDown(props: any) {
+      onKeyDown(props: { event: KeyboardEvent }) {
         if (props.event.key === "Escape") {
           if (popup && popup[0]) {
             popup[0].hide();
@@ -234,7 +247,7 @@ export const slashCommandSuggestion = (
 
         // Handle Enter key - execute the selected command
         if (props.event.key === "Enter") {
-          const handled = (component.ref as any)?.onKeyDown(props);
+          const handled = component.ref?.onKeyDown(props);
           if (handled) {
             props.event.preventDefault();
             props.event.stopPropagation();
@@ -243,7 +256,7 @@ export const slashCommandSuggestion = (
         }
 
         // For arrow keys, let the menu handle them
-        const handled = (component.ref as any)?.onKeyDown(props);
+        const handled = component.ref?.onKeyDown(props);
         if (handled) {
           props.event.preventDefault();
           props.event.stopPropagation();

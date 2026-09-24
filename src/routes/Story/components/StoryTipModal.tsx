@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { X, AlertCircle, Wallet } from "lucide-react";
 import { useChainId } from "wagmi";
 import { useTippingContract } from "@/hooks/useTippingContract";
@@ -49,7 +49,9 @@ export const StoryTipModal: React.FC<StoryTipModalProps> = ({
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("ETH");
-  const [feeSplit, setFeeSplit] = useState<any>(null);
+  const [feeSplit, setFeeSplit] = useState<Awaited<
+    ReturnType<ReturnType<typeof useTippingContract>["calculateSplit"]>
+  > | null>(null);
   const [isCalculatingFee, setIsCalculatingFee] = useState(false);
   const [insufficientBalance, setInsufficientBalance] = useState(false);
   const [needsApproval, setNeedsApproval] = useState(false);
@@ -79,11 +81,11 @@ export const StoryTipModal: React.FC<StoryTipModalProps> = ({
   const tipAmounts = [0.001, 0.01, 0.1, 0.5, 1];
 
   // Helper to get current amount number
-  const getTipAmount = (): number | null => {
+  const getTipAmount = useCallback((): number | null => {
     if (selectedAmount) return selectedAmount;
     if (customAmount) return parseFloat(customAmount);
     return null;
-  };
+  }, [selectedAmount, customAmount]);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -127,10 +129,10 @@ export const StoryTipModal: React.FC<StoryTipModalProps> = ({
     } else {
       setFeeSplit(null);
     }
-  }, [selectedAmount, customAmount, paymentMethod, isConnected]);
+  }, [getTipAmount, calculateSplit, paymentMethod, isConnected]);
 
   // Check Approval Logic
-  const checkUSDCApproval = async () => {
+  const checkUSDCApproval = useCallback(async () => {
     if (!address || paymentMethod !== "USDC" || !USDC_PAYMENTS_ENABLED) return;
 
     const amount = getTipAmount();
@@ -145,12 +147,12 @@ export const StoryTipModal: React.FC<StoryTipModalProps> = ({
     } catch (error) {
       console.error("Error checking approval:", error);
     }
-  };
+  }, [address, paymentMethod, getTipAmount, checkAllowance]);
 
   // Trigger approval check when dependencies change
   useEffect(() => {
     checkUSDCApproval();
-  }, [paymentMethod, address, selectedAmount, customAmount]);
+  }, [checkUSDCApproval]);
 
   const handleAmountSelect = (amount: number) => {
     setSelectedAmount(amount);
@@ -209,7 +211,7 @@ export const StoryTipModal: React.FC<StoryTipModalProps> = ({
 
       // 3. Re-check logic
       await checkUSDCApproval();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Approval failed:", error);
     }
   };
@@ -257,7 +259,7 @@ export const StoryTipModal: React.FC<StoryTipModalProps> = ({
 
       // Refresh balances after successful tip
       refetchBalances();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Tip failed:", error);
       // Alerts handled by UI, specific errors can be logged here
     }

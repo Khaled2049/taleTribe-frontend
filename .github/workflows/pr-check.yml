@@ -3,6 +3,7 @@ name: PR Check
 on:
   pull_request:
     branches: [main]
+  workflow_call: {}
 
 # A new push to the same PR makes the in-flight run obsolete.
 concurrency:
@@ -11,18 +12,16 @@ concurrency:
 
 permissions:
   contents: read
-
 jobs:
   frontend:
-    name: Frontend Build & Audit
+    name: taleTribe-frontend / build-test-typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4.2.2
-
-      - uses: actions/setup-node@v4.4.0
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: 22
           cache: yarn
@@ -37,7 +36,6 @@ jobs:
         run: yarn test
 
       - name: Build (type-check + bundle)
-        run: yarn build
         env:
           VITE_FIREBASE_API_KEY: placeholder
           VITE_FIREBASE_AUTH_DOMAIN: placeholder
@@ -54,16 +52,16 @@ jobs:
           VITE_APP_NAME: TheTaleTribe
           VITE_STORY_DATA_URL: https://story-data.placeholder.invalid
 
+        run: yarn build
   functions:
-    name: Functions Type-check & Audit
+    name: taleTribe-frontend / functions-typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4.2.2
-
-      - uses: actions/setup-node@v4.4.0
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: 22
 
@@ -80,13 +78,12 @@ jobs:
         run: npm audit --audit-level=critical
 
   terraform:
-    name: Terraform Validate
+    name: taleTribe-frontend / terraform
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
         with:
           terraform_version: 1.14.4
           terraform_wrapper: false
@@ -99,3 +96,27 @@ jobs:
           terraform fmt -check -recursive
           terraform init -backend=false
           terraform validate
+  format:
+    name: taleTribe-frontend / format
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: 22
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn prettier --check "src/**/*.{ts,tsx,css,json}"
+  lint:
+    name: taleTribe-frontend / lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: 22
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn lint

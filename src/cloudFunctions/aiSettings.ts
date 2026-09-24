@@ -45,7 +45,10 @@ export interface AiSettingsInput {
 }
 
 export const getAiProviderCatalog = async (): Promise<AiProviderCatalog> => {
-  const { data } = await api.post<AiProviderCatalog>("/getAiProviderCatalog", {});
+  const { data } = await api.post<AiProviderCatalog>(
+    "/getAiProviderCatalog",
+    {},
+  );
   return data;
 };
 

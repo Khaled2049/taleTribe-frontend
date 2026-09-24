@@ -47,24 +47,27 @@ const EditorHeader: React.FC<EditorHeaderProps> = ({
     [onZoomChange],
   );
 
-  const generateImage = async (prompt: string) => {
-    setIsLoading(true);
-    try {
-      const response = await api.post<{ image: string }>("/generate", {
-        prompt,
-      });
-      const imageData = response.data.image;
-      editor
-        .chain()
-        .focus()
-        .setImage({ src: `data:image/png;base64,${imageData}` })
-        .run();
-    } catch (error) {
-      console.error("Error generating text:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const generateImage = useCallback(
+    async (prompt: string) => {
+      setIsLoading(true);
+      try {
+        const response = await api.post<{ image: string }>("/generate", {
+          prompt,
+        });
+        const imageData = response.data.image;
+        editor
+          .chain()
+          .focus()
+          .setImage({ src: `data:image/png;base64,${imageData}` })
+          .run();
+      } catch (error) {
+        console.error("Error generating text:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [editor],
+  );
 
   const toggleBold = useCallback(() => {
     editor.chain().focus().toggleBold().run();
@@ -89,7 +92,7 @@ const EditorHeader: React.FC<EditorHeaderProps> = ({
     }
     editor.commands.blur();
     closeModal();
-  }, [editor, genImage, closeModal]);
+  }, [editor, genImage, closeModal, generateImage]);
 
   const toolbarBtn = (active: boolean) =>
     `p-2 rounded-ns transition-all duration-150 ${

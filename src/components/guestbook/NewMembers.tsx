@@ -80,7 +80,11 @@ const NewMembers: React.FC<NewMembersProps> = ({ viewerId, following }) => {
                 </div>
               </div>
             </Link>
-            <FollowButton targetId={member.uid} size="sm" className="shrink-0" />
+            <FollowButton
+              targetId={member.uid}
+              size="sm"
+              className="shrink-0"
+            />
           </div>
         ))}
       </div>

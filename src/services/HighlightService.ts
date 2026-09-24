@@ -10,10 +10,12 @@ class HighlightService {
 
       const highlights = JSON.parse(stored);
       // Convert date strings back to Date objects
-      return highlights.map((h: any) => ({
-        ...h,
-        createdAt: new Date(h.createdAt),
-      }));
+      return highlights.map(
+        (h: Omit<Highlight, "createdAt"> & { createdAt: string }) => ({
+          ...h,
+          createdAt: new Date(h.createdAt),
+        }),
+      );
     } catch (error) {
       console.error("Error loading highlights:", error);
       return [];
