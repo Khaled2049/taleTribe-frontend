@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+import { prefetchStoriesPage } from "@/routes/Story/prefetchStories";
 
 interface NavLinksProps {
   className?: string;
@@ -9,11 +10,19 @@ interface NavLinksProps {
  * Primary section navigation. Each section is its own top-level route — the
  * /explore shell that used to nest them is gone, and only redirects remain.
  */
-const SECTIONS = [
-  { to: "/stories", label: "Stories" },
+const SECTIONS: readonly {
+  to: string;
+  label: string;
+  prefetch?: () => void;
+}[] = [
+  {
+    to: "/stories",
+    label: "Stories",
+    prefetch: () => void prefetchStoriesPage(),
+  },
   { to: "/competitions", label: "Competitions" },
   { to: "/book-clubs", label: "Book Clubs" },
-] as const;
+];
 
 const NavLinks = ({ className = "", onLinkClick }: NavLinksProps) => {
   const location = useLocation();
@@ -32,6 +41,9 @@ const NavLinks = ({ className = "", onLinkClick }: NavLinksProps) => {
             key={link.to}
             to={link.to}
             onClick={onLinkClick}
+            onMouseEnter={link.prefetch}
+            onFocus={link.prefetch}
+            onTouchStart={link.prefetch}
             aria-current={active ? "page" : undefined}
             className={`
               relative inline-flex items-center gap-1.5 font-ui text-sm font-medium no-underline whitespace-nowrap

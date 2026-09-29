@@ -12,7 +12,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { firestore } from "@novelsync/platform-auth";
+import { firestore } from "@novelsync/platform-auth/firestore";
 import {
   deleteAiSettings,
   getAiProviderCatalog,

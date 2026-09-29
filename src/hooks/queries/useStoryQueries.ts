@@ -1,15 +1,11 @@
 import {
-  keepPreviousData,
-  useInfiniteQuery,
   useMutation,
-  useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { usePublicClient } from "wagmi";
 import { formatEther, formatUnits } from "viem";
 import { queryKeys } from "./queryKeys";
-import { publicStoryRepo } from "@novelsync/story-data-client";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import {
   tippingPlatformConfig,
@@ -70,56 +66,6 @@ export type StoryWithEarnings = Awaited<
     usdc: string;
   };
 };
-
-/**
- * Cursor-paginated published stories for the discovery grid.
- * Pages are fetched on demand (infinite scroll); each page carries the
- * API cursor for the next fetch. `getNextPageParam` returns undefined
- * once the repo reports a null cursor, which sets `hasNextPage` to false.
- *
- * `search` matches server-side against title and author name, so it finds
- * stories that infinite scroll has not reached yet. It belongs to the query
- * key, which is what keeps it cheap: a repeated or retyped term is served
- * from cache for the full `staleTime` rather than re-querying. Callers are
- * expected to pass a debounced value — this hook fires one request per
- * distinct term it is handed.
- */
-export function usePublishedStories(category: string, search = "") {
-  return useInfiniteQuery({
-    queryKey: queryKeys.stories.byCategory(category, search),
-    queryFn: ({ pageParam }) =>
-      publicStoryRepo.getPublishedStories(
-        pageParam,
-        category === "all" ? undefined : category,
-        search || undefined,
-      ),
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.cursor ?? undefined,
-    staleTime: 1000 * 60 * 5, // 5 min — story lists are low-churn
-    // Keep the previous term's results on screen while the next one loads, so
-    // typing refines the grid instead of collapsing it to a spinner each time.
-    placeholderData: keepPreviousData,
-  });
-}
-
-export function useStoryCovers(storyIds: readonly string[]) {
-  const results = useQueries({
-    queries: storyIds.map((storyId) => ({
-      queryKey: queryKeys.stories.detail(storyId),
-      queryFn: () => publicStoryRepo.getStoryDetail(storyId),
-      staleTime: 1000 * 60 * 10,
-      retry: false,
-    })),
-  });
-
-  const covers: Record<string, string> = {};
-  results.forEach((result, index) => {
-    const story = result.data?.story;
-    const url = story?.thumbnailUrl || story?.coverImageUrl;
-    if (url) covers[storyIds[index]] = url;
-  });
-  return covers;
-}
 
 const NO_EARNINGS = { eth: "0", usdc: "0" } as const;
 

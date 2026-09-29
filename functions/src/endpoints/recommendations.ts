@@ -192,8 +192,20 @@ const handleExplainRecommendations = requireAuth(
   },
 );
 
+function recommendationsMinInstances(): number {
+  const parsed = Number.parseInt(
+    process.env.RECOMMENDATIONS_MIN_INSTANCES || "0",
+    10,
+  );
+  return Number.isNaN(parsed) || parsed < 0 ? 0 : parsed;
+}
+
 export const recommendStories = onRequest(
-  { ...corsOptions, timeoutSeconds: 60 },
+  {
+    ...corsOptions,
+    timeoutSeconds: 60,
+    minInstances: recommendationsMinInstances(),
+  },
   handleRecommendStories,
 );
 
