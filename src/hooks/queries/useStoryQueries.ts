@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePublicClient } from "wagmi";
 import { formatEther, formatUnits } from "viem";
 import { queryKeys } from "./queryKeys";
