@@ -17,7 +17,6 @@ import Strike from "@tiptap/extension-strike";
 import { ImageNode } from "@/components/editor/ImageNode";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { Transaction } from "@tiptap/pm/state";
-import type { Node as PMNode, Schema } from "@tiptap/pm/model";
 import { loadStorageService } from "@/services/loadStorageService";
 import CharacterCount from "@tiptap/extension-character-count";
 import Heading from "@tiptap/extension-heading";
@@ -37,10 +36,11 @@ import HorizontalRule from "@tiptap/extension-horizontal-rule";
 import Link from "@tiptap/extension-link";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
-import { Extension, getHTMLFromFragment } from "@tiptap/core";
+import { Extension } from "@tiptap/core";
 import Suggestion from "@tiptap/suggestion";
 import { slashCommandSuggestion } from "./SlashCommandExtension";
-import { CHAPTER_WORD_LIMIT, chapterWordCount } from "@/utils/chapterWordLimit";
+import { CHAPTER_WORD_LIMIT } from "@/utils/chapterWordLimit";
+import { docWordCount } from "@/components/editor/docWordCount";
 import { SuggestionMenu } from "./SuggestionMenu";
 import {
   ImageIcon,
@@ -79,16 +79,6 @@ import {
 import { useAssistantProposal } from "@/components/chat/AssistantProposalContext";
 
 const CHARACTER_LIMIT = 50000;
-const wordCountCache = new WeakMap<PMNode, number>();
-
-const countDoc = (doc: PMNode, schema: Schema): number => {
-  const cached = wordCountCache.get(doc);
-  if (cached !== undefined) return cached;
-  const count = chapterWordCount(getHTMLFromFragment(doc.content, schema));
-  wordCountCache.set(doc, count);
-  return count;
-};
-
 const ChapterWordCeiling = Extension.create({
   name: "chapterWordCeiling",
   addProseMirrorPlugins() {
@@ -97,9 +87,9 @@ const ChapterWordCeiling = Extension.create({
         key: new PluginKey("chapterWordCeiling"),
         filterTransaction: (tr, state) => {
           if (!tr.docChanged) return true;
-          const next = countDoc(tr.doc, state.schema);
+          const next = docWordCount(tr.doc);
           if (next <= CHAPTER_WORD_LIMIT) return true;
-          return next <= countDoc(state.doc, state.schema);
+          return next <= docWordCount(state.doc);
         },
       }),
     ];
@@ -113,7 +103,6 @@ const HeadingWithoutInputRules = Heading.extend({
 
 interface TipTapEditorProps {
   initialContent: string;
-  onContentChange: (content: string) => void;
   onSave: (content: string) => void;
   /** Called when the editor loses focus, so the parent can flush a pending save. */
   onBlur?: () => void;
@@ -127,7 +116,6 @@ interface TipTapEditorProps {
 
 export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   initialContent,
-  onContentChange,
   onSave,
   onBlur,
   storyId,
@@ -141,7 +129,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   // Keep a ref so plugins always read the current ids without stale closure
   const uploadContextRef = useRef({ userId, storyId, chapterId });
   const editorRef = useRef<Editor | null>(null);
-  const onContentChangeRef = useRef(onContentChange);
   // Single debounce lives in useAutosave (via onSave); the editor just forwards
   // every change through a ref to avoid a stale closure in onUpdate.
   const onSaveRef = useRef(onSave);
@@ -151,7 +138,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const pasteErrorRef = useRef<((msg: string) => void) | null>(null);
 
   uploadContextRef.current = { userId, storyId, chapterId };
-  onContentChangeRef.current = onContentChange;
   onSaveRef.current = onSave;
   onBlurRef.current = onBlur;
   onTransactionRef.current = onTransaction;
@@ -347,7 +333,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     content: initialContent,
     onUpdate: ({ editor }) => {
       const content = editor.getHTML();
-      onContentChangeRef.current(content);
       // Forward straight to the autosave hook, which owns the (single) debounce.
       onSaveRef.current(content);
     },
@@ -377,10 +362,9 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   // ── Effects ────────────────────────────────────────────────────────────────
 
   // Re-seed the editor only when the *chapter* changes — never on content prop
-  // changes. initialContent updates on every keystroke (via onContentChange →
-  // chapter state), and TipTap's serialized getHTML() rarely matches the stored
-  // string byte-for-byte, so reacting to initialContent would call setContent
-  // mid-typing and reset the caret. Keying on chapterId avoids that. The
+  // changes. initialContent updates after each save, and TipTap's serialized
+  // getHTML() rarely matches the stored string byte-for-byte, so reacting to
+  // initialContent would call setContent mid-typing and reset the caret. Keying on chapterId avoids that. The
   // `false` arg keeps the swap out of the undo history.
   const loadedChapterIdRef = useRef<string | undefined>(undefined);
   useEffect(() => {

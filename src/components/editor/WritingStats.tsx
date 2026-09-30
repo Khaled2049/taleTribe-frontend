@@ -3,6 +3,8 @@ import { CHAPTER_WORD_LIMIT, chapterWordCount } from "@/utils/chapterWordLimit";
 
 interface WritingStatsProps {
   currentChapter: Chapter | null;
+  /** The live count from the editor; falls back to the saved content. */
+  storedWordCount?: number;
   chaptersCount: number;
   pageCount?: number;
   textCharacterCount?: number;
@@ -12,13 +14,15 @@ interface WritingStatsProps {
 
 export function WritingStats({
   currentChapter,
+  storedWordCount,
   chaptersCount,
   pageCount,
   textCharacterCount,
   textWordCount,
   singleDocument = false,
 }: WritingStatsProps) {
-  const wordCount = chapterWordCount(currentChapter?.content ?? "");
+  const wordCount =
+    storedWordCount ?? chapterWordCount(currentChapter?.content ?? "");
 
   const characterCount =
     textCharacterCount ?? currentChapter?.content?.length ?? 0;
