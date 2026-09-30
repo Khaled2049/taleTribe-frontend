@@ -35,8 +35,15 @@ interface ApiPublicChapter {
     wordCount: number;
 }
 
+export interface PublicStoryAuthor {
+    bio?: string;
+    photoUrl?: string;
+    walletAddress?: string;
+}
+
 interface ApiPublicStoryDetail {
     story: ApiPublicStory;
+    author?: PublicStoryAuthor;
     chapters: ApiPublicChapter[];
 }
 
@@ -100,12 +107,13 @@ class PublicStoryRepo {
         return { stories: page.stories.map((story) => this.story(story)), cursor: page.nextCursor || null };
     }
 
-    async getStoryDetail(storyId: string): Promise<{ story: Story; chapters: Omit<Chapter, "content">[] } | null> {
+    async getStoryDetail(storyId: string): Promise<{ story: Story; author: PublicStoryAuthor; chapters: Omit<Chapter, "content">[] } | null> {
         try {
             const result = await this.request<ApiPublicStoryDetail>(`/v1/public/stories/${storyId}`);
             const story = this.story(result.story);
             return {
                 story,
+                author: result.author ?? {},
                 chapters: result.chapters.map((chapter) => {
                     const { content: _content, ...metadata } = this.chapter(chapter, story.userId);
                     return metadata;
