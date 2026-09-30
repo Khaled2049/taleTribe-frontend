@@ -4,6 +4,7 @@ import { ChevronRight, Compass } from "lucide-react";
 import { FaEye, FaThumbsUp } from "react-icons/fa";
 import type { StoryMetadata } from "@novelsync/story-data-client";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
+import { prefetchStoryDetail } from "@/routes/Story/prefetchStoryDetail";
 
 export const ABOVE_THE_FOLD_COVERS = 6;
 
@@ -54,7 +55,12 @@ export const StoryGridCard = memo(function StoryGridCard({
   onSimilar,
 }: StoryCardProps) {
   return (
-    <div onClick={() => onOpen(story)} className="group cursor-pointer">
+    <div
+      onClick={() => onOpen(story)}
+      onMouseEnter={() => void prefetchStoryDetail(story.id)}
+      onTouchStart={() => void prefetchStoryDetail(story.id)}
+      className="group cursor-pointer"
+    >
       <div className="max-w-[130px] mx-auto book-perspective">
         <div className="book-cover relative aspect-[2/3] rounded-ns overflow-hidden mb-2 bg-ns-surface">
           <StoryCover
@@ -132,6 +138,8 @@ export const StoryListRow = memo(function StoryListRow({
   return (
     <div
       onClick={() => onOpen(story)}
+      onMouseEnter={() => void prefetchStoryDetail(story.id)}
+      onTouchStart={() => void prefetchStoryDetail(story.id)}
       className="group flex items-center gap-3 py-3 cursor-pointer active:bg-ns-surface-hover transition-colors"
     >
       <div className="relative w-10 h-[60px] rounded shrink-0 overflow-hidden bg-ns-surface">

@@ -19,7 +19,13 @@ import { RouteError } from "./components/common/RouteError";
 import { useAuthContext } from "./contexts/AuthContext";
 import RequireAuth from "./routes/RequireAuth";
 import { prefetchStoriesPage } from "./routes/Story/prefetchStories";
+import {
+  prefetchReaderChapter,
+  prefetchStoryDetail,
+} from "./routes/Story/prefetchStoryDetail";
+import { getCurrentUid } from "@novelsync/platform-auth";
 import { StoriesPageSkeleton } from "./routes/Story/StoriesPageSkeleton";
+import { StoryDetailSkeleton } from "./routes/Story/StoryDetailSkeleton";
 
 const Root = lazy(() => import("./routes/root"));
 const Signin = lazy(() => import("./routes/Auth/sign-in"));
@@ -297,6 +303,21 @@ const router = createBrowserRouter([
       },
       {
         path: "/create/:storyId",
+        // Not awaited, and imported lazily to keep the story-data workspace
+        // client out of the entry bundle; the shelf's hover has usually loaded
+        // it already. The uid is null until Firebase restores a session, so a
+        // cold refresh preloads only code and the guard fetches the data.
+        loader: ({ params }) => {
+          const { storyId } = params;
+          if (storyId) {
+            const uid = getCurrentUid();
+            void import("./routes/Story/prefetchWorkspace").then(
+              ({ prefetchWorkspace }) => prefetchWorkspace(uid, storyId),
+            );
+          }
+          return null;
+        },
+        hydrateFallbackElement: <LoadingFallback />,
         element: (
           <Suspense fallback={<LoadingFallback />}>
             <PrivateRoute />
@@ -349,11 +370,28 @@ const router = createBrowserRouter([
       },
       {
         path: "/story/:id",
+        loader: ({ params }) => {
+          if (params.id) void prefetchStoryDetail(params.id);
+          return null;
+        },
+        hydrateFallbackElement: <StoryDetailSkeleton />,
         element: (
-          <Suspense fallback={<LoadingFallback />}>
+          <Suspense fallback={<StoryDetailSkeleton />}>
             <StoryDetail />
           </Suspense>
         ),
+        children: [
+          {
+            path: "read/:chapterId?",
+            element: null,
+            loader: ({ params }) => {
+              if (params.id && params.chapterId) {
+                void prefetchReaderChapter(params.id, params.chapterId);
+              }
+              return null;
+            },
+          },
+        ],
       },
     ],
   },
