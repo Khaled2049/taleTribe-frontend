@@ -1,5 +1,5 @@
 import { isNotFound, request } from "@novelsync/story-data-client";
-import { firestore } from "@novelsync/platform-auth";
+import { firestore } from "@novelsync/platform-auth/firestore";
 import {
   IBookOfTheMonth,
   IClub,

@@ -24,6 +24,7 @@ export interface RecommendationItem {
   tone: string[];
   core_premise?: string | null;
   published_year?: number | null;
+  cover_url?: string | null;
   score: number;
   matched_query_count: number;
   explanation_cache_key?: string;

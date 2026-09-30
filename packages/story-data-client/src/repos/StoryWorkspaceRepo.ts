@@ -1,6 +1,6 @@
 import { isNotFound } from "../errors";
 import { request } from "../request";
-import type { Chapter, Story, StoryMetadata } from "../types/IStory";
+import type { Chapter, ChapterSummary, Story, StoryMetadata } from "../types/IStory";
 
 interface ApiStory {
     id: string;
@@ -128,11 +128,24 @@ export class StoryWorkspaceRepo {
     async deleteStory(story: Story): Promise<void> { const revision = this.revisions.get(`story:${story.id}`) ?? story.revision; if (!revision) throw new Error("Story revision is missing. Reload the story."); await this.request<void>("DELETE", `/v1/stories/${story.id}`, undefined, revision); }
     async deleteStoryByID(storyId: string): Promise<void> { const story = await this.getStory(storyId); if (!story) throw new Error("Story not found"); return this.deleteStory(story); }
     async getChapters(story: Story): Promise<Chapter[]> { return this.getChaptersByStoryId(story.id, story.userId); }
+    /**
+     * The running order without bodies. Deliberately leaves the revision map
+     * alone: an index read after another device's edit must not lend a newer
+     * If-Match to a body this session fetched earlier, or the save would
+     * overwrite that edit instead of raising a conflict.
+     */
+    async getChapterIndex(storyId: string, ownerId = ""): Promise<ChapterSummary[]> {
+        const chapters = await this.request<ApiChapter[]>("GET", `/v1/stories/${storyId}/chapters?content=false`);
+        return chapters.map((api) => ({ id: api.id, title: api.title, order: api.position, wordCount: api.wordCount, userId: ownerId, revision: api.revision }));
+    }
+    async getChapter(storyId: string, chapterId: string, ownerId = ""): Promise<Chapter | null> {
+        try { return this.chapter(await this.request<ApiChapter>("GET", `/v1/stories/${storyId}/chapters/${chapterId}`), ownerId); } catch (error) { if (isNotFound(error)) return null; throw error; }
+    }
     /** For callers holding a StoryMetadata rather than a full Story — the owner id is only used to stamp the mapped chapters. */
     async getChaptersByStoryId(storyId: string, ownerId = ""): Promise<Chapter[]> { const chapters = await this.request<ApiChapter[]>("GET", `/v1/stories/${storyId}/chapters`); return chapters.map((chapter) => this.chapter(chapter, ownerId)); }
     async createChapter(story: Story, title: string, position: number): Promise<Chapter> { return this.chapter(await this.request<ApiChapter>("POST", `/v1/stories/${story.id}/chapters`, { title, content: "", position }), story.userId); }
     async updateChapter(story: Story, chapter: Chapter, title: string, content: string): Promise<Chapter> { const revision = this.revisions.get(`chapter:${chapter.id}`) ?? chapter.revision; if (!revision) throw new Error("Chapter revision is missing. Reload the story."); return this.chapter(await this.request<ApiChapter>("PATCH", `/v1/stories/${story.id}/chapters/${chapter.id}`, { title, content, position: chapter.order }, revision), story.userId); }
-    async deleteChapter(story: Story, chapter: Chapter): Promise<void> { const revision = this.revisions.get(`chapter:${chapter.id}`) ?? chapter.revision; if (!revision) throw new Error("Chapter revision is missing. Reload the story."); await this.request<void>("DELETE", `/v1/stories/${story.id}/chapters/${chapter.id}`, undefined, revision); }
+    async deleteChapter(story: Story, chapter: Pick<Chapter, "id" | "revision">): Promise<void> { const revision = this.revisions.get(`chapter:${chapter.id}`) ?? chapter.revision; if (!revision) throw new Error("Chapter revision is missing. Reload the story."); await this.request<void>("DELETE", `/v1/stories/${story.id}/chapters/${chapter.id}`, undefined, revision); }
 }
 
 export const storyWorkspaceRepo = new StoryWorkspaceRepo();

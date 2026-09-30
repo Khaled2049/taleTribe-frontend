@@ -18,6 +18,7 @@ import { SEOHead } from "@/components/seo/SEOHead";
 import FollowButton from "@/components/common/FollowButton";
 import { storageService } from "@/services/StorageService";
 import { validateImageFile } from "@/utils/imageUpload";
+import { Web3Boundary } from "@/contexts/Web3Boundary";
 
 const OwnerSettings = lazy(() => import("./OwnerSettings"));
 
@@ -333,7 +334,9 @@ const PublicUserProfile: React.FC = () => {
               </div>
             }
           >
-            <OwnerSettings identity={identityFields} />
+            <Web3Boundary>
+              <OwnerSettings identity={identityFields} />
+            </Web3Boundary>
           </Suspense>
         )}
       </div>

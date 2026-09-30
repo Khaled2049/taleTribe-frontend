@@ -9,7 +9,6 @@ interface CommentProps {
   comment: CommentType;
   allComments: CommentType[];
   currentUser: IUser | null;
-  namesById: Map<string, string>;
   onReply: (parentId: string, message: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onEdit: (commentId: string, newMessage: string) => Promise<void>;
@@ -28,7 +27,6 @@ export const Comment: React.FC<CommentProps> = React.memo(
     comment,
     allComments,
     currentUser,
-    namesById,
     onReply,
     onDelete,
     onEdit,
@@ -46,8 +44,7 @@ export const Comment: React.FC<CommentProps> = React.memo(
       () => allComments.filter((c) => c.parentId === comment.id),
       [allComments, comment.id],
     );
-    const authorUsername =
-      namesById.get(comment.userId) || comment.authorUsername || "unknown";
+    const authorUsername = comment.authorUsername || "unknown";
 
     const handleEdit = async () => {
       if (editedMessage.trim() === "") return;
@@ -237,7 +234,6 @@ export const Comment: React.FC<CommentProps> = React.memo(
                 comment={reply}
                 allComments={allComments}
                 currentUser={currentUser}
-                namesById={namesById}
                 onReply={onReply}
                 onDelete={onDelete}
                 onEdit={onEdit}

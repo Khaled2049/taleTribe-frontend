@@ -3,7 +3,7 @@ import type { IClub } from "../src/types/IClub";
 
 // The repo module pulls in Firestore for the realtime chat helpers, which the
 // wire mapper under test has nothing to do with.
-vi.mock("@novelsync/platform-auth", () => ({ firestore: {} }));
+vi.mock("@novelsync/platform-auth/firestore", () => ({ firestore: {} }));
 
 const { clubInput } = await import("../src/routes/BookClub/bookClubRepo");
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 
-import { firestore } from "@novelsync/platform-auth";
+import { firestore } from "@novelsync/platform-auth/firestore";
 
 export type McpAccessStatus = "none" | "requested" | "granted" | "revoked";
 

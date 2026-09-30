@@ -21,6 +21,14 @@ export default defineConfig(({ mode }) => ({
         __dirname,
         "./packages/story-data-client/src/index.ts",
       ),
+      "@novelsync/platform-auth/firestore": path.resolve(
+        __dirname,
+        "./packages/platform-auth/src/firestore.ts",
+      ),
+      "@novelsync/platform-auth/storage": path.resolve(
+        __dirname,
+        "./packages/platform-auth/src/storage.ts",
+      ),
       "@novelsync/platform-auth": path.resolve(
         __dirname,
         "./packages/platform-auth/src/index.ts",

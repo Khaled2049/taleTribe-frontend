@@ -1,12 +1,12 @@
 /// <reference types="cypress" />
 export {};
 
-// Spec D — chapter comments. Comments moved to story-data in the cutover, so
+// Spec D — story comments. Comments moved to story-data in the cutover, so
 // what this spec covers is the part the Go API tests cannot reach: the Firebase
 // token surviving the Vite proxy into story-data, and the React Query cache the
 // thread actually renders from.
 //
-// The story and chapter are seeded through the API rather than the wizard —
+// The story is seeded through the API rather than the wizard —
 // story_lifecycle already covers the wizard, and repeating it here would just
 // make this spec fail for someone else's reason.
 
@@ -15,15 +15,14 @@ const PASSWORD = "e2e-password-123";
 
 type Row = Record<string, unknown>;
 
-describe("Chapter comments", () => {
+describe("Story comments", () => {
   let uid: string;
   let storyId: string;
-  let chapterId: string;
 
   const seedComment = (message: string) =>
     cy.task("storyData", {
       method: "POST",
-      path: `/v1/stories/${storyId}/chapters/${chapterId}/comments`,
+      path: `/v1/stories/${storyId}/comments`,
       uid,
       body: { message, parentId: "" },
     });
@@ -44,14 +43,6 @@ describe("Chapter comments", () => {
         },
       }).then((story) => {
         storyId = story.id as string;
-        // Creating a story opens it with a first chapter, and the reader lands
-        // on that one — so it is the chapter the comment thread hangs off.
-        cy.task<Row[]>("storyData", {
-          path: `/v1/stories/${storyId}/chapters`,
-          uid,
-        }).then((chapters) => {
-          chapterId = chapters[0].id as string;
-        });
       });
     });
     cy.login(EMAIL, PASSWORD);
@@ -77,7 +68,7 @@ describe("Chapter comments", () => {
     // And it really reached PostgreSQL, not just local state.
     cy.then(() =>
       cy.pollStoryData(
-        `/v1/public/stories/${storyId}/chapters/${chapterId}/comments`,
+        `/v1/public/stories/${storyId}/comments`,
         uid,
         (rows) => rows.length === 1,
       ),
@@ -86,7 +77,7 @@ describe("Chapter comments", () => {
 
   it("renders a thread longer than five comments", () => {
     // Regression: the list replaced any thread past five top-level comments
-    // with the literal words "Comments disabled", so a busy chapter showed
+    // with the literal words "Comments disabled", so a busy thread showed
     // nothing at all.
     for (let i = 1; i <= 6; i += 1) {
       seedComment(`Thought number ${i}`);
@@ -115,7 +106,7 @@ describe("Chapter comments", () => {
 
     cy.then(() =>
       cy.pollStoryData(
-        `/v1/public/stories/${storyId}/chapters/${chapterId}/comments`,
+        `/v1/public/stories/${storyId}/comments`,
         uid,
         (rows) => rows.length === 1 && rows[0].likeCount === 1,
       ),
@@ -124,7 +115,7 @@ describe("Chapter comments", () => {
     cy.get('[data-cy="comment-like"]').click();
     cy.then(() =>
       cy.pollStoryData(
-        `/v1/public/stories/${storyId}/chapters/${chapterId}/comments`,
+        `/v1/public/stories/${storyId}/comments`,
         uid,
         (rows) => rows[0].likeCount === 0,
       ),
