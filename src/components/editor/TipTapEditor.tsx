@@ -18,7 +18,7 @@ import { ImageNode } from "@/components/editor/ImageNode";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { Transaction } from "@tiptap/pm/state";
 import type { Node as PMNode, Schema } from "@tiptap/pm/model";
-import { storageService } from "@/services/StorageService";
+import { loadStorageService } from "@/services/loadStorageService";
 import CharacterCount from "@tiptap/extension-character-count";
 import Heading from "@tiptap/extension-heading";
 import {
@@ -244,6 +244,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     } = uploadContextRef.current;
                     void (async () => {
                       try {
+                        const storageService = await loadStorageService();
                         const url = await storageService.uploadChapterImage(
                           file,
                           uid ?? "",

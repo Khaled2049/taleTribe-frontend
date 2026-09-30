@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { Editor } from "@tiptap/react";
 import { generateCover } from "@/cloudFunctions/images";
-import { storageService } from "@/services/StorageService";
+import { loadStorageService } from "@/services/loadStorageService";
 
 export const MAX_CHAPTER_IMAGES = 5;
 
@@ -57,6 +57,7 @@ export function useImageGeneration({
         storyId: sid,
         chapterId: cid,
       } = uploadContextRef.current;
+      const storageService = await loadStorageService();
       const url = await storageService.uploadChapterImage(
         file,
         uid ?? "",

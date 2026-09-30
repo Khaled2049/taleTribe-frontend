@@ -1,5 +1,7 @@
 import "../style.css";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -84,7 +86,15 @@ import { nextChapterPosition } from "@/utils/chapterPosition";
 import { loadWorkspace } from "@/lib/workspaceLoad";
 import { Button } from "@/components/ui/button";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
-import { InteractiveStoryPanel } from "@/components/editor/InteractiveStoryPanel";
+// Co-Write only renders when opened; `?wizard=true` opens it on mount.
+const loadInteractiveStoryPanel = () =>
+  import("@/components/editor/InteractiveStoryPanel");
+const InteractiveStoryPanel = lazy(() =>
+  loadInteractiveStoryPanel().then((m) => ({
+    default: m.InteractiveStoryPanel,
+  })),
+);
+const preloadCoWrite = () => void loadInteractiveStoryPanel().catch(() => {});
 import { useCoWrite } from "@/hooks/useCoWrite";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useFullscreen } from "@/hooks/useFullscreen";
@@ -1461,22 +1471,31 @@ export function SimpleEditor() {
                 {isInteractivePanelOpen && editor && (
                   <div className="border-b border-ns-border bg-transparent px-3 py-3 sm:px-4 sm:py-4">
                     <div className="mx-auto w-full max-w-4xl">
-                      <InteractiveStoryPanel
-                        storyId={state.story?.id || ""}
-                        chapterId={state.currentChapter?.id || ""}
-                        editor={editor}
-                        mode={interactivePanelMode}
-                        turnCount={coWriteTurnCount}
-                        onClose={() => {
-                          setIsInteractivePanelOpen(false);
-                          setCoWriteTurnCount(0);
-                        }}
-                        onChoiceInserted={() => {
-                          setInteractivePanelMode("continuation");
-                          setCoWriteTurnCount((n) => n + 1);
-                          triggerSave(editor.getHTML());
-                        }}
-                      />
+                      <Suspense
+                        fallback={
+                          <div className="flex items-center gap-2 font-ui text-xs text-ns-ink-muted">
+                            <Loader className="w-3.5 h-3.5 animate-spin" />
+                            Opening Co-Write…
+                          </div>
+                        }
+                      >
+                        <InteractiveStoryPanel
+                          storyId={state.story?.id || ""}
+                          chapterId={state.currentChapter?.id || ""}
+                          editor={editor}
+                          mode={interactivePanelMode}
+                          turnCount={coWriteTurnCount}
+                          onClose={() => {
+                            setIsInteractivePanelOpen(false);
+                            setCoWriteTurnCount(0);
+                          }}
+                          onChoiceInserted={() => {
+                            setInteractivePanelMode("continuation");
+                            setCoWriteTurnCount((n) => n + 1);
+                            triggerSave(editor.getHTML());
+                          }}
+                        />
+                      </Suspense>
                     </div>
                   </div>
                 )}
@@ -1501,6 +1520,8 @@ export function SimpleEditor() {
                     </button>
                     <button
                       onClick={openCoWrite}
+                      onPointerEnter={preloadCoWrite}
+                      onFocus={preloadCoWrite}
                       title="Co-Write with AI"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink hover:border-ns-border-strong active:scale-[0.97] transition-all duration-150 whitespace-nowrap"
                     >
@@ -1595,6 +1616,8 @@ export function SimpleEditor() {
                     </button>
                     <button
                       onClick={openCoWrite}
+                      onPointerEnter={preloadCoWrite}
+                      onFocus={preloadCoWrite}
                       className="inline-flex justify-center rounded-ns border border-ns-border px-2 py-1.5 text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
                       aria-label="Open Co-Write"
                     >
