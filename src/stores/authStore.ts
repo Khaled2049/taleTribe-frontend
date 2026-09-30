@@ -3,8 +3,7 @@ import {
   User as FirebaseUser,
   updateProfile as updateFirebaseAuthProfile,
 } from "firebase/auth";
-import { auth, firestore } from "@novelsync/platform-auth";
-import { doc, getDoc } from "firebase/firestore";
+import { auth } from "@novelsync/platform-auth";
 import { IUser } from "@/types/IUser";
 import { profileRepo } from "@novelsync/story-data-client";
 import { appQueryClient } from "@/lib/queryClient";
@@ -45,6 +44,14 @@ const getFallbackUser = (firebaseUser: FirebaseUser): IUser => ({
   lastAiUsageDate: "",
 });
 
+async function readUserDoc(uid: string) {
+  const [{ doc, getDoc }, { firestore }] = await Promise.all([
+    import("firebase/firestore"),
+    import("@novelsync/platform-auth/firestore"),
+  ]);
+  return getDoc(doc(firestore, "users", uid));
+}
+
 export const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
   loading: true,
@@ -55,8 +62,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
 
     try {
-      const userDocRef = doc(firestore, "users", firebaseUser.uid);
-      const userDoc = await getDoc(userDocRef);
+      const userDoc = await readUserDoc(firebaseUser.uid);
 
       if (userDoc.exists()) {
         const userData = userDoc.data();
