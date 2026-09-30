@@ -1,6 +1,12 @@
 import { Extension, type Editor, type Range } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
-import tippy, { Instance as TippyInstance } from "tippy.js";
+import {
+  autoUpdate,
+  computePosition,
+  flip,
+  offset,
+  shift,
+} from "@floating-ui/dom";
 import { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { PluginKey, type EditorState } from "@tiptap/pm/state";
 import {
@@ -67,6 +73,57 @@ export const SlashCommandExtension = Extension.create({
 });
 
 // Suggestion configuration
+/**
+ * Floats the menu at the suggestion caret. Uses the floating-ui that TipTap's
+ * menus already load rather than a second positioning library. Fixed
+ * positioning plus autoUpdate keeps it attached while the editor's inner
+ * scroll container scrolls.
+ */
+function createSuggestionPopup(content: HTMLElement, contextElement: Element) {
+  const root = document.createElement("div");
+  Object.assign(root.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    zIndex: "9999",
+    visibility: "hidden",
+  });
+  root.appendChild(content);
+  document.body.appendChild(root);
+
+  let getRect: () => DOMRect | null = () => null;
+  const reference = {
+    getBoundingClientRect: () => getRect() ?? new DOMRect(),
+    contextElement,
+  };
+  const place = () => {
+    if (!getRect()) return;
+    void computePosition(reference, root, {
+      strategy: "fixed",
+      placement: "bottom-start",
+      middleware: [offset(10), flip(), shift({ padding: 8 })],
+    }).then(({ x, y }) => {
+      root.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+      root.style.visibility = "visible";
+    });
+  };
+  const stopAutoUpdate = autoUpdate(reference, root, place);
+
+  return {
+    setReference(rect: () => DOMRect | null) {
+      getRect = rect;
+      place();
+    },
+    hide() {
+      root.style.display = "none";
+    },
+    destroy() {
+      stopAutoUpdate();
+      root.remove();
+    },
+  };
+}
+
 export const slashCommandSuggestion = (
   onGenerateNextLine: () => Promise<void>,
   onGenerateImage: () => void,
@@ -175,7 +232,7 @@ export const slashCommandSuggestion = (
 
   render: () => {
     let component: ReactRenderer<MenuHandle>;
-    let popup: TippyInstance[];
+    let popup: ReturnType<typeof createSuggestionPopup> | null = null;
 
     return {
       onStart: (props: SuggestionProps) => {
@@ -189,9 +246,7 @@ export const slashCommandSuggestion = (
                 range: props.range,
               });
               // Close the suggestion menu
-              if (popup && popup[0]) {
-                popup[0].hide();
-              }
+              popup?.hide();
             },
           },
           editor: props.editor,
@@ -201,15 +256,8 @@ export const slashCommandSuggestion = (
           return;
         }
 
-        popup = tippy("body", {
-          getReferenceClientRect: props.clientRect as () => DOMRect,
-          appendTo: () => document.body,
-          content: component.element,
-          showOnCreate: true,
-          interactive: true,
-          trigger: "manual",
-          placement: "bottom-start",
-        });
+        popup = createSuggestionPopup(component.element, props.editor.view.dom);
+        popup.setReference(props.clientRect);
       },
 
       onUpdate(props: SuggestionProps) {
@@ -222,9 +270,7 @@ export const slashCommandSuggestion = (
               range: props.range,
             });
             // Close the suggestion menu
-            if (popup && popup[0]) {
-              popup[0].hide();
-            }
+            popup?.hide();
           },
         });
 
@@ -232,16 +278,12 @@ export const slashCommandSuggestion = (
           return;
         }
 
-        popup[0].setProps({
-          getReferenceClientRect: props.clientRect as () => DOMRect,
-        });
+        popup?.setReference(props.clientRect);
       },
 
       onKeyDown(props: { event: KeyboardEvent }) {
         if (props.event.key === "Escape") {
-          if (popup && popup[0]) {
-            popup[0].hide();
-          }
+          popup?.hide();
           return true;
         }
 
@@ -266,9 +308,8 @@ export const slashCommandSuggestion = (
       },
 
       onExit() {
-        if (popup && popup[0]) {
-          popup[0].destroy();
-        }
+        popup?.destroy();
+        popup = null;
         if (component) {
           component.destroy();
         }
