@@ -4,6 +4,7 @@ import { publicStoryRepo } from "@novelsync/story-data-client";
 import { Chapter, Story } from "@novelsync/story-data-client";
 import { storySocialRepo } from "@novelsync/story-data-client";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthIdentity } from "@novelsync/platform-auth";
 import {
   useComments,
   useCommentCache,
@@ -67,6 +68,9 @@ function withTimeout<T>(
 const StoryDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuthContext();
+  const { uid, loading: authLoading } = useAuthIdentity();
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [viewerKey, setViewerKey] = useState<string | null>(null);
 
   const [viewMode, setViewMode] = useState<ViewMode>("details");
   const [hoveredHeroStar, setHoveredHeroStar] = useState<number | null>(null);
@@ -102,6 +106,7 @@ const StoryDetail: React.FC = () => {
     chapterId: string | null;
     scrollPercent: number;
   } | null>(null);
+  const openedChapterFor = useRef<string | null>(null);
 
   // --- Data Loading ---
 
@@ -199,22 +204,14 @@ const StoryDetail: React.FC = () => {
     [id, prefetchChapter],
   );
 
-  const loadStory = useCallback(
-    async (storyId: string) => {
-      try {
-        setState((prev) => ({ ...prev, loading: true, error: null }));
-
-        const [detail, me, progress] = await Promise.all([
-          publicStoryRepo.getStoryDetail(storyId),
-          user
-            ? storySocialRepo.getMe(storyId).catch(() => null)
-            : Promise.resolve(null),
-          user
-            ? readingHistoryRepo.getProgress(storyId)
-            : Promise.resolve(null),
-        ]);
-        resumeRef.current = progress;
-
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    setState((prev) => ({ ...prev, loading: true, error: null }));
+    publicStoryRepo
+      .getStoryDetail(id)
+      .then((detail) => {
+        if (cancelled) return;
         if (!detail) {
           setState((prev) => ({
             ...prev,
@@ -223,53 +220,84 @@ const StoryDetail: React.FC = () => {
           }));
           return;
         }
-
-        const { story: storyData, chapters: chaptersMetaList } = detail;
-        const savedChapterIndex = progress?.chapterId
-          ? chaptersMetaList.findIndex(
-              (chapter) => chapter.id === progress.chapterId,
-            )
-          : -1;
-        const validChapterIndex = Math.max(
-          0,
-          Math.min(savedChapterIndex, chaptersMetaList.length - 1),
-        );
-
         setState((prev) => ({
           ...prev,
-          story: storyData,
-          chapters: chaptersMetaList,
+          story: detail.story,
+          chapters: detail.chapters,
           currentChapter: null,
-          currentChapterIndex: validChapterIndex,
-          likes: storyData.likes,
-          isLiked: me?.liked || false,
-          userRating: me?.rating ?? null,
-          ratingsCount: storyData.ratingsCount || 0,
+          currentChapterIndex: 0,
+          likes: detail.story.likes,
+          ratingsCount: detail.story.ratingsCount || 0,
           loading: false,
         }));
-
-        void publicStoryRepo.recordView(storyId).catch(() => {});
-        // Load the starting chapter content (prefetches next inside)
-        await loadChapterContent(
-          validChapterIndex,
-          chaptersMetaList,
-          storyData.userId,
-        );
-      } catch (error) {
+        void publicStoryRepo.recordView(id).catch(() => {});
+      })
+      .catch((error) => {
+        if (cancelled) return;
         console.error("Error fetching story:", error);
         setState((prev) => ({
           ...prev,
           loading: false,
           error: "Failed to load story",
         }));
-      }
-    },
-    [user, loadChapterContent],
-  );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, loadAttempt]);
+
+  useEffect(() => {
+    if (!id || authLoading) return;
+    let cancelled = false;
+    const viewer = `${id}:${uid ?? ""}`;
+    if (!uid) {
+      resumeRef.current = null;
+      setState((prev) => ({ ...prev, isLiked: false, userRating: null }));
+      setViewerKey(viewer);
+      return;
+    }
+    Promise.all([
+      storySocialRepo.getMe(id).catch(() => null),
+      readingHistoryRepo.getProgress(id),
+    ]).then(([me, progress]) => {
+      if (cancelled) return;
+      resumeRef.current = progress;
+      setState((prev) => ({
+        ...prev,
+        isLiked: me?.liked || false,
+        userRating: me?.rating ?? null,
+      }));
+      setViewerKey(viewer);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, uid, authLoading]);
+
+  const storyReady = !!id && state.story?.id === id;
+  const viewerReady = viewerKey === `${id}:${uid ?? ""}`;
+  useEffect(() => {
+    if (!storyReady || !viewerReady || !state.story) return;
+    if (openedChapterFor.current === state.story.id) return;
+    openedChapterFor.current = state.story.id;
+    const resumeId = resumeRef.current?.chapterId;
+    const saved = resumeId
+      ? state.chapters.findIndex((chapter) => chapter.id === resumeId)
+      : -1;
+    const index = Math.max(0, Math.min(saved, state.chapters.length - 1));
+    setState((prev) => ({ ...prev, currentChapterIndex: index }));
+    void loadChapterContent(index, state.chapters, state.story.userId);
+  }, [
+    storyReady,
+    viewerReady,
+    state.story,
+    state.chapters,
+    loadChapterContent,
+  ]);
 
   // --- Handlers ---
   const handleLike = useCallback(async () => {
-    if (!id || !user) return;
+    if (!id || !uid) return;
 
     const previousIsLiked = state.isLiked;
     const previousLikes = state.likes;
@@ -295,11 +323,11 @@ const StoryDetail: React.FC = () => {
         likes: previousLikes,
       }));
     }
-  }, [id, user, state.isLiked, state.likes]);
+  }, [id, uid, state.isLiked, state.likes]);
 
   const handleRatingSubmit = useCallback(
     async (rating: number) => {
-      if (!id || !user) return;
+      if (!id || !uid) return;
       if (state.userRating !== null) return;
 
       const previousUserRating = state.userRating;
@@ -333,7 +361,7 @@ const StoryDetail: React.FC = () => {
         }));
       }
     },
-    [id, user, state.userRating, state.ratingsCount, state.story],
+    [id, uid, state.userRating, state.ratingsCount, state.story],
   );
 
   const handlePrevChapter = useCallback(() => {
@@ -346,7 +374,7 @@ const StoryDetail: React.FC = () => {
     // Record the target so any in-flight fetch for another chapter is dropped.
     if (chapterMeta) activeChapterId.current = chapterMeta.id;
 
-    if (id && user && state.story) {
+    if (id && uid && state.story) {
       if (chapterMeta) readingHistoryRepo.saveProgress(id, chapterMeta.id);
     }
 
@@ -366,7 +394,7 @@ const StoryDetail: React.FC = () => {
       loadChapterContent(prevIndex, state.chapters, state.story?.userId || "");
   }, [
     id,
-    user,
+    uid,
     state.currentChapterIndex,
     state.chapters,
     state.story,
@@ -386,7 +414,7 @@ const StoryDetail: React.FC = () => {
     // Record the target so any in-flight fetch for another chapter is dropped.
     if (chapterMeta) activeChapterId.current = chapterMeta.id;
 
-    if (id && user && state.story) {
+    if (id && uid && state.story) {
       if (chapterMeta) readingHistoryRepo.saveProgress(id, chapterMeta.id);
     }
 
@@ -406,7 +434,7 @@ const StoryDetail: React.FC = () => {
       loadChapterContent(nextIndex, state.chapters, state.story?.userId || "");
   }, [
     id,
-    user,
+    uid,
     state.currentChapterIndex,
     state.chapters,
     state.story,
@@ -428,11 +456,11 @@ const StoryDetail: React.FC = () => {
 
   const handleScrollPersist = useCallback(
     (percent: number) => {
-      if (!id || !user) return;
+      if (!id || !uid) return;
       if (state.currentChapter)
         readingHistoryRepo.saveProgress(id, state.currentChapter.id, percent);
     },
-    [id, user, state.currentChapter],
+    [id, uid, state.currentChapter],
   );
 
   // --- Comment Logic ---
@@ -502,10 +530,6 @@ const StoryDetail: React.FC = () => {
   );
 
   // --- Effects ---
-  useEffect(() => {
-    if (id) loadStory(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
 
   // --- Render ---
   if (state.loading) {
@@ -516,7 +540,7 @@ const StoryDetail: React.FC = () => {
     return (
       <StoryErrorState
         error={state.error}
-        onRetry={() => id && loadStory(id)}
+        onRetry={() => setLoadAttempt((n) => n + 1)}
       />
     );
   }
@@ -553,7 +577,7 @@ const StoryDetail: React.FC = () => {
       numberOfPages: state.chapters.length,
     };
 
-    const canRate = !!user && state.userRating === null;
+    const canRate = !!uid && state.userRating === null;
     const displayRating = state.userRating ?? state.story.averageRating ?? 0;
     const starsToShow = hoveredHeroStar ?? displayRating;
 
@@ -662,7 +686,7 @@ const StoryDetail: React.FC = () => {
                   <button
                     onClick={() => {
                       const chapter = state.chapters[state.currentChapterIndex];
-                      if (id && user && chapter) {
+                      if (id && uid && chapter) {
                         const resume = resumeRef.current;
                         readingHistoryRepo.saveProgress(
                           id,
