@@ -62,6 +62,7 @@ import { Editor } from "@tiptap/react";
 // Import hooks
 import { useEditorState } from "@/hooks/useEditorState";
 import { useAutosave } from "@/hooks/useAutosave";
+import { SaveCancelledError } from "@/lib/saveQueue";
 import { SaveStatusIndicator } from "@/components/editor/SaveStatusIndicator";
 import { WritingStats } from "@/components/editor/WritingStats";
 import {
@@ -416,13 +417,24 @@ export function SimpleEditor() {
     });
   }, [queryClient, user]);
 
+  // Anything that leaves the chapter or acts on its stored text must wait for
+  // a durable save, and stay put if it fails.
+  const saveBeforeContinuing = useCallback(async () => {
+    try {
+      await flushAndWait();
+      return true;
+    } catch (error) {
+      if (!(error instanceof SaveCancelledError)) {
+        toast.error("Couldn't save your changes. Please try again.");
+      }
+      return false;
+    }
+  }, [flushAndWait]);
+
   // Handle new chapter creation
   const handleNewChapter = async () => {
     if (!state.story) return;
-
-    if (isDirty) {
-      await forceSave();
-    }
+    if (!(await saveBeforeContinuing())) return;
 
     try {
       const newChapter = await storyWorkspaceRepo.createChapter(
@@ -526,9 +538,7 @@ export function SimpleEditor() {
   };
 
   const handleSplitRequest = async () => {
-    if (isDirty) {
-      await forceSave();
-    }
+    if (!(await saveBeforeContinuing())) return;
     const validationError = splitValidationError(
       splitDocumentAtHeadings(editor),
     );
@@ -542,10 +552,7 @@ export function SimpleEditor() {
   // Summarize the current chapter and persist the summary.
   const handleSummarizeChapter = async () => {
     if (!state.story || !state.currentChapter) return;
-
-    if (isDirty) {
-      await forceSave();
-    }
+    if (!(await saveBeforeContinuing())) return;
 
     setIsSummarizing(true);
     try {
@@ -577,10 +584,7 @@ export function SimpleEditor() {
   // Handle publishing
   const handlePublish = async () => {
     if (!state.story) return;
-
-    if (isDirty) {
-      await forceSave();
-    }
+    if (!(await saveBeforeContinuing())) return;
 
     const wasPublished = state.story.isPublished;
 
@@ -655,8 +659,9 @@ export function SimpleEditor() {
   ]);
 
   const handleSaveAndContinue = async () => {
-    if (state.currentChapter) {
-      await forceSave();
+    if (!(await saveBeforeContinuing())) {
+      setPendingChapter(null);
+      return;
     }
     if (pendingChapter) {
       actions.selectChapter(pendingChapter);
