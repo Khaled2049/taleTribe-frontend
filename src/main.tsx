@@ -19,7 +19,12 @@ import { RouteError } from "./components/common/RouteError";
 import { useAuthContext } from "./contexts/AuthContext";
 import RequireAuth from "./routes/RequireAuth";
 import { prefetchStoriesPage } from "./routes/Story/prefetchStories";
+import {
+  prefetchReaderChapter,
+  prefetchStoryDetail,
+} from "./routes/Story/prefetchStoryDetail";
 import { StoriesPageSkeleton } from "./routes/Story/StoriesPageSkeleton";
+import { StoryDetailSkeleton } from "./routes/Story/StoryDetailSkeleton";
 
 const Root = lazy(() => import("./routes/root"));
 const Signin = lazy(() => import("./routes/Auth/sign-in"));
@@ -349,11 +354,28 @@ const router = createBrowserRouter([
       },
       {
         path: "/story/:id",
+        loader: ({ params }) => {
+          if (params.id) void prefetchStoryDetail(params.id);
+          return null;
+        },
+        hydrateFallbackElement: <StoryDetailSkeleton />,
         element: (
-          <Suspense fallback={<LoadingFallback />}>
+          <Suspense fallback={<StoryDetailSkeleton />}>
             <StoryDetail />
           </Suspense>
         ),
+        children: [
+          {
+            path: "read/:chapterId?",
+            element: null,
+            loader: ({ params }) => {
+              if (params.id && params.chapterId) {
+                void prefetchReaderChapter(params.id, params.chapterId);
+              }
+              return null;
+            },
+          },
+        ],
       },
     ],
   },
