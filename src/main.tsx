@@ -19,6 +19,7 @@ import { RouteError } from "./components/common/RouteError";
 import { useAuthContext } from "./contexts/AuthContext";
 import RequireAuth from "./routes/RequireAuth";
 import { prefetchStoriesPage } from "./routes/Story/prefetchStories";
+import { prefetchStoryDetail } from "./routes/Story/prefetchStoryDetail";
 import { StoriesPageSkeleton } from "./routes/Story/StoriesPageSkeleton";
 
 const Root = lazy(() => import("./routes/root"));
@@ -349,6 +350,11 @@ const router = createBrowserRouter([
       },
       {
         path: "/story/:id",
+        loader: ({ params }) => {
+          if (params.id) void prefetchStoryDetail(params.id);
+          return null;
+        },
+        hydrateFallbackElement: <LoadingFallback />,
         element: (
           <Suspense fallback={<LoadingFallback />}>
             <StoryDetail />

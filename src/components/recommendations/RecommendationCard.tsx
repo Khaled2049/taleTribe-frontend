@@ -5,6 +5,7 @@ import type { RecommendationItem } from "@/cloudFunctions/recommendations";
 import { getApiErrorMessage } from "@/cloudFunctions";
 import { useRecommendationExplanation } from "@/hooks/queries/useRecommendationQueries";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
+import { prefetchStoryDetail } from "@/routes/Story/prefetchStoryDetail";
 
 interface RecommendationCardProps {
   item: RecommendationItem;
@@ -42,7 +43,11 @@ export default function RecommendationCard({
   };
 
   return (
-    <article className="group">
+    <article
+      className="group"
+      onMouseEnter={() => void prefetchStoryDetail(item.story_id)}
+      onTouchStart={() => void prefetchStoryDetail(item.story_id)}
+    >
       <div className="book-perspective mx-auto max-w-[130px]">
         {/* Coverless stories keep the same deterministic typographic jacket on
             every shelf, without persisting or inventing generated artwork. */}
