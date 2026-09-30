@@ -3,7 +3,6 @@ import React from "react";
 import { Comment as CommentType } from "@novelsync/story-data-client";
 import { Comment } from "./Comment";
 import { IUser } from "@/types/IUser";
-import { useProfileNames } from "@/hooks/queries/useUserQueries";
 
 interface CommentListProps {
   comments: CommentType[];
@@ -17,9 +16,6 @@ interface CommentListProps {
 export const CommentList: React.FC<CommentListProps> = React.memo(
   ({ comments, currentUser, onReply, onDelete, onEdit, onLike }) => {
     const topLevelComments = comments.filter((comment) => !comment.parentId);
-    // Resolved once for the whole thread. Per-row lookups meant one request
-    // per participant, fired in a burst as the thread mounted.
-    const namesById = useProfileNames(comments.map((c) => c.userId));
 
     return (
       <div className="space-y-4">
@@ -29,7 +25,6 @@ export const CommentList: React.FC<CommentListProps> = React.memo(
             comment={comment}
             allComments={comments}
             currentUser={currentUser}
-            namesById={namesById}
             onReply={onReply}
             onDelete={onDelete}
             onEdit={onEdit}
