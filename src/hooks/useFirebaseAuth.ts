@@ -15,7 +15,8 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
-import { auth, firestore } from "@novelsync/platform-auth";
+import { auth } from "@novelsync/platform-auth";
+import { firestore } from "@novelsync/platform-auth/firestore";
 import { storageService } from "@/services/StorageService";
 import { profileRepo } from "@novelsync/story-data-client";
 

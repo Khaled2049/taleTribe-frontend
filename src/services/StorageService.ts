@@ -1,4 +1,4 @@
-import { storage } from "@novelsync/platform-auth";
+import { storage } from "@novelsync/platform-auth/storage";
 import { reserveStorageUpload } from "@/cloudFunctions/storage";
 import { prepareImageForUpload, createThumbnail } from "@/utils/imageUpload";
 import {

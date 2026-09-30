@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useFirebaseAuth } from "../../../hooks/useFirebaseAuth";
+import { signOut } from "firebase/auth";
+import { auth } from "@novelsync/platform-auth";
 import { useAuthContext } from "../../../contexts/AuthContext";
 import { useState } from "react";
 import {
@@ -16,7 +17,7 @@ import {
   Moon,
   Sun,
 } from "lucide-react";
-import { useWalletState } from "@/hooks/useWalletState";
+import { disconnectWalletIfConnected } from "@/blockchain/disconnectWallet";
 import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
 import { APP_NAME } from "@/config/seo";
@@ -57,11 +58,9 @@ function navLinkClass(isActive: boolean) {
 }
 
 const MobileMenu = ({ isOpen, onClose }: MobileMenuProps) => {
-  const { signout } = useFirebaseAuth();
   const { user } = useAuthContext();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { address, disconnectWallet } = useWalletState();
   const { theme, toggleTheme } = useTheme();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -70,18 +69,16 @@ const MobileMenu = ({ isOpen, onClose }: MobileMenuProps) => {
 
     setIsSigningOut(true);
     try {
-      if (address) {
-        try {
-          await disconnectWallet();
-        } catch (disconnectError) {
-          console.warn(
-            "Wallet disconnect failed during sign-out:",
-            disconnectError,
-          );
-        }
+      try {
+        await disconnectWalletIfConnected();
+      } catch (disconnectError) {
+        console.warn(
+          "Wallet disconnect failed during sign-out:",
+          disconnectError,
+        );
       }
 
-      await signout();
+      await signOut(auth);
       onClose();
       navigate("/sign-in");
       toast.success("Signed out successfully");

@@ -1,13 +1,19 @@
 import { Link } from "react-router-dom";
 import { useAuthContext } from "../../contexts/AuthContext";
-import { useState, useRef } from "react";
+import { lazy, Suspense, useState, useRef } from "react";
 import { Loader, Menu, User } from "lucide-react";
-import { WalletConnectButton } from "../web3/WalletConnectButton";
 import UserDropdown from "./navbar/UserDropdown";
 import MobileMenu from "./navbar/MobileMenu";
 import NavLinks from "./navbar/NavLinks";
 import { APP_NAME } from "../../config/seo";
 import { WEB3_ENABLED } from "../../config/featureFlags";
+import { Web3Boundary } from "@/contexts/Web3Boundary";
+
+const WalletConnectButton = lazy(() =>
+  import("../web3/WalletConnectButton").then((m) => ({
+    default: m.WalletConnectButton,
+  })),
+);
 
 const Navbar = () => {
   const { user, loading } = useAuthContext();
@@ -74,7 +80,11 @@ const Navbar = () => {
             {/* Wallet Connect Button */}
             {WEB3_ENABLED && (
               <div className="flex items-center">
-                <WalletConnectButton />
+                <Suspense fallback={null}>
+                  <Web3Boundary>
+                    <WalletConnectButton />
+                  </Web3Boundary>
+                </Suspense>
               </div>
             )}
 

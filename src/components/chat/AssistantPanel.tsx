@@ -26,7 +26,6 @@ import {
   MapPin,
   MessageCircle,
   PanelRightClose,
-  PanelRightOpen,
   RotateCcw,
   Search,
   Send,
@@ -83,6 +82,14 @@ import {
   AssistantNewChatRow,
   AssistantThreadList,
 } from "./AssistantThreadList";
+import {
+  ASSISTANT_DOCK_WIDTH_KEY,
+  clampDockWidth,
+  initialDockWidth,
+  MAX_DOCK_WIDTH,
+  MIN_DOCK_WIDTH,
+} from "./assistantDock";
+import { AssistantFab, AssistantRail } from "./AssistantDockParts";
 import { AssistantTabs, type AssistantTab } from "./AssistantTabs";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useAssistantProposal } from "./AssistantProposalContext";
@@ -97,34 +104,6 @@ const READ_TOOL_NAMES = [
 ] as const;
 const EDITOR_ACTIONS_PRESENTED =
   import.meta.env.VITE_ASSISTANT_EDITOR_ACTIONS_ENABLED !== "false";
-const ASSISTANT_DOCK_OPEN_KEY = "tale-tribe:assistant-dock-open";
-const ASSISTANT_DOCK_WIDTH_KEY = "tale-tribe:assistant-dock-width";
-const MIN_DOCK_WIDTH = 360;
-const MAX_DOCK_WIDTH = 560;
-
-function initialDockOpen() {
-  if (typeof window === "undefined") return true;
-  const stored = window.localStorage.getItem(ASSISTANT_DOCK_OPEN_KEY);
-  return stored === null ? true : stored === "true";
-}
-
-function clampDockWidth(width: number) {
-  if (typeof window === "undefined") {
-    return Math.min(MAX_DOCK_WIDTH, Math.max(MIN_DOCK_WIDTH, width));
-  }
-  const viewportMaximum = Math.max(
-    MIN_DOCK_WIDTH,
-    Math.min(MAX_DOCK_WIDTH, window.innerWidth * 0.48),
-  );
-  return Math.min(viewportMaximum, Math.max(MIN_DOCK_WIDTH, width));
-}
-
-function initialDockWidth() {
-  if (typeof window === "undefined") return 448;
-  const stored = Number(window.localStorage.getItem(ASSISTANT_DOCK_WIDTH_KEY));
-  return clampDockWidth(Number.isFinite(stored) && stored > 0 ? stored : 448);
-}
-
 const AssistantPanelContext = createContext<{
   storyId: string;
   navigateTo: (to: string, state?: { assistantChapterId: string }) => void;
@@ -1113,9 +1092,20 @@ function Composer() {
   );
 }
 
-export default function AssistantPanel({ storyId }: { storyId: string }) {
-  const [desktopOpen, setDesktopOpen] = useState(initialDockOpen);
-  const [mobileOpen, setMobileOpen] = useState(false);
+/** Open state is owned by FloatingChatButton, which mounts this on first use. */
+export default function AssistantPanel({
+  storyId,
+  desktopOpen,
+  setDesktopOpen,
+  mobileOpen,
+  setMobileOpen,
+}: {
+  storyId: string;
+  desktopOpen: boolean;
+  setDesktopOpen: (open: boolean) => void;
+  mobileOpen: boolean;
+  setMobileOpen: (open: boolean) => void;
+}) {
   const [target, setTarget] = useState<ConversationTarget>({ mode: "latest" });
 
   return (
@@ -1222,10 +1212,6 @@ function AssistantConversation({
     [actionLedger, editorBridge, endpoint, storyId, threadSession],
   );
   const runtime = useLocalRuntime(adapter, { adapters: { history } });
-
-  useEffect(() => {
-    window.localStorage.setItem(ASSISTANT_DOCK_OPEN_KEY, String(desktopOpen));
-  }, [desktopOpen]);
 
   useEffect(() => {
     window.localStorage.setItem(ASSISTANT_DOCK_WIDTH_KEY, String(dockWidth));
@@ -1336,34 +1322,12 @@ function AssistantConversation({
               />
             </aside>
           ) : (
-            <aside className="flex h-full w-12 shrink-0 flex-col items-center border-l border-ns-border bg-ns-surface py-3 text-ns-ink">
-              <button
-                type="button"
-                data-cy="open-chat"
-                onClick={() => setDesktopOpen(true)}
-                aria-label="Open story assistant"
-                title="Open story assistant"
-                className="group flex h-9 w-9 items-center justify-center rounded-ns-lg border border-ns-border bg-ns-elevated text-ns-accent shadow-ns-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-ns-accent hover:shadow-ns motion-reduce:transform-none"
-              >
-                <PanelRightOpen className="h-4 w-4" />
-              </button>
-              <span className="mt-4 select-none font-ui text-[9px] font-semibold uppercase tracking-[0.18em] text-ns-ink-muted [writing-mode:vertical-rl]">
-                Assistant
-              </span>
-            </aside>
+            <AssistantRail onOpen={() => setDesktopOpen(true)} />
           )
         ) : (
           <Dialog.Root open={mobileOpen} onOpenChange={setMobileOpen}>
             <Dialog.Trigger asChild>
-              <button
-                type="button"
-                data-cy="open-chat"
-                className="fixed bottom-24 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-ns-accent text-white shadow-ns-lg transition-all duration-200 hover:-translate-y-0.5 hover:bg-ns-accent-hover active:scale-95 motion-reduce:transform-none motion-reduce:transition-none md:right-6"
-                aria-label="Open story assistant"
-                title="Story assistant"
-              >
-                <MessageCircle className="h-5 w-5" />
-              </button>
+              <AssistantFab />
             </Dialog.Trigger>
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none" />

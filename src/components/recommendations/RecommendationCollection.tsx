@@ -4,7 +4,6 @@ import type {
   RecommendationItem,
 } from "@/cloudFunctions/recommendations";
 import { getApiErrorMessage } from "@/cloudFunctions";
-import { useStoryCovers } from "@/hooks/queries/useStoryQueries";
 import RecommendationCard from "./RecommendationCard";
 
 /**
@@ -47,8 +46,17 @@ function ShelfSkeleton({ variant }: { variant: CollectionVariant }) {
     <div className={CARD_GRID[variant]} aria-hidden="true">
       {Array.from({ length: SKELETON_COUNT[variant] }, (_, item) => (
         <div key={item}>
-          <div className="aspect-[2/3] animate-pulse rounded-ns border border-ns-border bg-ns-surface" />
-          <div className="mt-2 h-3 w-3/4 animate-pulse rounded bg-ns-surface" />
+          <div className="mx-auto max-w-[130px]">
+            <div className="mb-2 aspect-[2/3] animate-pulse rounded-ns border border-ns-border bg-ns-surface" />
+          </div>
+          <div className="space-y-0.5">
+            <div className="flex h-5 items-center">
+              <div className="h-3.5 w-3/4 animate-pulse rounded bg-ns-surface" />
+            </div>
+            <div className="flex h-4 items-center">
+              <div className="h-3 w-1/2 animate-pulse rounded bg-ns-surface" />
+            </div>
+          </div>
         </div>
       ))}
     </div>
@@ -67,9 +75,6 @@ export default function RecommendationCollection({
   onDismiss,
   quietError = false,
 }: RecommendationCollectionProps) {
-  // Hooks run before the quiet-error bail-out so the order stays stable.
-  const covers = useStoryCovers(data?.items.map((item) => item.story_id) ?? []);
-
   if (error && quietError) return null;
 
   const seedItemIds = data?.resolved_books?.map((book) => book.id) ?? [];
@@ -96,7 +101,7 @@ export default function RecommendationCollection({
         <RecommendationCard
           key={item.id}
           item={item}
-          coverUrl={covers[item.story_id]}
+          coverUrl={item.cover_url ?? undefined}
           prompt={prompt}
           seedItemIds={seedItemIds}
           onSimilar={onSimilar}
@@ -119,9 +124,11 @@ export default function RecommendationCollection({
           <h2 className="font-heading text-xl font-medium text-ns-ink sm:text-2xl">
             {title}
           </h2>
-          {data?.mode === "popular" && (
-            <p className="mt-1 font-ui text-xs text-ns-ink-muted">
-              A popular shelf while we learn your reading taste.
+          {(variant === "row" || data?.mode === "popular") && (
+            <p className="mt-1 min-h-4 font-ui text-xs text-ns-ink-muted">
+              {data?.mode === "popular"
+                ? "A popular shelf while we learn your reading taste."
+                : ""}
             </p>
           )}
           {data?.degraded && (
