@@ -1,450 +1,373 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Link, useParams } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useMatch,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import { publicStoryRepo } from "@novelsync/story-data-client";
 import { Chapter, Story } from "@novelsync/story-data-client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  publicChapterQuery,
+  usePublicStory,
+  useStoryViewer,
+  type PublicStoryDetail,
+  type StoryViewer,
+} from "@/hooks/queries/publicStory";
+import { queryKeys } from "@/hooks/queries/queryKeys";
 import { storySocialRepo } from "@novelsync/story-data-client";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthIdentity } from "@novelsync/platform-auth";
 import {
   useComments,
   useCommentCache,
 } from "@/hooks/queries/useCommentQueries";
-import { StoryLoadingState } from "./components/StoryLoadingState";
+import { StoryDetailSkeleton } from "./StoryDetailSkeleton";
+import { ReaderSkeleton } from "./components/reader/ReaderSkeleton";
 import { StoryErrorState } from "./components/StoryErrorState";
 import { StorySynopsis } from "./components/StorySynopsis";
 import { BookOpen, Heart } from "lucide-react";
 import { StoryAuthorBio } from "./components/StoryAuthorBio";
 import { StoryCommentsSection } from "./components/StoryCommentsSection";
 import { ChapterReader } from "./components/reader/ChapterReader";
-import { useUserWalletAddress } from "@/hooks/useUserWalletAddress";
 import { SEOHead } from "@/components/seo/SEOHead";
-import { AuthorName } from "@/components/common";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import { getAbsoluteUrl } from "@/config/seo";
 import { readingHistoryRepo } from "@novelsync/story-data-client";
 
-interface StoryDetailState {
-  story: Story | null;
-  chapters: Omit<Chapter, "content">[];
-  currentChapter: Chapter | null;
-  currentChapterIndex: number;
-  likes: number;
-  loading: boolean;
-  chapterLoading: boolean;
-  chapterError: string | null;
-  error: string | null;
-  isLiked: boolean;
-  userRating: number | null;
-  ratingsCount: number;
-}
+const NO_CHAPTERS: Omit<Chapter, "content">[] = [];
 
 type ViewMode = "details" | "reader";
 
-const CHAPTER_FETCH_TIMEOUT_MS = 15000;
-
-function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-  label: string,
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`${label} timed out after ${ms}ms`)),
-      ms,
-    );
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
+const onIdle = (run: () => void) => {
+  if (typeof window.requestIdleCallback === "function") {
+    const handle = window.requestIdleCallback(run);
+    return () => window.cancelIdleCallback(handle);
+  }
+  const handle = window.setTimeout(run, 200);
+  return () => window.clearTimeout(handle);
+};
 
 const StoryDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuthContext();
+  const { uid, loading: authLoading } = useAuthIdentity();
+  const queryClient = useQueryClient();
 
-  const [viewMode, setViewMode] = useState<ViewMode>("details");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const readerMatch = useMatch("/story/:id/read/:chapterId?");
+  const viewMode: ViewMode = readerMatch ? "reader" : "details";
+  const routeChapterId = readerMatch?.params.chapterId;
   const [hoveredHeroStar, setHoveredHeroStar] = useState<number | null>(null);
 
-  const [state, setState] = useState<StoryDetailState>({
-    story: null,
-    chapters: [],
-    currentChapter: null,
-    currentChapterIndex: 0,
-    likes: 0,
-    loading: true,
-    chapterLoading: false,
-    chapterError: null,
-    error: null,
-    isLiked: false,
-    userRating: null,
-    ratingsCount: 0,
-  });
+  const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
+  const [openedStoryId, setOpenedStoryId] = useState<string | null>(null);
 
-  const { data: comments = [], isPending: commentsLoading } = useComments(
-    id,
-    state.currentChapter?.id,
-  );
-  const { upsert: upsertComment, remove: removeComment } = useCommentCache(
-    id,
-    state.currentChapter?.id,
-  );
+  const detailQuery = usePublicStory(id);
+  const viewerQuery = useStoryViewer(id, uid);
+  const story = detailQuery.data?.story ?? null;
+  const chapters = detailQuery.data?.chapters ?? NO_CHAPTERS;
+  const routeIndex = routeChapterId
+    ? chapters.findIndex((chapter) => chapter.id === routeChapterId)
+    : -1;
+  const activeIndex =
+    viewMode === "reader" && routeIndex >= 0 ? routeIndex : currentChapterIndex;
+  const chapterCount = detailQuery.isPlaceholderData
+    ? (story?.chapterCount ?? 0)
+    : chapters.length;
+  const likes = story?.likes ?? 0;
+  const ratingsCount = story?.ratingsCount ?? 0;
+  const isLiked = uid ? (viewerQuery.data?.liked ?? false) : false;
+  const userRating = uid ? (viewerQuery.data?.rating ?? null) : null;
 
-  const { walletAddress: authorWalletAddress } = useUserWalletAddress(
-    state.story?.userId,
-  );
+  const { data: comments = [], isPending: commentsLoading } = useComments(id);
+  const { upsert: upsertComment, remove: removeComment } = useCommentCache(id);
 
-  const chapterContentCache = useRef<Record<string, string>>({});
-  // Id of the chapter the reader currently wants. Used to discard stale
-  // responses when the user navigates faster than the network resolves.
-  const activeChapterId = useRef<string | null>(null);
   // Saved resume position (chapter + scroll), captured on load.
   const resumeRef = useRef<{
     chapterId: string | null;
     scrollPercent: number;
   } | null>(null);
-  const [readNowPending, setReadNowPending] = useState(false);
+  const viewRecordedFor = useRef<string | null>(null);
 
-  // --- Data Loading ---
+  const chapterMeta =
+    story && openedStoryId === story.id ? chapters[activeIndex] : undefined;
+  const chapterQuery = useQuery({
+    ...publicChapterQuery(id ?? "", chapterMeta?.id ?? "", story?.userId ?? ""),
+    enabled: !!id && !!story && !!chapterMeta,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === id ? previous : undefined,
+  });
+  const currentChapter = chapterQuery.data ?? null;
+  const chapterLoading =
+    !!chapterMeta &&
+    (chapterQuery.isPlaceholderData ||
+      (chapterQuery.isFetching && !chapterQuery.data));
+  const chapterError = chapterQuery.isError
+    ? "Failed to load this chapter. Please try again."
+    : chapterQuery.data === null
+      ? "This chapter could not be found."
+      : null;
 
-  // Best-effort background fetch of a neighbouring chapter into the cache.
-  const prefetchChapter = useCallback(
-    (chapters: Omit<Chapter, "content">[], index: number, authorId: string) => {
+  const storyReady =
+    !!story && story.id === id && !detailQuery.isPlaceholderData;
+  const viewerReady =
+    !authLoading &&
+    (!uid ||
+      ((viewerQuery.isSuccess || viewerQuery.isError) &&
+        !viewerQuery.isFetching));
+
+  useEffect(() => {
+    if (!storyReady || !story || viewRecordedFor.current === story.id) return;
+    viewRecordedFor.current = story.id;
+    void publicStoryRepo.recordView(story.id).catch(() => {});
+  }, [storyReady, story]);
+
+  useEffect(() => {
+    if (!storyReady || !viewerReady || !story) return;
+    if (openedStoryId === story.id) return;
+    resumeRef.current = uid ? (viewerQuery.data?.progress ?? null) : null;
+    const resumeId = resumeRef.current?.chapterId;
+    const saved = resumeId
+      ? chapters.findIndex((chapter) => chapter.id === resumeId)
+      : -1;
+    setCurrentChapterIndex(Math.max(0, Math.min(saved, chapters.length - 1)));
+    setOpenedStoryId(story.id);
+  }, [
+    storyReady,
+    viewerReady,
+    story,
+    chapters,
+    uid,
+    viewerQuery.data,
+    openedStoryId,
+  ]);
+
+  useEffect(() => {
+    if (viewMode !== "reader" || !id || !story || !currentChapter) return;
+    if (chapterLoading) return;
+    const neighbours = [
+      chapters[activeIndex + 1],
+      chapters[activeIndex - 1],
+    ].filter((meta): meta is Omit<Chapter, "content"> => !!meta);
+    return onIdle(() => {
+      for (const meta of neighbours) {
+        void queryClient.prefetchQuery(
+          publicChapterQuery(id, meta.id, story.userId),
+        );
+      }
+    });
+  }, [
+    viewMode,
+    id,
+    story,
+    chapters,
+    activeIndex,
+    currentChapter,
+    chapterLoading,
+    queryClient,
+  ]);
+
+  const patchStory = useCallback(
+    (update: (story: Story) => Story) => {
       if (!id) return;
-      const meta = chapters[index];
-      if (!meta || chapterContentCache.current[meta.id]) return;
-      publicStoryRepo
-        .getChapter(id, meta.id, authorId)
-        .then((c) => {
-          if (c) chapterContentCache.current[c.id] = c.content;
-        })
-        .catch(() => {
-          // Prefetch is best-effort; failures are retried on actual navigation.
-        });
+      queryClient.setQueryData<PublicStoryDetail | null>(
+        queryKeys.stories.detail(id),
+        (detail) =>
+          detail ? { ...detail, story: update(detail.story) } : detail,
+      );
     },
-    [id],
+    [id, queryClient],
   );
 
-  const loadChapterContent = useCallback(
-    async (
-      index: number,
-      chapters: Omit<Chapter, "content">[],
-      authorId: string,
-    ) => {
-      if (!id) return;
-      const chapterMeta = chapters[index];
-      if (!chapterMeta) return;
+  const holdStoryQueries = useCallback(async () => {
+    if (!id) return;
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: queryKeys.stories.detail(id) }),
+      uid
+        ? queryClient.cancelQueries({
+            queryKey: queryKeys.stories.viewer(id, uid),
+          })
+        : undefined,
+    ]);
+  }, [id, uid, queryClient]);
 
-      // Mark this chapter as the one we want; later resolutions check against it.
-      activeChapterId.current = chapterMeta.id;
+  const refreshViewer = useCallback(() => {
+    if (!id || !uid) return;
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.stories.viewer(id, uid),
+    });
+  }, [id, uid, queryClient]);
 
-      const cached = chapterContentCache.current[chapterMeta.id];
-      if (cached) {
-        setState((prev) => ({
-          ...prev,
-          currentChapter: { ...chapterMeta, content: cached } as Chapter,
-          chapterLoading: false,
-          chapterError: null,
-        }));
-        // Warm neighbours even on a cache hit.
-        prefetchChapter(chapters, index + 1, authorId);
-        prefetchChapter(chapters, index - 1, authorId);
-        return;
-      }
-
-      setState((prev) => ({
-        ...prev,
-        chapterLoading: true,
-        chapterError: null,
-      }));
-
-      try {
-        const fullChapter = await withTimeout(
-          publicStoryRepo.getChapter(id, chapterMeta.id, authorId),
-          CHAPTER_FETCH_TIMEOUT_MS,
-          "Chapter fetch",
-        );
-
-        // A newer navigation superseded this request — drop the stale result.
-        if (activeChapterId.current !== chapterMeta.id) return;
-
-        if (!fullChapter) {
-          setState((prev) => ({
-            ...prev,
-            chapterLoading: false,
-            chapterError: "This chapter could not be found.",
-          }));
-          return;
-        }
-
-        chapterContentCache.current[fullChapter.id] = fullChapter.content;
-        setState((prev) => ({
-          ...prev,
-          currentChapter: fullChapter,
-          chapterLoading: false,
-          chapterError: null,
-        }));
-
-        // Prefetch both neighbours so back/forward feel instant.
-        prefetchChapter(chapters, index + 1, authorId);
-        prefetchChapter(chapters, index - 1, authorId);
-      } catch (error) {
-        console.error("Error loading chapter content:", error);
-        if (activeChapterId.current !== chapterMeta.id) return;
-        setState((prev) => ({
-          ...prev,
-          chapterLoading: false,
-          chapterError: "Failed to load this chapter. Please try again.",
-        }));
-      }
+  const patchViewer = useCallback(
+    (update: (viewer: StoryViewer) => StoryViewer) => {
+      if (!id || !uid) return;
+      queryClient.setQueryData<StoryViewer>(
+        queryKeys.stories.viewer(id, uid),
+        (viewer) => (viewer ? update(viewer) : viewer),
+      );
     },
-    [id, prefetchChapter],
-  );
-
-  const loadStory = useCallback(
-    async (
-      storyId: string,
-      chapterIndex: number = 0,
-      resumeChapterId: string | null = null,
-    ) => {
-      try {
-        setState((prev) => ({ ...prev, loading: true, error: null }));
-
-        const [detail, me] = await Promise.all([
-          publicStoryRepo.getStoryDetail(storyId),
-          user
-            ? storySocialRepo.getMe(storyId).catch(() => null)
-            : Promise.resolve(null),
-        ]);
-
-        if (!detail) {
-          setState((prev) => ({
-            ...prev,
-            loading: false,
-            error: "Story not found",
-          }));
-          return;
-        }
-
-        const { story: storyData, chapters: chaptersMetaList } = detail;
-        const savedChapterIndex = resumeChapterId
-          ? chaptersMetaList.findIndex(
-              (chapter) => chapter.id === resumeChapterId,
-            )
-          : -1;
-        const validChapterIndex = Math.max(
-          0,
-          Math.min(
-            savedChapterIndex >= 0 ? savedChapterIndex : chapterIndex,
-            chaptersMetaList.length - 1,
-          ),
-        );
-
-        setState((prev) => ({
-          ...prev,
-          story: storyData,
-          chapters: chaptersMetaList,
-          currentChapter: null,
-          currentChapterIndex: validChapterIndex,
-          likes: storyData.likes,
-          isLiked: me?.liked || false,
-          userRating: me?.rating ?? null,
-          ratingsCount: storyData.ratingsCount || 0,
-          loading: false,
-        }));
-
-        void publicStoryRepo.recordView(storyId).catch(() => {});
-        // Load the starting chapter content (prefetches next inside)
-        await loadChapterContent(
-          validChapterIndex,
-          chaptersMetaList,
-          storyData.userId,
-        );
-      } catch (error) {
-        console.error("Error fetching story:", error);
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: "Failed to load story",
-        }));
-      }
-    },
-    [user, loadChapterContent],
+    [id, uid, queryClient],
   );
 
   // --- Handlers ---
   const handleLike = useCallback(async () => {
-    if (!id || !user) return;
+    if (!id || !uid) return;
 
-    const previousIsLiked = state.isLiked;
-    const previousLikes = state.likes;
+    const previousIsLiked = isLiked;
+    const previousLikes = likes;
 
-    setState((prev) => ({
-      ...prev,
-      isLiked: !prev.isLiked,
-      likes: prev.isLiked ? Math.max(0, prev.likes - 1) : prev.likes + 1,
+    await holdStoryQueries();
+    patchViewer((viewer) => ({ ...viewer, liked: !previousIsLiked }));
+    patchStory((story) => ({
+      ...story,
+      likes: previousIsLiked
+        ? Math.max(0, previousLikes - 1)
+        : previousLikes + 1,
     }));
 
     try {
       const social = await storySocialRepo.setLike(id, !previousIsLiked);
-      setState((prev) => ({
-        ...prev,
-        isLiked: !previousIsLiked,
-        likes: social.likeCount,
-      }));
+      patchStory((story) => ({ ...story, likes: social.likeCount }));
     } catch (error) {
       console.error("Error toggling like:", error);
-      setState((prev) => ({
-        ...prev,
-        isLiked: previousIsLiked,
-        likes: previousLikes,
-      }));
+      patchViewer((viewer) => ({ ...viewer, liked: previousIsLiked }));
+      patchStory((story) => ({ ...story, likes: previousLikes }));
+    } finally {
+      refreshViewer();
     }
-  }, [id, user, state.isLiked, state.likes]);
+  }, [
+    id,
+    uid,
+    isLiked,
+    likes,
+    holdStoryQueries,
+    patchStory,
+    patchViewer,
+    refreshViewer,
+  ]);
 
   const handleRatingSubmit = useCallback(
     async (rating: number) => {
-      if (!id || !user) return;
-      if (state.userRating !== null) return;
+      if (!id || !uid) return;
+      if (userRating !== null) return;
 
-      const previousUserRating = state.userRating;
-      const previousRatingsCount = state.ratingsCount;
-      const previousAverageRating = state.story?.averageRating;
+      const previousRatingsCount = ratingsCount;
+      const previousAverageRating = story?.averageRating;
 
-      setState((prev) => ({
-        ...prev,
-        userRating: rating,
-        ratingsCount: prev.ratingsCount + 1,
+      await holdStoryQueries();
+      patchViewer((viewer) => ({ ...viewer, rating }));
+      patchStory((story) => ({
+        ...story,
+        ratingsCount: previousRatingsCount + 1,
       }));
 
       try {
         const social = await storySocialRepo.createRating(id, rating);
-        setState((prev) => ({
-          ...prev,
-          story: prev.story
-            ? { ...prev.story, averageRating: social.averageRating }
-            : null,
+        patchStory((story) => ({
+          ...story,
+          averageRating: social.averageRating,
           ratingsCount: social.ratingsCount,
         }));
       } catch (error) {
         console.error("Error submitting rating:", error);
-        setState((prev) => ({
-          ...prev,
-          userRating: previousUserRating,
+        patchViewer((viewer) => ({ ...viewer, rating: null }));
+        patchStory((story) => ({
+          ...story,
+          averageRating: previousAverageRating,
           ratingsCount: previousRatingsCount,
-          story: prev.story
-            ? { ...prev.story, averageRating: previousAverageRating }
-            : null,
         }));
+      } finally {
+        refreshViewer();
       }
     },
-    [id, user, state.userRating, state.ratingsCount, state.story],
+    [
+      id,
+      uid,
+      userRating,
+      ratingsCount,
+      story,
+      holdStoryQueries,
+      patchStory,
+      patchViewer,
+      refreshViewer,
+    ],
   );
 
-  const handlePrevChapter = useCallback(() => {
-    const prevIndex = Math.max(state.currentChapterIndex - 1, 0);
-    const chapterMeta = state.chapters[prevIndex];
-    const cached = chapterMeta
-      ? chapterContentCache.current[chapterMeta.id]
-      : null;
+  const goToChapter = useCallback(
+    (index: number) => {
+      const target = chapters[index];
+      if (!target) return;
+      if (id && uid) readingHistoryRepo.saveProgress(id, target.id);
+      setCurrentChapterIndex(index);
+      navigate(`/story/${id}/read/${target.id}`, {
+        replace: true,
+        state: location.state,
+      });
+    },
+    [id, uid, chapters, navigate, location.state],
+  );
 
-    // Record the target so any in-flight fetch for another chapter is dropped.
-    if (chapterMeta) activeChapterId.current = chapterMeta.id;
+  const handlePrevChapter = useCallback(
+    () => goToChapter(Math.max(activeIndex - 1, 0)),
+    [goToChapter, activeIndex],
+  );
 
-    if (id && user && state.story) {
-      if (chapterMeta) readingHistoryRepo.saveProgress(id, chapterMeta.id);
+  const handleNextChapter = useCallback(
+    () => goToChapter(Math.min(activeIndex + 1, chapters.length - 1)),
+    [goToChapter, activeIndex, chapters.length],
+  );
+
+  const handleBackToDetails = useCallback(() => {
+    if ((location.state as { fromDetails?: boolean } | null)?.fromDetails) {
+      navigate(-1);
+    } else {
+      navigate(`/story/${id}`, { replace: true });
     }
+  }, [location.state, navigate, id]);
 
-    setState((prev) => ({
-      ...prev,
-      currentChapterIndex: prevIndex,
-      chapterError: null,
-      ...(cached && chapterMeta
-        ? {
-            currentChapter: { ...chapterMeta, content: cached } as Chapter,
-            chapterLoading: false,
-          }
-        : { chapterLoading: true }),
-    }));
-
-    if (!cached)
-      loadChapterContent(prevIndex, state.chapters, state.story?.userId || "");
-    window.scrollTo(0, 0);
+  useEffect(() => {
+    if (viewMode !== "reader" || !id || !story) return;
+    if (openedStoryId !== story.id) return;
+    if (routeIndex >= 0) {
+      if (routeIndex !== currentChapterIndex)
+        setCurrentChapterIndex(routeIndex);
+      return;
+    }
+    const target = chapters[currentChapterIndex];
+    if (target) {
+      navigate(`/story/${id}/read/${target.id}`, {
+        replace: true,
+        state: location.state,
+      });
+    }
   }, [
+    viewMode,
     id,
-    user,
-    state.currentChapterIndex,
-    state.chapters,
-    state.story,
-    loadChapterContent,
+    story,
+    openedStoryId,
+    routeIndex,
+    currentChapterIndex,
+    chapters,
+    navigate,
+    location.state,
   ]);
 
-  const handleNextChapter = useCallback(() => {
-    const nextIndex = Math.min(
-      state.currentChapterIndex + 1,
-      state.chapters.length - 1,
-    );
-    const chapterMeta = state.chapters[nextIndex];
-    const cached = chapterMeta
-      ? chapterContentCache.current[chapterMeta.id]
-      : null;
-
-    // Record the target so any in-flight fetch for another chapter is dropped.
-    if (chapterMeta) activeChapterId.current = chapterMeta.id;
-
-    if (id && user && state.story) {
-      if (chapterMeta) readingHistoryRepo.saveProgress(id, chapterMeta.id);
-    }
-
-    setState((prev) => ({
-      ...prev,
-      currentChapterIndex: nextIndex,
-      chapterError: null,
-      ...(cached && chapterMeta
-        ? {
-            currentChapter: { ...chapterMeta, content: cached } as Chapter,
-            chapterLoading: false,
-          }
-        : { chapterLoading: true }),
-    }));
-
-    if (!cached)
-      loadChapterContent(nextIndex, state.chapters, state.story?.userId || "");
-    window.scrollTo(0, 0);
-  }, [
-    id,
-    user,
-    state.currentChapterIndex,
-    state.chapters,
-    state.story,
-    loadChapterContent,
-  ]);
-
+  const { refetch: refetchChapter } = chapterQuery;
   const handleRetryChapter = useCallback(() => {
-    loadChapterContent(
-      state.currentChapterIndex,
-      state.chapters,
-      state.story?.userId || "",
-    );
-  }, [
-    loadChapterContent,
-    state.currentChapterIndex,
-    state.chapters,
-    state.story?.userId,
-  ]);
+    void refetchChapter();
+  }, [refetchChapter]);
 
   const handleScrollPersist = useCallback(
     (percent: number) => {
-      if (!id || !user) return;
-      if (state.currentChapter)
-        readingHistoryRepo.saveProgress(id, state.currentChapter.id, percent);
+      if (!id || !uid) return;
+      if (currentChapter)
+        readingHistoryRepo.saveProgress(id, currentChapter.id, percent);
     },
-    [id, user, state.currentChapter],
+    [id, uid, currentChapter],
   );
 
   // --- Comment Logic ---
@@ -452,171 +375,129 @@ const StoryDetail: React.FC = () => {
   // rather than re-fetched whole.
   const handleCreateComment = useCallback(
     async (message: string) => {
-      if (!id || !state.currentChapter) return;
-      upsertComment(
-        await storySocialRepo.createComment(
-          id,
-          state.currentChapter.id,
-          message,
-        ),
-      );
+      if (!id) return;
+      upsertComment(await storySocialRepo.createComment(id, message));
     },
-    [id, state.currentChapter, upsertComment],
+    [id, upsertComment],
   );
 
   const handleReply = useCallback(
     async (parentId: string, message: string) => {
-      if (!id || !state.currentChapter) return;
+      if (!id) return;
       try {
         upsertComment(
-          await storySocialRepo.createComment(
-            id,
-            state.currentChapter.id,
-            message,
-            parentId,
-          ),
+          await storySocialRepo.createComment(id, message, parentId),
         );
       } catch (error) {
         console.error("Error adding reply:", error);
       }
     },
-    [id, state.currentChapter, upsertComment],
+    [id, upsertComment],
   );
 
   const handleDelete = useCallback(
     async (commentId: string) => {
-      if (!id || !state.currentChapter) return;
+      if (!id) return;
       try {
-        await storySocialRepo.deleteComment(
-          id,
-          state.currentChapter.id,
-          commentId,
-        );
+        await storySocialRepo.deleteComment(id, commentId);
         removeComment(commentId);
       } catch (error) {
         console.error("Error deleting comment:", error);
       }
     },
-    [id, state.currentChapter, removeComment],
+    [id, removeComment],
   );
 
   const handleEdit = useCallback(
     async (commentId: string, newMessage: string) => {
-      if (!id || !state.currentChapter) return;
+      if (!id) return;
       try {
         upsertComment(
-          await storySocialRepo.updateComment(
-            id,
-            state.currentChapter.id,
-            commentId,
-            newMessage,
-          ),
+          await storySocialRepo.updateComment(id, commentId, newMessage),
         );
       } catch (error) {
         console.error("Error updating comment:", error);
       }
     },
-    [id, state.currentChapter, upsertComment],
+    [id, upsertComment],
   );
 
   const handleCommentLike = useCallback(
     async (commentId: string, liked: boolean) => {
-      if (!id || !state.currentChapter) return;
+      if (!id) return;
       try {
         upsertComment(
-          await storySocialRepo.setCommentLike(
-            id,
-            state.currentChapter.id,
-            commentId,
-            liked,
-          ),
+          await storySocialRepo.setCommentLike(id, commentId, liked),
         );
       } catch (error) {
         console.error("Error updating comment like:", error);
       }
     },
-    [id, state.currentChapter, upsertComment],
+    [id, upsertComment],
   );
 
-  // --- Effects ---
-  useEffect(() => {
-    if (!id) return;
-    const init = async () => {
-      const startIndex = 0;
-      if (user) {
-        const progress = await readingHistoryRepo.getProgress(id);
-        resumeRef.current = progress;
-        loadStory(id, startIndex, progress.chapterId);
-        return;
-      }
-      loadStory(id, startIndex);
-    };
-    init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
   // --- Render ---
-  if (state.loading) {
-    return <StoryLoadingState />;
+  if (detailQuery.isPending) {
+    return <StoryDetailSkeleton />;
   }
 
-  if (state.error || !state.story) {
+  if (detailQuery.isError || !story) {
     return (
       <StoryErrorState
-        error={state.error}
-        onRetry={() => id && loadStory(id)}
+        error={detailQuery.isError ? "Failed to load story" : "Story not found"}
+        onRetry={() => void detailQuery.refetch()}
       />
     );
   }
 
   // --- VIEW 1: DETAILS ---
   if (viewMode === "details") {
-    const genres = state.story.tags || ["Fiction", "Adventure", "Fantasy"];
-    const storyUrl = `/story/${state.story.id}`;
-    const storyImage = state.story.coverImageUrl
-      ? getAbsoluteUrl(state.story.coverImageUrl)
+    const genres = story.tags || ["Fiction", "Adventure", "Fantasy"];
+    const storyUrl = `/story/${story.id}`;
+    const storyImage = story.coverImageUrl
+      ? getAbsoluteUrl(story.coverImageUrl)
       : getAbsoluteUrl("/book.svg");
 
     const structuredData = {
       "@context": "https://schema.org",
       "@type": "Book",
-      name: state.story.title,
-      description: state.story.description,
+      name: story.title,
+      description: story.description,
       author: {
         "@type": "Person",
-        name: state.story.author,
+        name: story.author,
       },
       image: storyImage,
       url: getAbsoluteUrl(storyUrl),
-      datePublished: state.story.createdAt.toISOString(),
-      dateModified: state.story.updatedAt.toISOString(),
-      aggregateRating: state.story.averageRating
+      datePublished: story.createdAt.toISOString(),
+      dateModified: story.updatedAt.toISOString(),
+      aggregateRating: story.averageRating
         ? {
             "@type": "AggregateRating",
-            ratingValue: state.story.averageRating,
-            ratingCount: state.ratingsCount || 0,
+            ratingValue: story.averageRating,
+            ratingCount: ratingsCount || 0,
           }
         : undefined,
       keywords: genres.join(", "),
-      numberOfPages: state.chapters.length,
+      numberOfPages: chapterCount,
     };
 
-    const canRate = !!user && state.userRating === null;
-    const displayRating = state.userRating ?? state.story.averageRating ?? 0;
+    const canRate = !!uid && userRating === null;
+    const displayRating = userRating ?? story.averageRating ?? 0;
     const starsToShow = hoveredHeroStar ?? displayRating;
 
     return (
       <>
         <SEOHead
-          title={state.story.title}
-          description={state.story.description}
+          title={story.title}
+          description={story.description}
           keywords={genres}
-          image={state.story.coverImageUrl}
+          image={story.coverImageUrl}
           url={storyUrl}
           type="article"
-          author={state.story.author}
-          publishedTime={state.story.createdAt.toISOString()}
-          modifiedTime={state.story.updatedAt.toISOString()}
+          author={story.author}
+          publishedTime={story.createdAt.toISOString()}
+          modifiedTime={story.updatedAt.toISOString()}
           canonical={storyUrl}
           structuredData={structuredData}
         />
@@ -627,16 +508,16 @@ const StoryDetail: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-8 sm:gap-10 items-start">
               {/* Book cover */}
               <div className="flex-shrink-0 w-36 sm:w-44 aspect-[2/3] rounded-ns-lg shadow-ns-xl overflow-hidden ring-1 ring-ns-border/40 self-start">
-                {state.story.coverImageUrl ? (
+                {story.coverImageUrl ? (
                   <img
-                    src={state.story.coverImageUrl}
-                    alt={state.story.title}
+                    src={story.coverImageUrl}
+                    alt={story.title}
                     className="w-full h-full object-cover"
                   />
                 ) : (
                   <BookCoverFallback
-                    title={state.story.title}
-                    author={state.story.author}
+                    title={story.title}
+                    author={story.author}
                     size="large"
                   />
                 )}
@@ -658,20 +539,17 @@ const StoryDetail: React.FC = () => {
 
                 {/* Title */}
                 <h1 className="font-heading italic text-5xl sm:text-6xl md:text-7xl text-ns-ink leading-[0.88] mb-5 tracking-tight">
-                  {state.story.title}
+                  {story.title}
                 </h1>
 
                 {/* Author + stats */}
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-6">
                   <span className="font-ui text-xs text-ns-ink-muted">by</span>
                   <Link
-                    to={`/profile/${state.story.userId}`}
+                    to={`/profile/${story.userId}`}
                     className="font-ui text-sm text-ns-ink hover:text-ns-accent transition-colors"
                   >
-                    <AuthorName
-                      userId={state.story.userId}
-                      fallback={state.story.author}
-                    />
+                    {story.author}
                   </Link>
                   <span className="text-ns-border select-none">·</span>
                   <div className="flex items-center gap-0.5">
@@ -694,14 +572,13 @@ const StoryDetail: React.FC = () => {
                     ))}
                   </div>
                   <span className="font-ui text-xs text-ns-ink-muted">
-                    {state.ratingsCount > 0
-                      ? `${state.ratingsCount} ${state.ratingsCount === 1 ? "rating" : "ratings"}`
+                    {ratingsCount > 0
+                      ? `${ratingsCount} ${ratingsCount === 1 ? "rating" : "ratings"}`
                       : "No ratings yet"}
                   </span>
                   <span className="text-ns-border select-none">·</span>
                   <span className="font-ui text-xs text-ns-ink-muted">
-                    {state.chapters.length}{" "}
-                    {state.chapters.length === 1 ? "chapter" : "chapters"}
+                    {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"}
                   </span>
                 </div>
 
@@ -709,65 +586,40 @@ const StoryDetail: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={() => {
-                      if (readNowPending) return;
-                      setReadNowPending(true);
-                      if (id && user && state.story) {
-                        if (state.currentChapter)
-                          readingHistoryRepo.saveProgress(
-                            id,
-                            state.currentChapter.id,
-                          );
+                      const chapter = chapters[activeIndex];
+                      if (id && uid && chapter) {
+                        const resume = resumeRef.current;
+                        readingHistoryRepo.saveProgress(
+                          id,
+                          chapter.id,
+                          resume?.chapterId === chapter.id
+                            ? resume.scrollPercent
+                            : 0,
+                        );
                       }
-                      setTimeout(() => {
-                        setReadNowPending(false);
-                        setViewMode("reader");
-                      }, 500);
+                      if (chapter) {
+                        navigate(`/story/${id}/read/${chapter.id}`, {
+                          state: { fromDetails: true },
+                        });
+                      }
                     }}
-                    disabled={readNowPending}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-ns-accent text-white font-ui text-sm font-medium rounded-ns shadow-ns-sm hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150 disabled:opacity-70 disabled:cursor-wait"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-ns-accent text-white font-ui text-sm font-medium rounded-ns shadow-ns-sm hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150"
                   >
-                    {readNowPending ? (
-                      <>
-                        <svg
-                          className="w-4 h-4 animate-spin"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                          />
-                        </svg>
-                        Opening…
-                      </>
-                    ) : (
-                      <>
-                        <BookOpen className="w-4 h-4" />
-                        Read Now
-                      </>
-                    )}
+                    <BookOpen className="w-4 h-4" />
+                    Read Now
                   </button>
                   <button
                     onClick={handleLike}
                     className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-ns border font-ui text-sm transition-all duration-150 active:scale-[0.97] ${
-                      state.isLiked
+                      isLiked
                         ? "border-ns-accent text-ns-accent bg-ns-accent-subtle"
                         : "border-ns-border text-ns-ink-secondary hover:border-ns-border-strong hover:text-ns-ink hover:bg-ns-surface-hover"
                     }`}
                   >
                     <Heart
-                      className={`w-4 h-4 transition-all ${state.isLiked ? "fill-current" : ""}`}
+                      className={`w-4 h-4 transition-all ${isLiked ? "fill-current" : ""}`}
                     />
-                    {state.likes} {state.likes === 1 ? "Like" : "Likes"}
+                    {likes} {likes === 1 ? "Like" : "Likes"}
                   </button>
                 </div>
               </div>
@@ -777,7 +629,7 @@ const StoryDetail: React.FC = () => {
           {/* ── Content ── */}
           <div className="max-w-5xl mx-auto px-6 py-12">
             <main className="max-w-2xl mx-auto">
-              <StorySynopsis description={state.story.description} />
+              <StorySynopsis description={story.description} />
 
               {/* Ornamental divider */}
               <div className="flex items-center gap-4 my-10">
@@ -787,10 +639,13 @@ const StoryDetail: React.FC = () => {
               </div>
 
               <StoryAuthorBio
-                author={state.story.author}
-                authorId={state.story.userId}
-                authorWalletAddress={authorWalletAddress || undefined}
+                author={story.author}
+                authorId={story.userId}
+                bio={detailQuery.data?.author.bio}
+                photoURL={detailQuery.data?.author.photoUrl}
+                authorWalletAddress={detailQuery.data?.author.walletAddress}
                 storyId={id!}
+                loading={detailQuery.isPlaceholderData}
               />
 
               <div className="flex items-center gap-4 my-10">
@@ -799,18 +654,16 @@ const StoryDetail: React.FC = () => {
                 <div className="flex-1 h-px bg-ns-border" />
               </div>
 
-              {state.currentChapter && (
-                <StoryCommentsSection
-                  comments={comments}
-                  commentsLoading={commentsLoading}
-                  currentUser={user}
-                  onCreate={handleCreateComment}
-                  onReply={handleReply}
-                  onDelete={handleDelete}
-                  onEdit={handleEdit}
-                  onLike={handleCommentLike}
-                />
-              )}
+              <StoryCommentsSection
+                comments={comments}
+                commentsLoading={commentsLoading}
+                currentUser={user}
+                onCreate={handleCreateComment}
+                onReply={handleReply}
+                onDelete={handleDelete}
+                onEdit={handleEdit}
+                onLike={handleCommentLike}
+              />
             </main>
           </div>
         </div>
@@ -819,28 +672,38 @@ const StoryDetail: React.FC = () => {
   }
 
   // --- VIEW 2: READER ---
-  if (!state.currentChapter) {
-    return <StoryLoadingState />;
+  if (!currentChapter && chapterError && !chapterLoading) {
+    return (
+      <StoryErrorState error={chapterError} onRetry={handleRetryChapter} />
+    );
+  }
+
+  if (!currentChapter) {
+    return (
+      <ReaderSkeleton
+        title={chapters.length > 1 ? chapters[activeIndex]?.title : undefined}
+      />
+    );
   }
 
   // Only the resumed chapter restores scroll; everything else starts at top.
   // useScrollProgress guards against restoring more than once per chapter entry.
   const resumeScrollPercent =
     resumeRef.current &&
-    state.currentChapter.id === resumeRef.current.chapterId &&
+    currentChapter.id === resumeRef.current.chapterId &&
     resumeRef.current.scrollPercent > 0
       ? resumeRef.current.scrollPercent
       : null;
 
   return (
     <ChapterReader
-      currentChapter={state.currentChapter}
-      currentChapterIndex={state.currentChapterIndex}
-      totalChapters={state.chapters.length}
-      chapterLoading={state.chapterLoading}
-      chapterError={state.chapterError}
+      currentChapter={currentChapter}
+      currentChapterIndex={activeIndex}
+      totalChapters={chapters.length}
+      chapterLoading={chapterLoading}
+      chapterError={chapterError}
       onRetryChapter={handleRetryChapter}
-      onBackToDetails={() => setViewMode("details")}
+      onBackToDetails={handleBackToDetails}
       onPrevChapter={handlePrevChapter}
       onNextChapter={handleNextChapter}
       resumeScrollPercent={resumeScrollPercent}
