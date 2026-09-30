@@ -1,12 +1,16 @@
-import React, { useState } from "react";
+import React, { lazy, Suspense, useState } from "react";
 import { Link } from "react-router-dom";
 import { User, DollarSign } from "lucide-react";
-import { StoryTipModal } from "./StoryTipModal";
+import { Web3Boundary } from "@/contexts/Web3Boundary";
 import { WEB3_ENABLED } from "@/config/featureFlags";
 import {
   useAuthorUsername,
   usePublicProfile,
 } from "@/hooks/queries/useUserQueries";
+
+const StoryTipModal = lazy(() =>
+  import("./StoryTipModal").then((m) => ({ default: m.StoryTipModal })),
+);
 
 interface StoryAuthorBioProps {
   author: string;
@@ -97,16 +101,21 @@ export const StoryAuthorBio: React.FC<StoryAuthorBioProps> = ({
         </div>
       </section>
 
-      {WEB3_ENABLED && (
-        <StoryTipModal
-          author={displayAuthor}
-          authorWalletAddress={
-            authorWalletAddress || "0x0000000000000000000000000000000000000000"
-          }
-          storyId={storyId}
-          isOpen={showTipModal}
-          onClose={() => setShowTipModal(false)}
-        />
+      {WEB3_ENABLED && showTipModal && (
+        <Suspense fallback={null}>
+          <Web3Boundary>
+            <StoryTipModal
+              author={displayAuthor}
+              authorWalletAddress={
+                authorWalletAddress ||
+                "0x0000000000000000000000000000000000000000"
+              }
+              storyId={storyId}
+              isOpen={showTipModal}
+              onClose={() => setShowTipModal(false)}
+            />
+          </Web3Boundary>
+        </Suspense>
       )}
     </>
   );

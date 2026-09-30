@@ -8,7 +8,7 @@ import {
   RouterProvider,
 } from "react-router-dom";
 import { NavbarWrapper } from "./NavbarWrapper";
-import { Web3Provider } from "./contexts/Web3Provider";
+import { Web3Boundary } from "./contexts/Web3Boundary";
 import { ThemeToaster } from "./components/common/ThemeToaster";
 import { SEOProvider } from "./contexts/HelmetProvider";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -18,6 +18,8 @@ import { AuthBootstrap } from "./components/AppBootstrap/AuthBootstrap";
 import { RouteError } from "./components/common/RouteError";
 import { useAuthContext } from "./contexts/AuthContext";
 import RequireAuth from "./routes/RequireAuth";
+import { prefetchStoriesPage } from "./routes/Story/prefetchStories";
+import { StoriesPageSkeleton } from "./routes/Story/StoriesPageSkeleton";
 
 const Root = lazy(() => import("./routes/root"));
 const Signin = lazy(() => import("./routes/Auth/sign-in"));
@@ -112,8 +114,13 @@ const router = createBrowserRouter([
       },
       {
         path: "/stories",
+        loader: () => {
+          void prefetchStoriesPage();
+          return null;
+        },
+        hydrateFallbackElement: <StoriesPageSkeleton />,
         element: (
-          <Suspense fallback={<LoadingFallback />}>
+          <Suspense fallback={<StoriesPageSkeleton />}>
             <AllStories />
           </Suspense>
         ),
@@ -282,7 +289,9 @@ const router = createBrowserRouter([
         path: "/auth/complete-signup",
         element: (
           <Suspense fallback={<LoadingFallback />}>
-            <CompleteSignup />
+            <Web3Boundary>
+              <CompleteSignup />
+            </Web3Boundary>
           </Suspense>
         ),
       },
@@ -332,7 +341,9 @@ const router = createBrowserRouter([
         path: "/user-stories",
         element: (
           <Suspense fallback={<LoadingFallback />}>
-            <UserStories />
+            <Web3Boundary>
+              <UserStories />
+            </Web3Boundary>
           </Suspense>
         ),
       },
@@ -351,11 +362,9 @@ const router = createBrowserRouter([
 createRoot(document.getElementById("root")!).render(
   <SEOProvider>
     <QueryClientProvider client={appQueryClient}>
-      <Web3Provider>
-        <AuthBootstrap />
-        <RouterProvider router={router} />
-        <ThemeToaster />
-      </Web3Provider>
+      <AuthBootstrap />
+      <RouterProvider router={router} />
+      <ThemeToaster />
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   </SEOProvider>,

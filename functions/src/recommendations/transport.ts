@@ -36,10 +36,25 @@ export function getRecommendationServiceUrl(): string {
   return url;
 }
 
+const idTokenClients = new Map<
+  string,
+  ReturnType<GoogleAuth["getIdTokenClient"]>
+>();
+
+function idTokenClient(googleAuth: GoogleAuth, audience: string) {
+  let client = idTokenClients.get(audience);
+  if (!client) {
+    client = googleAuth.getIdTokenClient(audience);
+    client.catch(() => idTokenClients.delete(audience));
+    idTokenClients.set(audience, client);
+  }
+  return client;
+}
+
 async function identityToken(audience: string): Promise<string | null> {
   if (isEmulator || /localhost|127\.0\.0\.1/.test(audience)) return null;
   if (!auth) return null;
-  const client = await auth.getIdTokenClient(audience);
+  const client = await idTokenClient(auth, audience);
   const headers = await client.getRequestHeaders();
   return headers.Authorization?.split(" ")[1] ?? null;
 }
