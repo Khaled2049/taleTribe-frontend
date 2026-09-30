@@ -10,6 +10,7 @@ interface Deferred {
 function setup() {
   const calls: Deferred[] = [];
   const states: SaveState[] = [];
+  const dirtyChanges: boolean[] = [];
   let enabled = true;
   const queue = new SaveQueue({
     getOnSave: () => (content) =>
@@ -19,12 +20,13 @@ function setup() {
     isEnabled: () => enabled,
     debounceMs: 3000,
     onStateChange: (state) => states.push(state),
-    onDirtyChange: () => {},
+    onDirtyChange: (dirty) => dirtyChanges.push(dirty),
   });
   return {
     queue,
     calls,
     states,
+    dirtyChanges,
     disable: () => {
       enabled = false;
     },
@@ -210,5 +212,29 @@ describe("SaveQueue.flushPending", () => {
     queue.flushPending();
     await settle();
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("SaveQueue change notifications", () => {
+  it("emits pending and dirty once however many keystrokes arrive", () => {
+    const { queue, states, dirtyChanges } = setup();
+    for (const text of ["a", "ab", "abc", "abcd"]) queue.trigger(text);
+    expect(states.map((state) => state.status)).toEqual(["pending"]);
+    expect(dirtyChanges).toEqual([true]);
+  });
+
+  it("still reports each distinct transition of a save", async () => {
+    const { queue, calls, states, dirtyChanges } = setup();
+    queue.trigger("a");
+    const done = queue.flushAndWait();
+    await settle();
+    calls[0].resolve(1);
+    await done;
+    expect(states.map((state) => state.status)).toEqual([
+      "pending",
+      "saving",
+      "saved",
+    ]);
+    expect(dirtyChanges).toEqual([true, false]);
   });
 });

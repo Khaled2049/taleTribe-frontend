@@ -1,5 +1,6 @@
 import "../style.css";
 import {
+  type ComponentProps,
   lazy,
   Suspense,
   useCallback,
@@ -69,7 +70,11 @@ import { SaveCancelledError } from "@/lib/saveQueue";
 import { SaveStatusIndicator } from "@/components/editor/SaveStatusIndicator";
 import { WritingStats } from "@/components/editor/WritingStats";
 import {
-  canSplitDocument,
+  useDocumentStructure,
+  useFormatState,
+  useLiveWordCount,
+} from "@/components/editor/useLiveEditorState";
+import {
   getDocumentOutline,
   jumpToOutlineEntry,
   splitDocumentAtHeadings,
@@ -578,13 +583,16 @@ export function SimpleEditor() {
   };
 
   const isSingleDocument = state.chapters.length === 1;
-  const outline: OutlineEntry[] = isSingleDocument
-    ? getDocumentOutline(editor)
-    : [];
-  const canSplitIntoChapters = isSingleDocument && canSplitDocument(editor);
+  const { outline, canSplit: canSplitIntoChapters } = useDocumentStructure(
+    editor,
+    isSingleDocument,
+  );
 
   const handleOutlineSelect = (entry: OutlineEntry) => {
-    if (editor) jumpToOutlineEntry(editor, entry.pos);
+    if (!editor) return;
+    // The subscribed outline ignores position shifts, so read the live one.
+    const live = getDocumentOutline(editor)[outline.indexOf(entry)];
+    jumpToOutlineEntry(editor, (live ?? entry).pos);
   };
 
   const splitChapterCount = splitDialogOpen
@@ -815,13 +823,8 @@ export function SimpleEditor() {
 
   const handleMetadataChange = () => {
     if (state.currentChapter) {
-      triggerSave(state.currentChapter.content);
+      triggerSave(editor?.getHTML() ?? state.currentChapter.content);
     }
-  };
-
-  // Handle content changes in editor
-  const handleContentChange = (content: string) => {
-    actions.updateChapterContent(content);
   };
 
   // Handle save from editor (autosave trigger)
@@ -879,13 +882,8 @@ export function SimpleEditor() {
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   };
 
-  const activeTextAlign = editor?.isActive({ textAlign: "center" })
-    ? "center"
-    : editor?.isActive({ textAlign: "right" })
-      ? "right"
-      : editor?.isActive({ textAlign: "justify" })
-        ? "justify"
-        : "left";
+  const format = useFormatState(editor);
+  const activeTextAlign = format.textAlign;
 
   const openChaptersPanel = () => {
     if (!isLgUp) {
@@ -1017,35 +1015,35 @@ export function SimpleEditor() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => editor.chain().focus().toggleBold().run()}
-                  className={`px-2 py-1.5 rounded-ns border text-xs font-semibold text-ns-ink ${editor.isActive("bold") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
+                  className={`px-2 py-1.5 rounded-ns border text-xs font-semibold text-ns-ink ${format.bold ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Bold"
                 >
                   B
                 </button>
                 <button
                   onClick={() => editor.chain().focus().toggleItalic().run()}
-                  className={`px-2 py-1.5 rounded-ns border text-xs italic text-ns-ink ${editor.isActive("italic") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
+                  className={`px-2 py-1.5 rounded-ns border text-xs italic text-ns-ink ${format.italic ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Italic"
                 >
                   I
                 </button>
                 <button
                   onClick={() => editor.chain().focus().toggleUnderline().run()}
-                  className={`px-2 py-1.5 rounded-ns border text-xs underline text-ns-ink ${editor.isActive("underline") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
+                  className={`px-2 py-1.5 rounded-ns border text-xs underline text-ns-ink ${format.underline ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Underline"
                 >
                   U
                 </button>
                 <button
                   onClick={() => editor.chain().focus().toggleStrike().run()}
-                  className={`px-2 py-1.5 rounded-ns border text-xs line-through text-ns-ink ${editor.isActive("strike") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
+                  className={`px-2 py-1.5 rounded-ns border text-xs line-through text-ns-ink ${format.strike ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Strikethrough"
                 >
                   S
                 </button>
                 <button
                   onClick={applyLink}
-                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("link") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${format.link ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Link"
                 >
                   <Link2 className="w-4 h-4" />
@@ -1060,7 +1058,7 @@ export function SimpleEditor() {
               <div className="flex items-center gap-1 flex-wrap">
                 <button
                   onClick={() => editor.chain().focus().setParagraph().run()}
-                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("paragraph") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${format.paragraph ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Paragraph"
                 >
                   <Pilcrow className="w-4 h-4" />
@@ -1069,7 +1067,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().toggleHeading({ level: 1 }).run()
                   }
-                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("heading", { level: 1 }) ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${format.heading1 ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Heading 1"
                 >
                   <Heading1 className="w-4 h-4" />
@@ -1078,7 +1076,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().toggleHeading({ level: 2 }).run()
                   }
-                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("heading", { level: 2 }) ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${format.heading2 ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Heading 2"
                 >
                   <Heading2 className="w-4 h-4" />
@@ -1087,7 +1085,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().toggleBulletList().run()
                   }
-                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("bulletList") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${format.bulletList ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Bullet list"
                 >
                   <List className="w-4 h-4" />
@@ -1096,7 +1094,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().toggleOrderedList().run()
                   }
-                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("orderedList") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${format.orderedList ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Numbered list"
                 >
                   <ListOrdered className="w-4 h-4" />
@@ -1105,7 +1103,7 @@ export function SimpleEditor() {
                   onClick={() =>
                     editor.chain().focus().toggleBlockquote().run()
                   }
-                  className={`p-2 rounded-ns border text-ns-ink ${editor.isActive("blockquote") ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
+                  className={`p-2 rounded-ns border text-ns-ink ${format.blockquote ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
                   title="Quote"
                 >
                   <Quote className="w-4 h-4" />
@@ -1250,12 +1248,11 @@ export function SimpleEditor() {
         {state.rightTab === "document" && (
           <div className="space-y-4">
             <div className="rounded-ns border border-ns-border bg-ns-elevated p-3 text-ns-ink shadow-ns-sm">
-              <WritingStats
+              <LiveWritingStats
+                editor={editor}
                 currentChapter={state.currentChapter}
                 chaptersCount={state.chapters.length}
                 singleDocument={isSingleDocument}
-                textCharacterCount={editor?.storage.characterCount?.characters?.()}
-                textWordCount={editor?.storage.characterCount?.words?.()}
               />
             </div>
             <div className="rounded-ns border border-ns-border bg-ns-elevated p-3 text-ns-ink shadow-ns-sm">
@@ -1420,7 +1417,6 @@ export function SimpleEditor() {
                   <div className="mx-auto min-h-full flex flex-col">
                     <TipTapEditor
                       initialContent={state.currentChapter.content}
-                      onContentChange={handleContentChange}
                       onSave={handleEditorSave}
                       onBlur={flushSave}
                       storyId={state.story?.id || ""}
@@ -1890,5 +1886,24 @@ function ChapterOpening({
         Opening {title || "chapter"}…
       </p>
     </div>
+  );
+}
+
+/** Subscribes to every edit, so it is mounted only on the Document tab. */
+function LiveWritingStats({
+  editor,
+  ...props
+}: { editor: Editor | null } & Omit<
+  ComponentProps<typeof WritingStats>,
+  "storedWordCount" | "textCharacterCount" | "textWordCount"
+>) {
+  const live = useLiveWordCount(editor);
+  return (
+    <WritingStats
+      {...props}
+      storedWordCount={live?.storedWords}
+      textCharacterCount={live?.characters}
+      textWordCount={live?.words}
+    />
   );
 }
