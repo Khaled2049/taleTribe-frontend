@@ -15,7 +15,6 @@ export interface StorySocialMe {
 interface ApiComment {
     id: string;
     storyId: string;
-    chapterId: string;
     message: string;
     userId: string;
     parentId?: string;
@@ -41,7 +40,6 @@ class StorySocialRepo {
         return {
             id: comment.id,
             storyId: comment.storyId,
-            chapterId: comment.chapterId,
             message: comment.message,
             userId: comment.userId,
             parentId: comment.parentId || null,
@@ -65,28 +63,28 @@ class StorySocialRepo {
         return this.request<StorySocialSummary>("POST", `/v1/stories/${storyId}/ratings`, { rating });
     }
 
-    async getComments(storyId: string, chapterId: string): Promise<Comment[]> {
-        const comments = await this.publicRequest<ApiComment[]>(`/v1/public/stories/${storyId}/chapters/${chapterId}/comments`);
+    async getComments(storyId: string): Promise<Comment[]> {
+        const comments = await this.publicRequest<ApiComment[]>(`/v1/public/stories/${storyId}/comments`);
         return comments.map((comment) => this.comment(comment));
     }
 
-    async createComment(storyId: string, chapterId: string, message: string, parentId?: string): Promise<Comment> {
-        return this.comment(await this.request<ApiComment>("POST", `/v1/stories/${storyId}/chapters/${chapterId}/comments`, { message, parentId: parentId || "" }));
+    async createComment(storyId: string, message: string, parentId?: string): Promise<Comment> {
+        return this.comment(await this.request<ApiComment>("POST", `/v1/stories/${storyId}/comments`, { message, parentId: parentId || "" }));
     }
 
-    async updateComment(storyId: string, chapterId: string, commentId: string, message: string): Promise<Comment> {
-        return this.comment(await this.request<ApiComment>("PATCH", `/v1/stories/${storyId}/chapters/${chapterId}/comments/${commentId}`, { message }));
+    async updateComment(storyId: string, commentId: string, message: string): Promise<Comment> {
+        return this.comment(await this.request<ApiComment>("PATCH", `/v1/stories/${storyId}/comments/${commentId}`, { message }));
     }
 
-    deleteComment(storyId: string, chapterId: string, commentId: string) {
-        return this.request<void>("DELETE", `/v1/stories/${storyId}/chapters/${chapterId}/comments/${commentId}`);
+    deleteComment(storyId: string, commentId: string) {
+        return this.request<void>("DELETE", `/v1/stories/${storyId}/comments/${commentId}`);
     }
 
-    async setCommentLike(storyId: string, chapterId: string, commentId: string, liked: boolean): Promise<Comment> {
+    async setCommentLike(storyId: string, commentId: string, liked: boolean): Promise<Comment> {
         return this.comment(
             await this.request<ApiComment>(
                 liked ? "PUT" : "DELETE",
-                `/v1/stories/${storyId}/chapters/${chapterId}/comments/${commentId}/likes`,
+                `/v1/stories/${storyId}/comments/${commentId}/likes`,
             ),
         );
     }

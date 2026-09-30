@@ -3,10 +3,6 @@ import { Link } from "react-router-dom";
 import { User, DollarSign } from "lucide-react";
 import { Web3Boundary } from "@/contexts/Web3Boundary";
 import { WEB3_ENABLED } from "@/config/featureFlags";
-import {
-  useAuthorUsername,
-  usePublicProfile,
-} from "@/hooks/queries/useUserQueries";
 
 const StoryTipModal = lazy(() =>
   import("./StoryTipModal").then((m) => ({ default: m.StoryTipModal })),
@@ -16,29 +12,27 @@ interface StoryAuthorBioProps {
   author: string;
   authorId?: string;
   bio?: string;
+  photoURL?: string;
   authorWalletAddress?: string;
   storyId: string;
+  loading?: boolean;
 }
+
+const pulse = "animate-pulse rounded bg-ns-surface";
 
 export const StoryAuthorBio: React.FC<StoryAuthorBioProps> = ({
   author,
   authorId,
   bio,
+  photoURL,
   authorWalletAddress,
   storyId,
+  loading = false,
 }) => {
   const [showTipModal, setShowTipModal] = useState(false);
 
-  // Resolve the author's current username live from their public profile so the
-  // bio reflects username changes; fall back to the copy stored on the story.
-  const displayAuthor = useAuthorUsername(authorId, author);
-
-  // Pull the author's live public profile for the real bio + photo. Prefer it
-  // over the copy passed in, then a generic line while signed out / unset.
-  const { data: authorProfile } = usePublicProfile(authorId);
-  const photoURL = authorProfile?.photoURL;
+  const displayAuthor = author.trim() || "unknown";
   const authorBio =
-    authorProfile?.bio?.trim() ||
     bio?.trim() ||
     `${displayAuthor} is a writer who loves exploring complex themes through storytelling.`;
 
@@ -51,7 +45,9 @@ export const StoryAuthorBio: React.FC<StoryAuthorBioProps> = ({
 
         <div className="flex gap-5 items-start">
           <div className="w-14 h-14 rounded-full bg-ns-elevated border border-ns-border overflow-hidden flex items-center justify-center flex-shrink-0">
-            {photoURL ? (
+            {loading ? (
+              <div className="w-full h-full animate-pulse bg-ns-surface" />
+            ) : photoURL ? (
               <img
                 src={photoURL}
                 alt={displayAuthor}
@@ -74,9 +70,16 @@ export const StoryAuthorBio: React.FC<StoryAuthorBioProps> = ({
                 displayAuthor
               )}
             </h4>
-            <p className="font-body text-sm text-ns-ink-secondary leading-relaxed">
-              {authorBio}
-            </p>
+            {loading ? (
+              <div className="space-y-2 pt-1" aria-hidden="true">
+                <div className={`h-3.5 w-full ${pulse}`} />
+                <div className={`h-3.5 w-3/4 ${pulse}`} />
+              </div>
+            ) : (
+              <p className="font-body text-sm text-ns-ink-secondary leading-relaxed">
+                {authorBio}
+              </p>
+            )}
           </div>
         </div>
 

@@ -5,8 +5,9 @@ export const queryKeys = {
     published: () => ["stories", "published"] as const,
     byCategory: (category: string, search = "") =>
       ["stories", "published", category, search] as const,
-    // Reserved for route-level detail migration.
     detail: (storyId: string) => ["stories", "detail", storyId] as const,
+    viewer: (storyId: string, uid: string) =>
+      ["stories", storyId, "viewer", uid] as const,
     chapters: (storyId: string) => ["stories", storyId, "chapters"] as const,
     chapter: (storyId: string, chapterId: string) =>
       ["stories", storyId, "chapters", chapterId] as const,
@@ -25,8 +26,7 @@ export const queryKeys = {
     wall: (filter: string) => ["guestbook", "wall", filter] as const,
   },
   comments: {
-    byChapter: (storyId: string, chapterId: string) =>
-      ["comments", storyId, chapterId] as const,
+    byStory: (storyId: string) => ["comments", storyId] as const,
   },
   bookClubs: {
     all: () => ["bookClubs"] as const,
