@@ -8,6 +8,12 @@ export interface Chapter {
   revision?: number;
 }
 
+/**
+ * A chapter from the index read, without its body. A separate type so an
+ * omitted body can never be mistaken for an empty saved chapter.
+ */
+export type ChapterSummary = Omit<Chapter, "content">;
+
 export interface Story {
   id: string;
   title: string;

@@ -1,24 +1,23 @@
 import { useAuthContext } from "../../contexts/AuthContext";
-import { FaEye, FaThumbsUp, FaBook } from "react-icons/fa";
-import {
-  ChevronRight,
-  ChevronDown,
-  Check,
-  Compass,
-  Search,
-  Sparkles,
-  X,
-} from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { FaBook } from "react-icons/fa";
+import { ChevronDown, Check, Search, Sparkles, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { APP_NAME } from "@/config/seo";
 import StoriesHeader from "@/components/story/StoriesHeader";
-import { BookCoverFallback } from "@/components/story/BookCoverFallback";
-import { AuthorName } from "@/components/common";
 import { StoryMetadata } from "@novelsync/story-data-client";
-import { usePublishedStories } from "@/hooks/queries/useStoryQueries";
+import { usePublishedStories } from "@/hooks/queries/publishedStories";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { findScrollParent } from "@/lib/scrollParent";
+import { useAuthIdentity } from "@novelsync/platform-auth";
+import { StoryGridSkeleton } from "@/routes/Story/StoriesPageSkeleton";
+import {
+  ABOVE_THE_FOLD_COVERS,
+  StoryGridCard,
+  StoryListRow,
+} from "@/routes/Story/components/StoryCards";
 import { RecommendationCollection } from "@/components/recommendations";
 import type { RecommendationFilters } from "@/cloudFunctions/recommendations";
 import { getApiErrorMessage } from "@/cloudFunctions";
@@ -62,36 +61,11 @@ const MIN_SEARCH_LENGTH = 2;
 const RECOMMENDATIONS_ENABLED =
   import.meta.env.VITE_RECOMMENDATIONS_ENABLED !== "false";
 
-const StoryCover: React.FC<{
-  src?: string;
-  title: string;
-  author?: string;
-}> = ({ src, title, author }) => {
-  const [loaded, setLoaded] = useState(false);
-
-  if (!src) {
-    return <BookCoverFallback title={title} author={author} />;
-  }
-
-  return (
-    <>
-      {!loaded && (
-        <div className="absolute inset-0 bg-ns-surface animate-pulse" />
-      )}
-      <img
-        src={src}
-        alt={title}
-        loading="lazy"
-        decoding="async"
-        onLoad={() => setLoaded(true)}
-        className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
-      />
-    </>
-  );
-};
-
 const AllStories: React.FC = () => {
   const { user } = useAuthContext();
+  const identity = useAuthIdentity();
+  const signedIn = identity.isSignedIn;
+  const isSmUp = useMediaQuery("(min-width: 640px)");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -114,6 +88,7 @@ const AllStories: React.FC = () => {
   const {
     data,
     isLoading: loading,
+    isPlaceholderData,
     isError,
     error,
     fetchNextPage,
@@ -134,14 +109,15 @@ const AllStories: React.FC = () => {
   const discover = useDiscoverStories();
   const discoveryActive = discover.isPending || Boolean(discover.data);
   const forYou = useBehavioralRecommendations(
-    user?.uid,
+    identity.uid,
     recommendationFilters,
     RECOMMENDATIONS_ENABLED && searchInput.trim() === "" && !discoveryActive,
   );
 
   const navigate = useNavigate();
 
-  // Infinite scroll: fetch the next page when the sentinel nears the viewport.
+  // Infinite scroll: fetch the next page when the sentinel nears the bottom of
+  // whatever element actually scrolls the page.
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const node = loadMoreRef.current;
@@ -153,7 +129,7 @@ const AllStories: React.FC = () => {
           fetchNextPage();
         }
       },
-      { rootMargin: "400px" }, // prefetch before the user hits the bottom
+      { root: findScrollParent(node), rootMargin: "400px" }, // prefetch before the user hits the bottom
     );
     observer.observe(node);
     return () => observer.disconnect();
@@ -199,7 +175,7 @@ const AllStories: React.FC = () => {
 
   const discoverPrompt = () => {
     const prompt = searchInput.trim();
-    if (!user || prompt.length < MIN_SEARCH_LENGTH) return;
+    if (!signedIn || prompt.length < MIN_SEARCH_LENGTH) return;
     setDiscoveryTitle(`Discoveries for “${prompt}”`);
     setDiscoveryPrompt(prompt);
     discover.mutate({
@@ -210,33 +186,36 @@ const AllStories: React.FC = () => {
     });
   };
 
-  const discoverSimilar = (story: {
-    title: string;
-    author?: string | null;
-  }) => {
-    if (!user) return;
-    setSearchInput("");
-    setDiscoveryTitle(`More like ${story.title}`);
-    setDiscoveryPrompt(undefined);
-    discover.mutate({
-      mode: "adhoc",
-      books: [
-        {
-          title: story.title,
-          ...(story.author ? { author: story.author } : {}),
-        },
-      ],
-      topK: 12,
-      filters: recommendationFilters,
-    });
-  };
+  const { mutate: runDiscovery } = discover;
+  const discoverSimilar = useCallback(
+    (story: { title: string; author?: string | null }) => {
+      if (!signedIn) return;
+      setSearchInput("");
+      setDiscoveryTitle(`More like ${story.title}`);
+      setDiscoveryPrompt(undefined);
+      runDiscovery({
+        mode: "adhoc",
+        books: [
+          {
+            title: story.title,
+            ...(story.author ? { author: story.author } : {}),
+          },
+        ],
+        topK: 12,
+        filters: recommendationFilters,
+      });
+    },
+    [signedIn, recommendationFilters, runDiscovery],
+  );
+  const cardSimilar =
+    RECOMMENDATIONS_ENABLED && signedIn ? discoverSimilar : undefined;
 
   // A single row at the head of the story list, above the grid, on every
   // viewport. It stands down whenever search or AI discovery takes over the
   // column, so only one shelf is ever competing for that slot.
   const forYouShelf =
     RECOMMENDATIONS_ENABLED &&
-    user &&
+    signedIn &&
     searchInput.trim() === "" &&
     !discoveryActive &&
     (forYou.isLoading || forYou.data) ? (
@@ -268,9 +247,10 @@ const AllStories: React.FC = () => {
     }
   };
 
-  const handleStoryClick = (story: StoryMetadata) => {
-    navigate(`/story/${story.id}`);
-  };
+  const handleStoryClick = useCallback(
+    (story: StoryMetadata) => navigate(`/story/${story.id}`),
+    [navigate],
+  );
 
   return (
     <>
@@ -295,7 +275,8 @@ const AllStories: React.FC = () => {
           {/* Left: header + mobile strip + grid */}
           <div className="flex-1 min-w-0">
             <StoriesHeader
-              user={user}
+              uid={identity.uid}
+              name={user?.firstName || user?.username}
               onNewStory={handleNewStory}
               isModalOpen={isModalOpen}
               onCloseModal={() => setIsModalOpen(false)}
@@ -322,7 +303,7 @@ const AllStories: React.FC = () => {
                 onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder="Search stories by title or author…"
                 aria-label="Search stories by title or author"
-                className={`w-full pl-6 py-2.5 font-ui text-sm bg-transparent border-0 border-b border-ns-border text-ns-ink placeholder:text-ns-ink-muted focus:outline-none focus:border-ns-accent transition-colors [&::-webkit-search-cancel-button]:hidden ${RECOMMENDATIONS_ENABLED && user ? "pr-32" : "pr-8"}`}
+                className={`w-full pl-6 py-2.5 font-ui text-sm bg-transparent border-0 border-b border-ns-border text-ns-ink placeholder:text-ns-ink-muted focus:outline-none focus:border-ns-accent transition-colors [&::-webkit-search-cancel-button]:hidden ${RECOMMENDATIONS_ENABLED && signedIn ? "pr-32" : "pr-8"}`}
               />
               <div className="absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1">
                 {searchInput && (
@@ -335,7 +316,7 @@ const AllStories: React.FC = () => {
                     <X size={14} />
                   </button>
                 )}
-                {RECOMMENDATIONS_ENABLED && user && (
+                {RECOMMENDATIONS_ENABLED && signedIn && (
                   <button
                     type="submit"
                     disabled={
@@ -353,7 +334,7 @@ const AllStories: React.FC = () => {
             <div className="mb-6 min-h-4">
               {RECOMMENDATIONS_ENABLED && searchInput.trim().length >= 2 && (
                 <p className="font-ui text-[10px] text-ns-ink-muted">
-                  {user
+                  {signedIn
                     ? "Press Enter or choose Discover for a theme-and-mood search."
                     : "Sign in to search by theme, mood, or stories you already love."}
                 </p>
@@ -477,11 +458,7 @@ const AllStories: React.FC = () => {
                   </div>
                 )}
                 {loading ? (
-                  <div className="flex items-center justify-center py-16">
-                    <span className="text-ns-ink-muted font-ui text-sm">
-                      Loading stories…
-                    </span>
-                  </div>
+                  <StoryGridSkeleton />
                 ) : stories.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
                     <FaBook className="text-5xl text-ns-ink-muted mb-4 opacity-30" />
@@ -499,177 +476,41 @@ const AllStories: React.FC = () => {
                     </p>
                   </div>
                 ) : (
-                  <>
-                    {/* Mobile: list layout */}
-                    <div
-                      data-cy="story-list"
-                      className="sm:hidden divide-y divide-ns-border border-t border-ns-border"
-                    >
-                      {stories.map((story) => (
-                        <div
-                          key={story.id}
-                          onClick={() => handleStoryClick(story)}
-                          className="group flex items-center gap-3 py-3 cursor-pointer active:bg-ns-surface-hover transition-colors"
-                        >
-                          {/* Thumbnail */}
-                          <div className="relative w-10 h-[60px] rounded shrink-0 overflow-hidden bg-ns-surface">
-                            {story.coverImageUrl || story.thumbnailUrl ? (
-                              <img
-                                src={story.thumbnailUrl || story.coverImageUrl}
-                                alt={story.title}
-                                loading="lazy"
-                                decoding="async"
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <BookCoverFallback
-                                title={story.title}
-                                author={story.author}
-                                size="tiny"
-                              />
-                            )}
-                          </div>
-
-                          {/* Text */}
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-ui font-medium text-sm truncate text-ns-ink group-hover:text-ns-accent transition-colors duration-200">
-                              {story.title}
-                            </h3>
-                            {story.userId ? (
-                              <Link
-                                to={`/profile/${story.userId}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="block text-xs text-ns-ink-muted font-ui truncate mt-0.5 hover:text-ns-accent transition-colors"
-                              >
-                                <AuthorName
-                                  userId={story.userId}
-                                  fallback={story.author}
-                                />
-                              </Link>
-                            ) : (
-                              <p className="text-xs text-ns-ink-muted font-ui truncate mt-0.5">
-                                {story.author}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-3 mt-1">
-                              <span className="flex items-center gap-1 text-[11px] text-ns-ink-muted font-ui">
-                                <FaEye className="opacity-60" />
-                                {story.views >= 1000
-                                  ? `${(story.views / 1000).toFixed(1)}K`
-                                  : story.views}
-                              </span>
-                              <span className="flex items-center gap-1 text-[11px] text-ns-ink-muted font-ui">
-                                <FaThumbsUp className="opacity-60" />
-                                {story.likes}
-                              </span>
-                              {story.category && (
-                                <span className="text-[10px] font-ui text-ns-ink-muted bg-ns-surface px-1.5 py-0.5 rounded capitalize truncate">
-                                  {story.category}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {RECOMMENDATIONS_ENABLED && user && (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                discoverSimilar(story);
-                              }}
-                              aria-label={`Find stories like ${story.title}`}
-                              className="rounded-full p-2 text-ns-ink-muted transition-colors hover:bg-ns-surface hover:text-ns-accent"
-                            >
-                              <Compass className="h-4 w-4" />
-                            </button>
-                          )}
-                          <ChevronRight className="w-4 h-4 text-ns-ink-muted shrink-0 opacity-40" />
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Desktop: grid layout */}
-                    <div
-                      data-cy="story-grid"
-                      className="hidden sm:grid sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2"
-                    >
-                      {stories.map((story) => (
-                        <div
-                          key={story.id}
-                          onClick={() => handleStoryClick(story)}
-                          className="group cursor-pointer"
-                        >
-                          <div className="max-w-[130px] mx-auto book-perspective">
-                            <div className="book-cover relative aspect-[2/3] rounded-ns overflow-hidden mb-2 bg-ns-surface">
-                              <StoryCover
-                                src={story.thumbnailUrl || story.coverImageUrl}
-                                title={story.title}
-                                author={story.author}
-                              />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors duration-300 flex flex-col justify-between p-2 opacity-0 group-hover:opacity-100">
-                                <p className="text-white text-[10px] line-clamp-3 leading-relaxed font-body">
-                                  {story.description}
-                                </p>
-                                <div className="space-y-2 font-ui text-white">
-                                  <div className="flex items-center justify-between text-[10px]">
-                                    <span className="flex items-center gap-0.5">
-                                      <FaEye />
-                                      {story.views >= 1000
-                                        ? `${(story.views / 1000).toFixed(1)}K`
-                                        : story.views}
-                                    </span>
-                                    <span className="flex items-center gap-0.5">
-                                      <FaThumbsUp /> {story.likes}
-                                    </span>
-                                  </div>
-                                  {RECOMMENDATIONS_ENABLED && user && (
-                                    <button
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        discoverSimilar(story);
-                                      }}
-                                      className="flex w-full items-center justify-center gap-1 rounded-full border border-white/35 bg-black/20 px-2 py-1 text-[9px] uppercase tracking-[0.08em] transition-colors hover:bg-white hover:text-stone-900"
-                                    >
-                                      <Compass className="h-3 w-3" />
-                                      More like this
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="space-y-0.5 min-w-0">
-                            <h3
-                              title={story.title}
-                              className="font-ui font-medium text-sm truncate text-ns-ink group-hover:text-ns-accent transition-colors duration-200"
-                            >
-                              {story.title}
-                            </h3>
-                            {story.userId ? (
-                              <Link
-                                to={`/profile/${story.userId}`}
-                                title={story.author}
-                                onClick={(e) => e.stopPropagation()}
-                                className="block text-xs text-ns-ink-muted font-ui truncate hover:text-ns-accent transition-colors"
-                              >
-                                <AuthorName
-                                  userId={story.userId}
-                                  fallback={story.author}
-                                />
-                              </Link>
-                            ) : (
-                              <p
-                                title={story.author}
-                                className="text-xs text-ns-ink-muted font-ui truncate"
-                              >
-                                {story.author}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                  <div
+                    aria-busy={isPlaceholderData}
+                    className={`transition-opacity duration-200 ${isPlaceholderData ? "opacity-50" : ""}`}
+                  >
+                    {isSmUp ? (
+                      <div
+                        data-cy="story-grid"
+                        className="grid grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2"
+                      >
+                        {stories.map((story, index) => (
+                          <StoryGridCard
+                            key={story.id}
+                            story={story}
+                            priority={index < ABOVE_THE_FOLD_COVERS}
+                            onOpen={handleStoryClick}
+                            onSimilar={cardSimilar}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div
+                        data-cy="story-list"
+                        className="divide-y divide-ns-border border-t border-ns-border"
+                      >
+                        {stories.map((story, index) => (
+                          <StoryListRow
+                            key={story.id}
+                            story={story}
+                            priority={index < ABOVE_THE_FOLD_COVERS}
+                            onOpen={handleStoryClick}
+                            onSimilar={cardSimilar}
+                          />
+                        ))}
+                      </div>
+                    )}
 
                     {/* Infinite-scroll sentinel + loading indicator */}
                     <div
@@ -684,7 +525,7 @@ const AllStories: React.FC = () => {
                         </span>
                       </div>
                     )}
-                  </>
+                  </div>
                 )}
               </>
             )}

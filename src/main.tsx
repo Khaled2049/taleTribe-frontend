@@ -8,7 +8,7 @@ import {
   RouterProvider,
 } from "react-router-dom";
 import { NavbarWrapper } from "./NavbarWrapper";
-import { Web3Provider } from "./contexts/Web3Provider";
+import { Web3Boundary } from "./contexts/Web3Boundary";
 import { ThemeToaster } from "./components/common/ThemeToaster";
 import { SEOProvider } from "./contexts/HelmetProvider";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -18,6 +18,14 @@ import { AuthBootstrap } from "./components/AppBootstrap/AuthBootstrap";
 import { RouteError } from "./components/common/RouteError";
 import { useAuthContext } from "./contexts/AuthContext";
 import RequireAuth from "./routes/RequireAuth";
+import { prefetchStoriesPage } from "./routes/Story/prefetchStories";
+import {
+  prefetchReaderChapter,
+  prefetchStoryDetail,
+} from "./routes/Story/prefetchStoryDetail";
+import { getCurrentUid } from "@novelsync/platform-auth";
+import { StoriesPageSkeleton } from "./routes/Story/StoriesPageSkeleton";
+import { StoryDetailSkeleton } from "./routes/Story/StoryDetailSkeleton";
 
 const Root = lazy(() => import("./routes/root"));
 const Signin = lazy(() => import("./routes/Auth/sign-in"));
@@ -112,8 +120,13 @@ const router = createBrowserRouter([
       },
       {
         path: "/stories",
+        loader: () => {
+          void prefetchStoriesPage();
+          return null;
+        },
+        hydrateFallbackElement: <StoriesPageSkeleton />,
         element: (
-          <Suspense fallback={<LoadingFallback />}>
+          <Suspense fallback={<StoriesPageSkeleton />}>
             <AllStories />
           </Suspense>
         ),
@@ -282,12 +295,29 @@ const router = createBrowserRouter([
         path: "/auth/complete-signup",
         element: (
           <Suspense fallback={<LoadingFallback />}>
-            <CompleteSignup />
+            <Web3Boundary>
+              <CompleteSignup />
+            </Web3Boundary>
           </Suspense>
         ),
       },
       {
         path: "/create/:storyId",
+        // Not awaited, and imported lazily to keep the story-data workspace
+        // client out of the entry bundle; the shelf's hover has usually loaded
+        // it already. The uid is null until Firebase restores a session, so a
+        // cold refresh preloads only code and the guard fetches the data.
+        loader: ({ params }) => {
+          const { storyId } = params;
+          if (storyId) {
+            const uid = getCurrentUid();
+            void import("./routes/Story/prefetchWorkspace").then(
+              ({ prefetchWorkspace }) => prefetchWorkspace(uid, storyId),
+            );
+          }
+          return null;
+        },
+        hydrateFallbackElement: <LoadingFallback />,
         element: (
           <Suspense fallback={<LoadingFallback />}>
             <PrivateRoute />
@@ -332,17 +362,36 @@ const router = createBrowserRouter([
         path: "/user-stories",
         element: (
           <Suspense fallback={<LoadingFallback />}>
-            <UserStories />
+            <Web3Boundary>
+              <UserStories />
+            </Web3Boundary>
           </Suspense>
         ),
       },
       {
         path: "/story/:id",
+        loader: ({ params }) => {
+          if (params.id) void prefetchStoryDetail(params.id);
+          return null;
+        },
+        hydrateFallbackElement: <StoryDetailSkeleton />,
         element: (
-          <Suspense fallback={<LoadingFallback />}>
+          <Suspense fallback={<StoryDetailSkeleton />}>
             <StoryDetail />
           </Suspense>
         ),
+        children: [
+          {
+            path: "read/:chapterId?",
+            element: null,
+            loader: ({ params }) => {
+              if (params.id && params.chapterId) {
+                void prefetchReaderChapter(params.id, params.chapterId);
+              }
+              return null;
+            },
+          },
+        ],
       },
     ],
   },
@@ -351,11 +400,9 @@ const router = createBrowserRouter([
 createRoot(document.getElementById("root")!).render(
   <SEOProvider>
     <QueryClientProvider client={appQueryClient}>
-      <Web3Provider>
-        <AuthBootstrap />
-        <RouterProvider router={router} />
-        <ThemeToaster />
-      </Web3Provider>
+      <AuthBootstrap />
+      <RouterProvider router={router} />
+      <ThemeToaster />
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   </SEOProvider>,

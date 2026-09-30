@@ -184,9 +184,10 @@ jobs:
         with:
           name: dist
           path: dist
-          # Only has to survive the hand-off to the deploy job below. The default
-          # is 90 days, which filled the account's artifact storage quota.
-          retention-days: 1
+          # Allow a week for production approvals and deployment retries while
+          # limiting storage use (the 90-day default previously exhausted quota).
+          # After expiry, re-run all jobs to rebuild and upload a fresh artifact.
+          retention-days: 7
 
     needs: test
     environment: production

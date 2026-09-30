@@ -1,15 +1,19 @@
 import { useReducer, useMemo } from "react";
-import { Chapter, Story } from "@novelsync/story-data-client";
+import { Chapter, ChapterSummary, Story } from "@novelsync/story-data-client";
+import { toChapterSummary } from "@/lib/chapterIndex";
 
 // State type
 export interface EditorState {
   story: Story | null;
-  chapters: Chapter[];
+  chapters: ChapterSummary[];
   currentChapter: Chapter | null;
+  /** A selected chapter whose body is still loading; the canvas is read-only. */
+  openingChapter: ChapterSummary | null;
   storyTitle: string;
   storyDescription: string;
   chapterTitle: string;
   isLoading: boolean;
+  loadError: "missing" | "error" | null;
   metadataChanged: boolean;
   leftSidebarOpen: boolean;
   rightSidebarOpen: boolean;
@@ -19,15 +23,18 @@ export interface EditorState {
 // Action types
 type EditorAction =
   | { type: "SET_LOADING"; payload: boolean }
+  | { type: "LOAD_FAILED"; payload: "missing" | "error" }
   | {
       type: "LOAD_STORY";
       payload: {
         story: Story;
-        chapters: Chapter[];
+        chapters: ChapterSummary[];
         currentChapter: Chapter | null;
         leftSidebarOpen: boolean;
       };
     }
+  | { type: "BEGIN_CHAPTER_OPEN"; payload: ChapterSummary }
+  | { type: "CHAPTER_OPEN_FAILED" }
   | { type: "SELECT_CHAPTER"; payload: Chapter }
   | { type: "UPDATE_STORY_TITLE"; payload: string }
   | { type: "UPDATE_STORY_DESCRIPTION"; payload: string }
@@ -49,26 +56,36 @@ type EditorAction =
   | { type: "SET_STORY_PUBLISHED"; payload: boolean }
   | { type: "RESET" };
 
-// Initial state
-const initialState: EditorState = {
+export const initialEditorState: EditorState = {
   story: null,
   chapters: [],
   currentChapter: null,
+  openingChapter: null,
   storyTitle: "",
   storyDescription: "",
   chapterTitle: "",
   isLoading: true,
+  loadError: null,
   metadataChanged: false,
   leftSidebarOpen: true,
   rightSidebarOpen: false,
   rightTab: "format",
 };
 
-// Reducer
-function editorReducer(state: EditorState, action: EditorAction): EditorState {
+export function editorReducer(
+  state: EditorState,
+  action: EditorAction,
+): EditorState {
   switch (action.type) {
     case "SET_LOADING":
-      return { ...state, isLoading: action.payload };
+      return {
+        ...state,
+        isLoading: action.payload,
+        loadError: action.payload ? null : state.loadError,
+      };
+
+    case "LOAD_FAILED":
+      return { ...state, isLoading: false, loadError: action.payload };
 
     case "LOAD_STORY":
       return {
@@ -76,19 +93,28 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         story: action.payload.story,
         chapters: action.payload.chapters,
         currentChapter: action.payload.currentChapter,
+        openingChapter: null,
         storyTitle: action.payload.story.title,
         storyDescription: action.payload.story.description,
         chapterTitle: action.payload.currentChapter?.title || "",
         leftSidebarOpen: action.payload.leftSidebarOpen,
         rightSidebarOpen: false,
         isLoading: false,
+        loadError: null,
         metadataChanged: false,
       };
+
+    case "BEGIN_CHAPTER_OPEN":
+      return { ...state, openingChapter: action.payload };
+
+    case "CHAPTER_OPEN_FAILED":
+      return { ...state, openingChapter: null };
 
     case "SELECT_CHAPTER":
       return {
         ...state,
         currentChapter: action.payload,
+        openingChapter: null,
         chapterTitle: action.payload.title,
       };
 
@@ -129,8 +155,9 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     case "ADD_CHAPTER":
       return {
         ...state,
-        chapters: [...state.chapters, action.payload],
+        chapters: [...state.chapters, toChapterSummary(action.payload)],
         currentChapter: action.payload,
+        openingChapter: null,
         chapterTitle: action.payload.title,
       };
 
@@ -140,15 +167,12 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       );
       const wasCurrentChapter = state.currentChapter?.id === action.payload;
 
+      // The index holds no bodies, so the caller opens the next chapter.
       return {
         ...state,
         chapters: remainingChapters,
-        currentChapter: wasCurrentChapter
-          ? remainingChapters[0] || null
-          : state.currentChapter,
-        chapterTitle: wasCurrentChapter
-          ? remainingChapters[0]?.title || ""
-          : state.chapterTitle,
+        currentChapter: wasCurrentChapter ? null : state.currentChapter,
+        chapterTitle: wasCurrentChapter ? "" : state.chapterTitle,
       };
     }
 
@@ -157,7 +181,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         ...state,
         chapters: state.chapters.map((ch) =>
           ch.id === action.payload.id
-            ? { ...ch, ...action.payload.updates }
+            ? toChapterSummary({ ...ch, ...action.payload.updates })
             : ch,
         ),
         currentChapter:
@@ -192,7 +216,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       };
 
     case "RESET":
-      return initialState;
+      return initialEditorState;
 
     default:
       return state;
@@ -201,7 +225,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
 // Hook
 export function useEditorState() {
-  const [state, dispatch] = useReducer(editorReducer, initialState);
+  const [state, dispatch] = useReducer(editorReducer, initialEditorState);
 
   // Action creators
   const actions = useMemo(
@@ -209,9 +233,12 @@ export function useEditorState() {
       setLoading: (loading: boolean) =>
         dispatch({ type: "SET_LOADING", payload: loading }),
 
+      loadFailed: (reason: "missing" | "error") =>
+        dispatch({ type: "LOAD_FAILED", payload: reason }),
+
       loadStory: (
         story: Story,
-        chapters: Chapter[],
+        chapters: ChapterSummary[],
         currentChapter: Chapter | null,
         options?: { leftSidebarOpen?: boolean },
       ) =>
@@ -224,6 +251,11 @@ export function useEditorState() {
             leftSidebarOpen: options?.leftSidebarOpen ?? true,
           },
         }),
+
+      beginChapterOpen: (chapter: ChapterSummary) =>
+        dispatch({ type: "BEGIN_CHAPTER_OPEN", payload: chapter }),
+
+      chapterOpenFailed: () => dispatch({ type: "CHAPTER_OPEN_FAILED" }),
 
       selectChapter: (chapter: Chapter) =>
         dispatch({ type: "SELECT_CHAPTER", payload: chapter }),
