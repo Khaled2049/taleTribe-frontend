@@ -32,9 +32,7 @@ import { BookOpen, Heart } from "lucide-react";
 import { StoryAuthorBio } from "./components/StoryAuthorBio";
 import { StoryCommentsSection } from "./components/StoryCommentsSection";
 import { ChapterReader } from "./components/reader/ChapterReader";
-import { useUserWalletAddress } from "@/hooks/useUserWalletAddress";
 import { SEOHead } from "@/components/seo/SEOHead";
-import { AuthorName } from "@/components/common";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import { getAbsoluteUrl } from "@/config/seo";
 import { readingHistoryRepo } from "@novelsync/story-data-client";
@@ -87,10 +85,6 @@ const StoryDetail: React.FC = () => {
 
   const { data: comments = [], isPending: commentsLoading } = useComments(id);
   const { upsert: upsertComment, remove: removeComment } = useCommentCache(id);
-
-  const { walletAddress: authorWalletAddress } = useUserWalletAddress(
-    story?.userId,
-  );
 
   // Saved resume position (chapter + scroll), captured on load.
   const resumeRef = useRef<{
@@ -555,7 +549,7 @@ const StoryDetail: React.FC = () => {
                     to={`/profile/${story.userId}`}
                     className="font-ui text-sm text-ns-ink hover:text-ns-accent transition-colors"
                   >
-                    <AuthorName userId={story.userId} fallback={story.author} />
+                    {story.author}
                   </Link>
                   <span className="text-ns-border select-none">·</span>
                   <div className="flex items-center gap-0.5">
@@ -647,8 +641,11 @@ const StoryDetail: React.FC = () => {
               <StoryAuthorBio
                 author={story.author}
                 authorId={story.userId}
-                authorWalletAddress={authorWalletAddress || undefined}
+                bio={detailQuery.data?.author.bio}
+                photoURL={detailQuery.data?.author.photoUrl}
+                authorWalletAddress={detailQuery.data?.author.walletAddress}
                 storyId={id!}
+                loading={detailQuery.isPlaceholderData}
               />
 
               <div className="flex items-center gap-4 my-10">

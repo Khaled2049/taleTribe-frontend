@@ -68,6 +68,10 @@ describe("publicStoryQuery", () => {
   it("caches the detail under the key the loader and page share", async () => {
     responses[`/v1/public/stories/${STORY_ID}`] = {
       story: apiStory,
+      author: {
+        bio: "Writes about the sea.",
+        photoUrl: "https://x.test/a.png",
+      },
       chapters: [
         {
           id: "c1",
@@ -86,9 +90,27 @@ describe("publicStoryQuery", () => {
     const cached = client.getQueryData(queryKeys.stories.detail(STORY_ID));
     expect(cached).toMatchObject({
       story: { id: STORY_ID, userId: "author-1", likes: 2 },
+      author: {
+        bio: "Writes about the sea.",
+        photoUrl: "https://x.test/a.png",
+      },
       chapters: [{ id: "c1", title: "One" }],
     });
     expect(urls).toHaveLength(1);
+  });
+});
+
+describe("publicStoryQuery without an author profile", () => {
+  it("reads a missing author as an empty profile", async () => {
+    responses[`/v1/public/stories/${STORY_ID}`] = {
+      story: apiStory,
+      chapters: [],
+    };
+    const detail = await new QueryClient().fetchQuery(
+      publicStoryQuery(STORY_ID),
+    );
+
+    expect(detail?.author).toEqual({});
   });
 });
 
@@ -176,6 +198,7 @@ describe("publicStoryPlaceholder", () => {
       chapterCount: 6,
     });
     expect(placeholder?.chapters).toEqual([]);
+    expect(placeholder?.author).toEqual({});
   });
 
   it("returns nothing for a story the list has not loaded", () => {
