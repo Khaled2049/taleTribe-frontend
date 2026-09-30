@@ -1,8 +1,12 @@
 import { Navigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthIdentity } from "@novelsync/platform-auth";
 import { Button } from "@/components/ui/button";
-import { workspaceStoryQuery } from "@/hooks/queries/workspaceStory";
+import {
+  workspaceChapterIndexQuery,
+  workspaceStoryQuery,
+} from "@/hooks/queries/workspaceStory";
 import { workspaceAccess } from "@/lib/workspaceAccess";
 import Story from "./Story/Story";
 
@@ -20,6 +24,14 @@ const PrivateRoute = () => {
     ...workspaceStoryQuery(uid ?? "", storyId ?? ""),
     enabled: !!uid && !!storyId,
   });
+
+  // Runs beside the ownership read so the editor's index is not a second
+  // sequential round trip. The endpoint enforces its own read access.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!uid || !storyId) return;
+    void queryClient.prefetchQuery(workspaceChapterIndexQuery(uid, storyId));
+  }, [queryClient, uid, storyId]);
 
   const access = workspaceAccess(identity, storyId, story);
 

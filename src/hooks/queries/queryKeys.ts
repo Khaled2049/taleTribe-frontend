@@ -18,6 +18,10 @@ export const queryKeys = {
     all: (uid: string) => ["workspace", uid] as const,
     story: (uid: string, storyId: string) =>
       ["workspace", uid, storyId, "story"] as const,
+    chapterIndex: (uid: string, storyId: string) =>
+      ["workspace", uid, storyId, "chapterIndex"] as const,
+    chapter: (uid: string, storyId: string, chapterId: string) =>
+      ["workspace", uid, storyId, "chapter", chapterId] as const,
   },
   characters: {
     byStory: (storyId: string) => ["characters", storyId] as const,

@@ -1,67 +1,117 @@
 import { describe, expect, it } from "vitest";
-import type { Chapter, Story } from "@novelsync/story-data-client";
+import type {
+  Chapter,
+  ChapterSummary,
+  Story,
+} from "@novelsync/story-data-client";
 import { loadWorkspace, WorkspaceReader } from "@/lib/workspaceLoad";
 import { editorReducer, initialEditorState } from "@/hooks/useEditorState";
 
 const story = { id: "s1", userId: "u1", title: "T", description: "" } as Story;
-const chapters = [{ id: "c1", title: "One", content: "<p>x</p>" }] as Chapter[];
+const summary = (id: string, order: number): ChapterSummary => ({
+  id,
+  title: id,
+  order,
+  wordCount: 1,
+  userId: "u1",
+  revision: 1,
+});
+const body = (id: string): Chapter => ({
+  ...summary(id, 0),
+  content: `<p>${id}</p>`,
+});
+const index = [summary("c1", 0), summary("c2", 1)];
 
 const reader = (overrides: Partial<WorkspaceReader> = {}): WorkspaceReader => ({
   getStory: async () => story,
-  getChapters: async () => chapters,
+  getChapterIndex: async () => index,
+  getChapter: async (_storyId, chapterId) => body(chapterId),
   ...overrides,
 });
 
 describe("loadWorkspace", () => {
-  it("returns the story and its chapters", async () => {
-    await expect(loadWorkspace(reader(), "s1")).resolves.toEqual({
+  it("returns the story, the index and only the first chapter's body", async () => {
+    const requested: string[] = [];
+    const result = await loadWorkspace(
+      reader({
+        getChapter: async (_storyId, chapterId) => {
+          requested.push(chapterId);
+          return body(chapterId);
+        },
+      }),
+      "s1",
+    );
+    expect(result).toEqual({
       status: "loaded",
       story,
-      chapters,
+      chapters: index,
+      currentChapter: body("c1"),
     });
+    expect(requested).toEqual(["c1"]);
   });
 
-  it("reports a missing story without fetching chapters", async () => {
-    let chaptersRequested = false;
+  it("starts the index read before the story read resolves", async () => {
+    let indexStarted = false;
+    let releaseStory!: (value: Story) => void;
+    const pending = loadWorkspace(
+      reader({
+        getStory: () =>
+          new Promise<Story>((resolve) => {
+            releaseStory = resolve;
+          }),
+        getChapterIndex: async () => {
+          indexStarted = true;
+          return index;
+        },
+      }),
+      "s1",
+    );
+    await Promise.resolve();
+    expect(indexStarted).toBe(true);
+    releaseStory(story);
+    await expect(pending).resolves.toMatchObject({ status: "loaded" });
+  });
+
+  it("reports a missing story even though its index read fails", async () => {
     const result = await loadWorkspace(
       reader({
         getStory: async () => null,
-        getChapters: async () => {
-          chaptersRequested = true;
-          return [];
+        getChapterIndex: async () => {
+          throw new Error("404");
         },
       }),
       "s1",
     );
     expect(result).toEqual({ status: "missing" });
-    expect(chaptersRequested).toBe(false);
   });
 
-  it("resolves with an error when the story read fails", async () => {
-    const error = new Error("503");
+  it("loads an empty story with no current chapter", async () => {
     const result = await loadWorkspace(
-      reader({
-        getStory: async () => {
-          throw error;
-        },
-      }),
+      reader({ getChapterIndex: async () => [] }),
       "s1",
     );
-    expect(result).toEqual({ status: "error", error });
+    expect(result).toMatchObject({ status: "loaded", currentChapter: null });
   });
 
-  it("resolves with an error when the chapter read fails", async () => {
-    const error = new Error("503");
+  it("leaves no current chapter when the first body has been deleted", async () => {
     const result = await loadWorkspace(
-      reader({
-        getChapters: async () => {
-          throw error;
-        },
-      }),
+      reader({ getChapter: async () => null }),
       "s1",
     );
-    expect(result).toEqual({ status: "error", error });
+    expect(result).toMatchObject({ status: "loaded", currentChapter: null });
   });
+
+  it.each([
+    ["story", { getStory: () => Promise.reject(new Error("503")) }],
+    ["index", { getChapterIndex: () => Promise.reject(new Error("503")) }],
+    ["body", { getChapter: () => Promise.reject(new Error("503")) }],
+  ] as const)(
+    "resolves with an error when the %s read fails",
+    async (_, overrides) => {
+      const result = await loadWorkspace(reader(overrides), "s1");
+      expect(result).toMatchObject({ status: "error" });
+    },
+  );
 });
 
 describe("editorReducer load lifecycle", () => {
@@ -96,13 +146,82 @@ describe("editorReducer load lifecycle", () => {
       type: "LOAD_STORY",
       payload: {
         story,
-        chapters,
-        currentChapter: chapters[0],
+        chapters: index,
+        currentChapter: body("c1"),
         leftSidebarOpen: false,
       },
     });
     expect(loaded.loadError).toBeNull();
     expect(loaded.isLoading).toBe(false);
     expect(loaded.currentChapter?.id).toBe("c1");
+  });
+});
+
+describe("editorReducer chapter opening", () => {
+  const loaded = editorReducer(initialEditorState, {
+    type: "LOAD_STORY",
+    payload: {
+      story,
+      chapters: index,
+      currentChapter: body("c1"),
+      leftSidebarOpen: false,
+    },
+  });
+
+  it("keeps the current chapter while the next body loads", () => {
+    const opening = editorReducer(loaded, {
+      type: "BEGIN_CHAPTER_OPEN",
+      payload: index[1],
+    });
+    expect(opening.openingChapter?.id).toBe("c2");
+    expect(opening.currentChapter?.id).toBe("c1");
+  });
+
+  it("switches once the body arrives", () => {
+    const opening = editorReducer(loaded, {
+      type: "BEGIN_CHAPTER_OPEN",
+      payload: index[1],
+    });
+    const selected = editorReducer(opening, {
+      type: "SELECT_CHAPTER",
+      payload: body("c2"),
+    });
+    expect(selected.openingChapter).toBeNull();
+    expect(selected.currentChapter?.id).toBe("c2");
+    expect(selected.chapterTitle).toBe("c2");
+  });
+
+  it("stays on the current chapter when opening fails", () => {
+    const opening = editorReducer(loaded, {
+      type: "BEGIN_CHAPTER_OPEN",
+      payload: index[1],
+    });
+    const failed = editorReducer(opening, { type: "CHAPTER_OPEN_FAILED" });
+    expect(failed.openingChapter).toBeNull();
+    expect(failed.currentChapter?.id).toBe("c1");
+  });
+
+  it("clears the current chapter when it is deleted, leaving the caller to open another", () => {
+    const next = editorReducer(loaded, {
+      type: "DELETE_CHAPTER",
+      payload: "c1",
+    });
+    expect(next.currentChapter).toBeNull();
+    expect(next.chapters.map((c) => c.id)).toEqual(["c2"]);
+  });
+
+  it("never stores a body in the index", () => {
+    const added = editorReducer(loaded, {
+      type: "ADD_CHAPTER",
+      payload: body("c3"),
+    });
+    const updated = editorReducer(added, {
+      type: "UPDATE_CHAPTER_IN_LIST",
+      payload: { id: "c3", updates: { ...body("c3"), content: "<p>edit</p>" } },
+    });
+    for (const chapter of updated.chapters) {
+      expect(chapter).not.toHaveProperty("content");
+    }
+    expect(updated.currentChapter?.content).toBe("<p>edit</p>");
   });
 });
