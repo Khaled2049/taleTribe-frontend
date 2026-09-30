@@ -131,6 +131,9 @@ export function useDeleteStory(userId: string | undefined) {
         queryKey: queryKeys.user.stories(userId!),
       });
       queryClient.invalidateQueries({
+        queryKey: queryKeys.workspace.all(userId!),
+      });
+      queryClient.invalidateQueries({
         queryKey: queryKeys.stories.all(),
       });
     },
@@ -151,6 +154,9 @@ export function useTogglePublishStory(userId: string | undefined) {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.user.stories(userId!),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workspace.all(userId!),
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.stories.all(),
@@ -181,6 +187,9 @@ export function useUpdateStoryMetadata(userId: string | undefined) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.user.stories(userId!),
       });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workspace.all(userId!),
+      });
     },
   });
 }
@@ -200,6 +209,9 @@ export function useUpdateStoryCover(userId: string | undefined) {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.user.stories(userId!),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workspace.all(userId!),
       });
     },
   });

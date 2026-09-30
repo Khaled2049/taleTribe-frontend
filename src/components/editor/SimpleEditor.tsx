@@ -47,7 +47,8 @@ import {
 } from "react-router-dom";
 import { useAuthContext } from "../../contexts/AuthContext";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
-import { Chapter } from "@novelsync/story-data-client";
+import { Chapter, ChapterSummary, Story } from "@novelsync/story-data-client";
+import { useAuthIdentity } from "@novelsync/platform-auth";
 
 // Import components
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
@@ -62,6 +63,7 @@ import { Editor } from "@tiptap/react";
 // Import hooks
 import { useEditorState } from "@/hooks/useEditorState";
 import { useAutosave } from "@/hooks/useAutosave";
+import { SaveCancelledError } from "@/lib/saveQueue";
 import { SaveStatusIndicator } from "@/components/editor/SaveStatusIndicator";
 import { WritingStats } from "@/components/editor/WritingStats";
 import {
@@ -91,6 +93,12 @@ import { toast } from "sonner";
 import { summarizeChapter } from "@/cloudFunctions/ai";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/queries/queryKeys";
+import {
+  workspaceChapterIndexQuery,
+  workspaceChapterQuery,
+  workspaceStoryQuery,
+} from "@/hooks/queries/workspaceStory";
+import { neighbourChapterIds } from "@/lib/chapterIndex";
 import { useEditorBridge } from "@/components/editor/EditorBridge";
 
 function splitValidationError(sections: DocumentSection[]): string | null {
@@ -123,6 +131,7 @@ export function SimpleEditor() {
   const openInteractivePanelOnMount = searchParams.get("wizard") === "true";
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
+  const { uid } = useAuthIdentity();
 
   // Use the new consolidated state hook
   const { state, actions } = useEditorState();
@@ -162,7 +171,9 @@ export function SimpleEditor() {
   const [chapterToDelete, setChapterToDelete] = useState<string | null>(null);
   const [unsavedChangesDialogOpen, setUnsavedChangesDialogOpen] =
     useState(false);
-  const [pendingChapter, setPendingChapter] = useState<Chapter | null>(null);
+  const [pendingChapter, setPendingChapter] = useState<ChapterSummary | null>(
+    null,
+  );
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryResult, setSummaryResult] = useState<string | null>(null);
   const [splitDialogOpen, setSplitDialogOpen] = useState(false);
@@ -270,6 +281,32 @@ export function SimpleEditor() {
     actions.setRightSidebarOpen(false);
   }, [isLgUp, actions]);
 
+  const cacheChapter = useCallback(
+    (chapter: Chapter) => {
+      if (!uid || !storyId) return;
+      queryClient.setQueryData(
+        workspaceChapterQuery(uid, storyId, chapter.id).queryKey,
+        chapter,
+      );
+    },
+    [queryClient, storyId, uid],
+  );
+
+  // Keeps the workspace query in step, so revisiting the editor does not
+  // restore a title or publish state this session already changed.
+  const replaceStory = useCallback(
+    (saved: Story) => {
+      actions.replaceStory(saved);
+      if (uid) {
+        queryClient.setQueryData(
+          workspaceStoryQuery(uid, saved.id).queryKey,
+          saved,
+        );
+      }
+    },
+    [actions, queryClient, uid],
+  );
+
   // Save function that will be passed to useAutosave
   const performSave = useCallback(
     async (content: string) => {
@@ -294,6 +331,7 @@ export function SimpleEditor() {
         actions.updateChapterInList(state.currentChapter.id, {
           ...savedChapter,
         });
+        cacheChapter(savedChapter);
         persistedRevision = savedChapter.revision;
         persistedRevisionRef.current = persistedRevision;
         bridgeRegistrationRef.current?.revisionChanged();
@@ -306,7 +344,7 @@ export function SimpleEditor() {
           title: state.storyTitle,
           description: state.storyDescription,
         });
-        actions.replaceStory(savedStory);
+        replaceStory(savedStory);
         actions.clearMetadataChanged();
       }
       return persistedRevision;
@@ -319,6 +357,8 @@ export function SimpleEditor() {
       state.storyDescription,
       state.metadataChanged,
       actions,
+      cacheChapter,
+      replaceStory,
     ],
   );
 
@@ -375,23 +415,89 @@ export function SimpleEditor() {
   }, [isLgUp]);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
+  // Keep the outgoing chapter visible but not editable while the next body
+  // loads. `false` stops TipTap emitting an update, which would mark it dirty.
   useEffect(() => {
-    if (!storyId) return;
+    if (!editor || editor.isDestroyed) return;
+    editor.setEditable(!state.openingChapter, false);
+  }, [editor, state.openingChapter]);
+
+  // Bodies are fetched per chapter, so warm the likeliest next selections to
+  // keep switching close to the old all-in-memory speed.
+  const prefetchNeighbours = useCallback(
+    (chapterId: string, chapters: readonly ChapterSummary[]) => {
+      if (!uid || !storyId) return;
+      for (const id of neighbourChapterIds(chapters, chapterId)) {
+        void queryClient.prefetchQuery(workspaceChapterQuery(uid, storyId, id));
+      }
+    },
+    [queryClient, storyId, uid],
+  );
+
+  // Bumped by anything that picks the current chapter, so a slower open that
+  // was superseded never replaces it.
+  const openRequestRef = useRef(0);
+  const openChapter = useCallback(
+    async (summary: ChapterSummary) => {
+      if (!uid || !storyId) return;
+      const request = ++openRequestRef.current;
+      actions.beginChapterOpen(summary);
+      if (!isLgUpRef.current) actions.setLeftSidebarOpen(false);
+      try {
+        const chapter = await queryClient.fetchQuery(
+          workspaceChapterQuery(uid, storyId, summary.id),
+        );
+        if (request !== openRequestRef.current) return;
+        if (!chapter) throw new Error("This chapter no longer exists.");
+        actions.selectChapter(chapter);
+        prefetchNeighbours(chapter.id, state.chapters);
+      } catch (error) {
+        if (request !== openRequestRef.current) return;
+        actions.chapterOpenFailed();
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Couldn't open that chapter.",
+        );
+      }
+    },
+    [actions, prefetchNeighbours, queryClient, state.chapters, storyId, uid],
+  );
+
+  useEffect(() => {
+    if (!storyId || !uid) return;
     let cancelled = false;
     actions.setLoading(true);
     resetSaveState();
 
-    loadWorkspace(storyWorkspaceRepo, storyId).then((result) => {
+    // The guard started the story and index reads under the same keys, so
+    // these normally join its requests rather than issuing new ones.
+    const reader = {
+      getStory: (id: string) =>
+        queryClient.fetchQuery(workspaceStoryQuery(uid, id)),
+      getChapterIndex: (id: string) =>
+        queryClient.fetchQuery(workspaceChapterIndexQuery(uid, id)),
+      getChapter: (id: string, chapterId: string) =>
+        queryClient.fetchQuery(workspaceChapterQuery(uid, id, chapterId)),
+    };
+
+    loadWorkspace(reader, storyId).then((result) => {
+      queryClient.removeQueries({
+        queryKey: workspaceChapterIndexQuery(uid, storyId).queryKey,
+      });
       if (cancelled) return;
       if (result.status === "loaded") {
         actions.loadStory(
           result.story,
           result.chapters,
-          result.chapters[0] ?? null,
+          result.currentChapter,
           {
             leftSidebarOpen: isLgUpRef.current,
           },
         );
+        if (result.currentChapter) {
+          prefetchNeighbours(result.currentChapter.id, result.chapters);
+        }
         return;
       }
       if (result.status === "error") {
@@ -403,7 +509,15 @@ export function SimpleEditor() {
     return () => {
       cancelled = true;
     };
-  }, [storyId, loadAttempt, actions, resetSaveState]);
+  }, [
+    storyId,
+    uid,
+    loadAttempt,
+    actions,
+    queryClient,
+    resetSaveState,
+    prefetchNeighbours,
+  ]);
 
   // The shelf renders a chapter count derived server-side, so adding or
   // removing a chapter here makes its cached list wrong. The query is not
@@ -416,13 +530,24 @@ export function SimpleEditor() {
     });
   }, [queryClient, user]);
 
+  // Anything that leaves the chapter or acts on its stored text must wait for
+  // a durable save, and stay put if it fails.
+  const saveBeforeContinuing = useCallback(async () => {
+    try {
+      await flushAndWait();
+      return true;
+    } catch (error) {
+      if (!(error instanceof SaveCancelledError)) {
+        toast.error("Couldn't save your changes. Please try again.");
+      }
+      return false;
+    }
+  }, [flushAndWait]);
+
   // Handle new chapter creation
   const handleNewChapter = async () => {
     if (!state.story) return;
-
-    if (isDirty) {
-      await forceSave();
-    }
+    if (!(await saveBeforeContinuing())) return;
 
     try {
       const newChapter = await storyWorkspaceRepo.createChapter(
@@ -430,7 +555,9 @@ export function SimpleEditor() {
         "New Chapter",
         nextChapterPosition(state.chapters),
       );
+      openRequestRef.current += 1;
       actions.addChapter(newChapter);
+      cacheChapter(newChapter);
       resetSaveState();
       invalidateShelf();
     } catch (error) {
@@ -497,6 +624,8 @@ export function SimpleEditor() {
 
       actions.updateChapterInList(savedFirst.id, savedFirst);
       createdChapters.forEach(actions.addChapter);
+      [savedFirst, ...createdChapters].forEach(cacheChapter);
+      openRequestRef.current += 1;
       actions.selectChapter(savedFirst);
       editor.commands.setContent(first.html, { emitUpdate: false });
       resetSaveState();
@@ -504,11 +633,21 @@ export function SimpleEditor() {
       toast.success(`Split into ${sections.length} chapters.`);
     } catch (error) {
       try {
-        const chapters = await storyWorkspaceRepo.getChapters(state.story);
-        const current =
+        const chapters = await storyWorkspaceRepo.getChapterIndex(
+          state.story.id,
+          state.story.userId,
+        );
+        const summary =
           chapters.find((chapter) => chapter.id === state.currentChapter?.id) ??
-          chapters[0] ??
-          null;
+          chapters[0];
+        const current = summary
+          ? await storyWorkspaceRepo.getChapter(
+              state.story.id,
+              summary.id,
+              state.story.userId,
+            )
+          : null;
+        if (current) cacheChapter(current);
         actions.loadStory(state.story, chapters, current, {
           leftSidebarOpen: state.leftSidebarOpen,
         });
@@ -526,9 +665,7 @@ export function SimpleEditor() {
   };
 
   const handleSplitRequest = async () => {
-    if (isDirty) {
-      await forceSave();
-    }
+    if (!(await saveBeforeContinuing())) return;
     const validationError = splitValidationError(
       splitDocumentAtHeadings(editor),
     );
@@ -542,10 +679,7 @@ export function SimpleEditor() {
   // Summarize the current chapter and persist the summary.
   const handleSummarizeChapter = async () => {
     if (!state.story || !state.currentChapter) return;
-
-    if (isDirty) {
-      await forceSave();
-    }
+    if (!(await saveBeforeContinuing())) return;
 
     setIsSummarizing(true);
     try {
@@ -577,10 +711,7 @@ export function SimpleEditor() {
   // Handle publishing
   const handlePublish = async () => {
     if (!state.story) return;
-
-    if (isDirty) {
-      await forceSave();
-    }
+    if (!(await saveBeforeContinuing())) return;
 
     const wasPublished = state.story.isPublished;
 
@@ -590,7 +721,7 @@ export function SimpleEditor() {
         ...state.story,
         isPublished: !wasPublished,
       });
-      actions.replaceStory(savedStory);
+      replaceStory(savedStory);
 
       if (!wasPublished) {
         toast.success(
@@ -609,19 +740,16 @@ export function SimpleEditor() {
 
   // Handle chapter selection with unsaved changes check
   const handleChapterSelect = useCallback(
-    (chapter: Chapter) => {
+    (chapter: ChapterSummary) => {
       if (isDirty) {
         setPendingChapter(chapter);
         setUnsavedChangesDialogOpen(true);
       } else {
-        actions.selectChapter(chapter);
-        if (!isLgUp) {
-          actions.setLeftSidebarOpen(false);
-        }
         resetSaveState();
+        void openChapter(chapter);
       }
     },
-    [actions, isDirty, isLgUp, resetSaveState],
+    [isDirty, openChapter, resetSaveState],
   );
 
   // Assistant chapter navigation is an explicit route-state contract. Consume
@@ -655,15 +783,13 @@ export function SimpleEditor() {
   ]);
 
   const handleSaveAndContinue = async () => {
-    if (state.currentChapter) {
-      await forceSave();
+    if (!(await saveBeforeContinuing())) {
+      setPendingChapter(null);
+      return;
     }
     if (pendingChapter) {
-      actions.selectChapter(pendingChapter);
-      if (!isLgUp) {
-        actions.setLeftSidebarOpen(false);
-      }
       resetSaveState();
+      void openChapter(pendingChapter);
     }
     setPendingChapter(null);
   };
@@ -671,11 +797,8 @@ export function SimpleEditor() {
   // Handle discard and continue
   const handleDiscardAndContinue = () => {
     if (pendingChapter) {
-      actions.selectChapter(pendingChapter);
-      if (!isLgUp) {
-        actions.setLeftSidebarOpen(false);
-      }
       resetSaveState();
+      void openChapter(pendingChapter);
     }
     setPendingChapter(null);
   };
@@ -712,8 +835,19 @@ export function SimpleEditor() {
       );
       if (!chapter) throw new Error("Chapter not found");
       await storyWorkspaceRepo.deleteChapter(state.story, chapter);
+      if (uid) {
+        queryClient.removeQueries({
+          queryKey: workspaceChapterQuery(uid, state.story.id, chapter.id)
+            .queryKey,
+        });
+      }
+      const next =
+        state.currentChapter?.id === chapter.id
+          ? state.chapters.find((item) => item.id !== chapter.id)
+          : undefined;
       actions.deleteChapter(chapterToDelete);
       resetSaveState();
+      if (next) void openChapter(next);
       invalidateShelf();
     } catch (error) {
       toast.error(
@@ -1271,24 +1405,31 @@ export function SimpleEditor() {
 
             {/* Writing Canvas */}
             {state.currentChapter ? (
-              <div className="flex-1 overflow-y-auto bg-ns-bg">
-                <div className="mx-auto min-h-full flex flex-col">
-                  <TipTapEditor
-                    initialContent={state.currentChapter.content}
-                    onContentChange={handleContentChange}
-                    onSave={handleEditorSave}
-                    onBlur={flushSave}
-                    storyId={state.story?.id || ""}
-                    chapterId={state.currentChapter?.id || ""}
-                    userId={user?.uid}
-                    onEditorReady={setEditor}
-                    onTransaction={(transaction) =>
-                      bridgeRegistrationRef.current?.transaction(transaction)
-                    }
-                    onOpenCoWrite={openCoWrite}
-                  />
+              <div className="relative flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 overflow-y-auto bg-ns-bg">
+                  <div className="mx-auto min-h-full flex flex-col">
+                    <TipTapEditor
+                      initialContent={state.currentChapter.content}
+                      onContentChange={handleContentChange}
+                      onSave={handleEditorSave}
+                      onBlur={flushSave}
+                      storyId={state.story?.id || ""}
+                      chapterId={state.currentChapter?.id || ""}
+                      userId={user?.uid}
+                      onEditorReady={setEditor}
+                      onTransaction={(transaction) =>
+                        bridgeRegistrationRef.current?.transaction(transaction)
+                      }
+                      onOpenCoWrite={openCoWrite}
+                    />
+                  </div>
                 </div>
+                {state.openingChapter && (
+                  <ChapterOpening title={state.openingChapter.title} overlay />
+                )}
               </div>
+            ) : state.openingChapter ? (
+              <ChapterOpening title={state.openingChapter.title} />
             ) : (
               /* Empty state — no chapter selected */
               <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 animate-ns-fade-in">
@@ -1703,6 +1844,28 @@ export function SimpleEditor() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function ChapterOpening({
+  title,
+  overlay = false,
+}: {
+  title: string;
+  overlay?: boolean;
+}) {
+  return (
+    <div
+      role="status"
+      className={`flex flex-col items-center justify-center gap-3 ${
+        overlay ? "absolute inset-0 z-10 bg-ns-bg/80" : "flex-1 bg-ns-bg"
+      }`}
+    >
+      <Loader className="w-6 h-6 text-ns-accent animate-spin" />
+      <p className="font-heading italic text-lg text-ns-ink-muted">
+        Opening {title || "chapter"}…
+      </p>
     </div>
   );
 }
