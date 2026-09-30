@@ -47,7 +47,8 @@ import {
 } from "react-router-dom";
 import { useAuthContext } from "../../contexts/AuthContext";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
-import { Chapter } from "@novelsync/story-data-client";
+import { Chapter, Story } from "@novelsync/story-data-client";
+import { useAuthIdentity } from "@novelsync/platform-auth";
 
 // Import components
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
@@ -92,6 +93,7 @@ import { toast } from "sonner";
 import { summarizeChapter } from "@/cloudFunctions/ai";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/queries/queryKeys";
+import { workspaceStoryQuery } from "@/hooks/queries/workspaceStory";
 import { useEditorBridge } from "@/components/editor/EditorBridge";
 
 function splitValidationError(sections: DocumentSection[]): string | null {
@@ -124,6 +126,7 @@ export function SimpleEditor() {
   const openInteractivePanelOnMount = searchParams.get("wizard") === "true";
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
+  const { uid } = useAuthIdentity();
 
   // Use the new consolidated state hook
   const { state, actions } = useEditorState();
@@ -271,6 +274,21 @@ export function SimpleEditor() {
     actions.setRightSidebarOpen(false);
   }, [isLgUp, actions]);
 
+  // Keeps the workspace query in step, so revisiting the editor does not
+  // restore a title or publish state this session already changed.
+  const replaceStory = useCallback(
+    (saved: Story) => {
+      actions.replaceStory(saved);
+      if (uid) {
+        queryClient.setQueryData(
+          workspaceStoryQuery(uid, saved.id).queryKey,
+          saved,
+        );
+      }
+    },
+    [actions, queryClient, uid],
+  );
+
   // Save function that will be passed to useAutosave
   const performSave = useCallback(
     async (content: string) => {
@@ -307,7 +325,7 @@ export function SimpleEditor() {
           title: state.storyTitle,
           description: state.storyDescription,
         });
-        actions.replaceStory(savedStory);
+        replaceStory(savedStory);
         actions.clearMetadataChanged();
       }
       return persistedRevision;
@@ -320,6 +338,7 @@ export function SimpleEditor() {
       state.storyDescription,
       state.metadataChanged,
       actions,
+      replaceStory,
     ],
   );
 
@@ -377,12 +396,20 @@ export function SimpleEditor() {
   const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
-    if (!storyId) return;
+    if (!storyId || !uid) return;
     let cancelled = false;
     actions.setLoading(true);
     resetSaveState();
 
-    loadWorkspace(storyWorkspaceRepo, storyId).then((result) => {
+    // The guard has just fetched this story under the same key, so this is
+    // normally a cache hit rather than a second GET.
+    const reader = {
+      getStory: (id: string) =>
+        queryClient.fetchQuery(workspaceStoryQuery(uid, id)),
+      getChapters: (story: Story) => storyWorkspaceRepo.getChapters(story),
+    };
+
+    loadWorkspace(reader, storyId).then((result) => {
       if (cancelled) return;
       if (result.status === "loaded") {
         actions.loadStory(
@@ -404,7 +431,7 @@ export function SimpleEditor() {
     return () => {
       cancelled = true;
     };
-  }, [storyId, loadAttempt, actions, resetSaveState]);
+  }, [storyId, uid, loadAttempt, actions, queryClient, resetSaveState]);
 
   // The shelf renders a chapter count derived server-side, so adding or
   // removing a chapter here makes its cached list wrong. The query is not
@@ -594,7 +621,7 @@ export function SimpleEditor() {
         ...state.story,
         isPublished: !wasPublished,
       });
-      actions.replaceStory(savedStory);
+      replaceStory(savedStory);
 
       if (!wasPublished) {
         toast.success(

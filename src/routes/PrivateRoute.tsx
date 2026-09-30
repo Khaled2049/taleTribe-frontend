@@ -1,14 +1,9 @@
 import { Navigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthIdentity } from "@novelsync/platform-auth";
-import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import { Button } from "@/components/ui/button";
-import {
-  OwnershipCheck,
-  ownershipKey,
-  ownershipOutcome,
-  workspaceAccess,
-} from "@/lib/workspaceAccess";
+import { workspaceStoryQuery } from "@/hooks/queries/workspaceStory";
+import { workspaceAccess } from "@/lib/workspaceAccess";
 import Story from "./Story/Story";
 
 /**
@@ -19,32 +14,14 @@ import Story from "./Story/Story";
 const PrivateRoute = () => {
   const identity = useAuthIdentity();
   const { storyId } = useParams();
-  const [check, setCheck] = useState<OwnershipCheck | null>(null);
-  const [attempt, setAttempt] = useState(0);
   const uid = identity.loading ? null : identity.uid;
 
-  useEffect(() => {
-    if (!uid || !storyId) return;
-    const key = ownershipKey(uid, storyId);
-    let cancelled = false;
+  const story = useQuery({
+    ...workspaceStoryQuery(uid ?? "", storyId ?? ""),
+    enabled: !!uid && !!storyId,
+  });
 
-    storyWorkspaceRepo
-      .getStory(storyId)
-      .then((story) => {
-        if (!cancelled)
-          setCheck({ key, outcome: ownershipOutcome(story, uid) });
-      })
-      .catch((error) => {
-        console.error("Error checking story ownership:", error);
-        if (!cancelled) setCheck({ key, outcome: "error" });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [uid, storyId, attempt]);
-
-  const access = workspaceAccess(identity, storyId, check);
+  const access = workspaceAccess(identity, storyId, story);
 
   if (access === "checking") {
     return (
@@ -58,14 +35,7 @@ const PrivateRoute = () => {
     return (
       <div className="flex flex-col items-center justify-center gap-4 min-h-screen bg-ns-bg font-ui text-ns-ink">
         <p>We couldn't open this story. Check your connection and try again.</p>
-        <Button
-          onClick={() => {
-            setCheck(null);
-            setAttempt((n) => n + 1);
-          }}
-        >
-          Try again
-        </Button>
+        <Button onClick={() => void story.refetch()}>Try again</Button>
       </div>
     );
   }

@@ -12,6 +12,13 @@ export const queryKeys = {
     chapter: (storyId: string, chapterId: string) =>
       ["stories", storyId, "chapters", chapterId] as const,
   },
+  // Owner-only editing reads, scoped by uid so a cached draft never outlives
+  // the account that fetched it.
+  workspace: {
+    all: (uid: string) => ["workspace", uid] as const,
+    story: (uid: string, storyId: string) =>
+      ["workspace", uid, storyId, "story"] as const,
+  },
   characters: {
     byStory: (storyId: string) => ["characters", storyId] as const,
   },
