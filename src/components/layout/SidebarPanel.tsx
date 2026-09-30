@@ -7,16 +7,16 @@ import {
   Heading,
   SplitSquareVertical,
 } from "lucide-react";
-import { Chapter } from "@novelsync/story-data-client";
+import { ChapterSummary } from "@novelsync/story-data-client";
 import type { OutlineEntry } from "@/utils/documentOutline";
 import { STORY_CHAPTER_LIMIT } from "@/utils/chapterWordLimit";
 
 interface SidebarPanelProps {
-  chapters: Chapter[];
+  chapters: ChapterSummary[];
   currentChapterId: string;
   chapterTitle: string;
   storyTitle: string;
-  onChapterSelect: (chapter: Chapter) => void;
+  onChapterSelect: (chapter: ChapterSummary) => void;
   onChapterDelete: (chapterId: string) => void;
   onChapterAdd?: () => void;
   chapterLimit?: number;

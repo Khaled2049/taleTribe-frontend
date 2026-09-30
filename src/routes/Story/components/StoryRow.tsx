@@ -31,6 +31,8 @@ interface StoryRowProps {
     earnings?: { eth: string; usdc: string };
   };
   onEdit: (id: string) => void;
+  /** Hover, focus or press on an edit control, before the click lands. */
+  onEditIntent?: (id: string) => void;
   onDelete: (id: string) => void;
   onPublish: (id: string) => void;
   onUnpublish: (id: string) => void;
@@ -69,6 +71,7 @@ const formatRelativeDate = (date: Date) => {
 export const StoryRow = ({
   story,
   onEdit,
+  onEditIntent,
   onDelete,
   onPublish,
   onUnpublish,
@@ -346,6 +349,8 @@ export const StoryRow = ({
           <div className="flex items-start justify-between gap-4">
             <h3
               onClick={() => onEdit(story.id)}
+              onPointerEnter={() => onEditIntent?.(story.id)}
+              onPointerDown={() => onEditIntent?.(story.id)}
               className="font-heading text-xl leading-snug text-ns-ink cursor-pointer hover:text-ns-accent transition-colors"
             >
               {story.title}
@@ -391,6 +396,8 @@ export const StoryRow = ({
                         onEdit(story.id);
                         setShowMenu(false);
                       }}
+                      onPointerEnter={() => onEditIntent?.(story.id)}
+                      onFocus={() => onEditIntent?.(story.id)}
                       className="w-full px-3 py-2 text-left text-sm font-ui text-ns-ink hover:bg-ns-surface-hover flex items-center gap-2.5"
                     >
                       <PenLine className="w-3.5 h-3.5 text-ns-ink-muted" />

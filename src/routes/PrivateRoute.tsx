@@ -1,59 +1,58 @@
 import { Navigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { useAuthContext } from "../contexts/AuthContext";
-import { storyWorkspaceRepo } from "@novelsync/story-data-client";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuthIdentity } from "@novelsync/platform-auth";
+import { Button } from "@/components/ui/button";
+import {
+  workspaceChapterIndexQuery,
+  workspaceStoryQuery,
+} from "@/hooks/queries/workspaceStory";
+import { workspaceAccess } from "@/lib/workspaceAccess";
 import Story from "./Story/Story";
 
+/**
+ * Gates on the Firebase identity rather than the hydrated profile in
+ * authStore: that store reports `user: null` until the profile and follow
+ * graph load, which a cold refresh would read as signed out.
+ */
 const PrivateRoute = () => {
-  const { user } = useAuthContext();
+  const identity = useAuthIdentity();
   const { storyId } = useParams();
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const uid = identity.loading ? null : identity.uid;
 
+  const story = useQuery({
+    ...workspaceStoryQuery(uid ?? "", storyId ?? ""),
+    enabled: !!uid && !!storyId,
+  });
+
+  // Runs beside the ownership read so the editor's index is not a second
+  // sequential round trip. The endpoint enforces its own read access.
+  const queryClient = useQueryClient();
   useEffect(() => {
-    const checkOwnership = async () => {
-      if (!user || !storyId) {
-        setIsAuthorized(false);
-        setLoading(false);
-        return;
-      }
+    if (!uid || !storyId) return;
+    void queryClient.prefetchQuery(workspaceChapterIndexQuery(uid, storyId));
+  }, [queryClient, uid, storyId]);
 
-      // Fetch the story by ID
-      const story = await getStoryById(storyId);
+  const access = workspaceAccess(identity, storyId, story);
 
-      if (story) {
-        // Check if the story creator ID matches the logged-in user
-
-        if (story.userId === user.uid) {
-          setIsAuthorized(true);
-        } else {
-          setIsAuthorized(false);
-        }
-      } else {
-        setIsAuthorized(false);
-      }
-
-      setLoading(false);
-    };
-
-    checkOwnership();
-  }, [user, storyId]);
-
-  const getStoryById = async (storyId: string) => {
-    try {
-      const storyData = await storyWorkspaceRepo.getStory(storyId);
-      return storyData;
-    } catch (error) {
-      console.error("Error fetching story:", error);
-      return null;
-    }
-  };
-
-  if (loading) {
-    return <div>Loading...</div>; // Optionally show a loader
+  if (access === "checking") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-ns-bg">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ns-accent" />
+      </div>
+    );
   }
 
-  return isAuthorized ? <Story /> : <Navigate to="/user-stories" />;
+  if (access === "error") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 min-h-screen bg-ns-bg font-ui text-ns-ink">
+        <p>We couldn't open this story. Check your connection and try again.</p>
+        <Button onClick={() => void story.refetch()}>Try again</Button>
+      </div>
+    );
+  }
+
+  return access === "owner" ? <Story /> : <Navigate to="/user-stories" />;
 };
 
 export default PrivateRoute;
