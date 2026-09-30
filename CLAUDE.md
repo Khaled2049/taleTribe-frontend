@@ -48,7 +48,7 @@ the suite touches now lives in this repo's `src/` or in `packages/`; nothing und
 `functions/src/` is reachable from `tests/`.
 
 There is no component-level coverage. E2E lives in `cypress/e2e/`
-(`story_lifecycle`, `ai_chat`, `worldbuilding_indexing`, `chapter_comments`,
+(`story_lifecycle`, `ai_chat`, `worldbuilding_indexing`, `story_comments`,
 `public_discovery`) and is not part of `yarn test` — run it with `yarn e2e`, which
 brings up the whole stack via `scripts/e2e-stack.sh`, or `yarn cy:open` /
 `yarn cy:run` against an already-running stack. Nothing covers competitions yet;
@@ -112,11 +112,20 @@ React 19 + TypeScript 5 + Vite 5. Firebase (Auth, Firestore, Functions, Storage)
 ```
 SEOProvider                  react-helmet-async
   QueryClientProvider        the single app query client
-    Web3Provider             wagmi
-      AuthBootstrap          renders null; see below
-      RouterProvider
-      ThemeToaster
+    AuthBootstrap            renders null; see below
+    RouterProvider
+    ThemeToaster
 ```
+
+wagmi is **not** in the global stack. `Web3Boundary` (`src/contexts/Web3Boundary.tsx`)
+lazy-loads `WagmiProvider` around only the places that call wagmi hooks — the
+`/user-stories` and `/auth/complete-signup` routes, `OwnerSettings`,
+`StoryTipModal` and the navbar's `WalletConnectButton` — so wagmi and viem stay
+out of the entry bundle. A new component that calls a wagmi hook must sit under
+a `Web3Boundary`, or it throws `WagmiProviderNotFoundError` at runtime; tsc
+cannot catch that. Sign-out disconnects a wallet through
+`src/blockchain/disconnectWallet.ts`, which uses `wagmi/actions` rather than a
+hook for the same reason.
 
 There is no `AuthProvider`, `ThemeProvider` or `ChatProvider` — that state is
 zustand (`src/stores/`), and `src/contexts/` holds selector hooks over those
@@ -167,10 +176,18 @@ Two rules govern that package:
 back as `StoryDataConflictError`.
 
 **Firebase access** (`packages/platform-auth`): owns `initializeApp` and the
-emulator wiring, and exports `auth`, `firestore`, `storage`, `functions` plus
+emulator wiring, and exports `auth` plus
 `getAuthContext()` (async token), `getCurrentUid()` (sync uid) and
 `useAuthIdentity()` (`{ uid, email, isAdmin, loading, isSignedIn }`, read straight
 off the SDK via `useSyncExternalStore`). Never call `initializeApp` anywhere else.
+
+Firestore and Storage are **subpath** entries, not part of the barrel:
+`@novelsync/platform-auth/firestore` and `@novelsync/platform-auth/storage`. The
+barrel is imported by the entry bundle for `auth`, so re-exporting either SDK
+from it would put it back in every page's first download. Code reachable from
+the entry bundle (`authStore`, the navbar) must load them with `import()`;
+route chunks can import them statically. The subpaths are aliased in the same
+four places as the package itself.
 
 **`src/services/`** holds stateful client-side modules that own a connection or
 a cache and are not components or hooks. It is not one backend — read the
@@ -315,7 +332,7 @@ Light theme: warm parchment (`#FDFCF9`) bg, sealing-wax red accent (`#B91C1C`). 
 - `layout/` — Navbar, Footer, SidebarPanel (+ `navbar/` subdir)
 - `story/` — StoryMetadata, StoriesHeader (+ `characters/`, `places/` subdirs)
 - `plot/` — Plot timeline and event editing
-- `community/` — Story/chapter comments
+- `community/` — Story comments
 - `guestbook/` — Per-user profile guestbook (entries, replies, votes)
 - `web3/` — Wallet connect, fee cards, transaction status
 - `common/` — Shared utilities (Modal, ConfirmDialog, ThemeToggle, Icons, etc.)
@@ -388,6 +405,7 @@ Cloud Functions (`functions/src/`) read only these:
 MAX_AI_USAGE                # daily chat/AI quota — keep aligned with VITE_MAX_AI_USAGE
 MAX_STORAGE_UPLOADS_PER_DAY
 AI_MAX_INSTANCES            # max concurrent instances for AI functions
+RECOMMENDATIONS_MIN_INSTANCES # warm instances for recommendStories, default 0 (read at deploy)
 STORY_DATA_URL              # story-data base URL for the dual-read paths
 CORS_EXTRA_ORIGINS          # comma-separated additional allowed origins
 LOCAL_REDIRECT_URL

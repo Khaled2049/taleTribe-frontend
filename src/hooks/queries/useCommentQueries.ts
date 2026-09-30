@@ -4,14 +4,11 @@ import { queryKeys } from "./queryKeys";
 import { storySocialRepo } from "@novelsync/story-data-client";
 import { Comment } from "@novelsync/story-data-client";
 
-export function useComments(
-  storyId: string | undefined,
-  chapterId: string | undefined,
-) {
+export function useComments(storyId: string | undefined) {
   return useQuery<Comment[]>({
-    queryKey: queryKeys.comments.byChapter(storyId!, chapterId!),
-    queryFn: () => storySocialRepo.getComments(storyId!, chapterId!),
-    enabled: !!storyId && !!chapterId,
+    queryKey: queryKeys.comments.byStory(storyId!),
+    queryFn: () => storySocialRepo.getComments(storyId!),
+    enabled: !!storyId,
     staleTime: 1000 * 30,
     refetchOnWindowFocus: true,
   });
@@ -23,16 +20,13 @@ export function useComments(
  * on the 30s stale window or a window focus, so without this the viewer waits
  * on a full re-fetch to see their own action.
  */
-export function useCommentCache(
-  storyId: string | undefined,
-  chapterId: string | undefined,
-) {
+export function useCommentCache(storyId: string | undefined) {
   const queryClient = useQueryClient();
-  const queryKey = queryKeys.comments.byChapter(storyId!, chapterId!);
+  const queryKey = queryKeys.comments.byStory(storyId!);
 
   const upsert = useCallback(
     (comment: Comment) => {
-      if (!storyId || !chapterId) return;
+      if (!storyId) return;
       queryClient.setQueryData<Comment[]>(queryKey, (current) => {
         const rest = (current ?? []).filter((c) => c.id !== comment.id);
         return [...rest, comment].sort(
@@ -40,12 +34,12 @@ export function useCommentCache(
         );
       });
     },
-    [queryClient, queryKey, storyId, chapterId],
+    [queryClient, queryKey, storyId],
   );
 
   const remove = useCallback(
     (commentId: string) => {
-      if (!storyId || !chapterId) return;
+      if (!storyId) return;
       queryClient.setQueryData<Comment[]>(queryKey, (current) =>
         // Replies are cascaded server-side, so they go here too.
         (current ?? []).filter(
@@ -53,13 +47,13 @@ export function useCommentCache(
         ),
       );
     },
-    [queryClient, queryKey, storyId, chapterId],
+    [queryClient, queryKey, storyId],
   );
 
   const invalidate = useCallback(() => {
-    if (!storyId || !chapterId) return Promise.resolve();
+    if (!storyId) return Promise.resolve();
     return queryClient.invalidateQueries({ queryKey });
-  }, [queryClient, queryKey, storyId, chapterId]);
+  }, [queryClient, queryKey, storyId]);
 
   return { upsert, remove, invalidate };
 }

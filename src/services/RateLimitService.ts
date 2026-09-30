@@ -7,7 +7,7 @@ import {
   updateDoc,
   increment,
 } from "firebase/firestore";
-import { firestore } from "@novelsync/platform-auth";
+import { firestore } from "@novelsync/platform-auth/firestore";
 import { RATE_LIMITS } from "@/config/rateLimits";
 
 /**
