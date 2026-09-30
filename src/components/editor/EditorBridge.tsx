@@ -150,6 +150,9 @@ export class EditorBridgeStore {
 
   getVersion = () => this.version;
 
+  /** Whether an editor has registered a chapter, i.e. the canvas is ready. */
+  isActive = () => this.active !== null;
+
   private emit() {
     this.version += 1;
     this.listeners.forEach((listener) => listener());
