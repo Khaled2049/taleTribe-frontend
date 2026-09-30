@@ -30,6 +30,43 @@ export const publicStoryQuery = (storyId: string) =>
     staleTime: 1000 * 60,
   });
 
+const CHAPTER_FETCH_TIMEOUT_MS = 15000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`Chapter fetch timed out after ${ms}ms`)),
+      ms,
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+export const publicChapterQuery = (
+  storyId: string,
+  chapterId: string,
+  authorId: string,
+) =>
+  queryOptions({
+    queryKey: queryKeys.stories.chapter(storyId, chapterId),
+    queryFn: () =>
+      withTimeout(
+        publicStoryRepo.getChapter(storyId, chapterId, authorId),
+        CHAPTER_FETCH_TIMEOUT_MS,
+      ),
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 30,
+  });
+
 export const storyViewerQuery = (storyId: string, uid: string) =>
   queryOptions({
     queryKey: queryKeys.stories.viewer(storyId, uid),

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import { configureStoryData } from "@novelsync/story-data-client";
 import {
+  publicChapterQuery,
   publicStoryPlaceholder,
   publicStoryQuery,
   storyViewerQuery,
@@ -86,6 +87,28 @@ describe("publicStoryQuery", () => {
       story: { id: STORY_ID, userId: "author-1", likes: 2 },
       chapters: [{ id: "c1", title: "One" }],
     });
+    expect(urls).toHaveLength(1);
+  });
+});
+
+describe("publicChapterQuery", () => {
+  it("keeps a chapter for the session once fetched", async () => {
+    responses[`/v1/public/stories/${STORY_ID}/chapters/c2`] = {
+      id: "c2",
+      storyId: STORY_ID,
+      title: "Two",
+      content: "<p>Body</p>",
+      position: 2,
+      wordCount: 1,
+    };
+    const client = new QueryClient();
+
+    await client.prefetchQuery(publicChapterQuery(STORY_ID, "c2", "author-1"));
+    await client.prefetchQuery(publicChapterQuery(STORY_ID, "c2", "author-1"));
+
+    expect(
+      client.getQueryData(queryKeys.stories.chapter(STORY_ID, "c2")),
+    ).toMatchObject({ id: "c2", content: "<p>Body</p>", userId: "author-1" });
     expect(urls).toHaveLength(1);
   });
 });
