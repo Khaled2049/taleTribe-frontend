@@ -19,6 +19,7 @@ import {
   useClearReadingHistory,
 } from "@/hooks/queries/useUserQueries";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
+import { prefetchWorkspace } from "@/routes/Story/prefetchWorkspace";
 
 const RowSkeleton = () => (
   <div className="flex gap-4 py-6 border-b border-ns-border animate-pulse">
@@ -77,6 +78,8 @@ const UserStories = () => {
   const navigate = useNavigate();
 
   const editStory = (storyId: string) => navigate(`/create/${storyId}`);
+  const prefetchEditor = (storyId: string) =>
+    prefetchWorkspace(user?.uid ?? null, storyId);
 
   const handleDeleteStory = (storyId: string) => {
     setOperationLoading(storyId);
@@ -316,6 +319,7 @@ const UserStories = () => {
                       key={story.id}
                       story={story}
                       onEdit={editStory}
+                      onEditIntent={prefetchEditor}
                       onDelete={handleDeleteStory}
                       onPublish={handleTogglePublishStory}
                       onUnpublish={handleTogglePublishStory}
