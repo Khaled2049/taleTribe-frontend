@@ -17,7 +17,8 @@ import {
   useComments,
   useCommentCache,
 } from "@/hooks/queries/useCommentQueries";
-import { StoryLoadingState } from "./components/StoryLoadingState";
+import { StoryDetailSkeleton } from "./StoryDetailSkeleton";
+import { ReaderSkeleton } from "./components/reader/ReaderSkeleton";
 import { StoryErrorState } from "./components/StoryErrorState";
 import { StorySynopsis } from "./components/StorySynopsis";
 import { BookOpen, Heart } from "lucide-react";
@@ -522,7 +523,7 @@ const StoryDetail: React.FC = () => {
 
   // --- Render ---
   if (detailQuery.isPending) {
-    return <StoryLoadingState />;
+    return <StoryDetailSkeleton />;
   }
 
   if (detailQuery.isError || !story) {
@@ -750,7 +751,15 @@ const StoryDetail: React.FC = () => {
 
   // --- VIEW 2: READER ---
   if (!state.currentChapter) {
-    return <StoryLoadingState />;
+    return (
+      <ReaderSkeleton
+        title={
+          chapters.length > 1
+            ? chapters[state.currentChapterIndex]?.title
+            : undefined
+        }
+      />
+    );
   }
 
   // Only the resumed chapter restores scroll; everything else starts at top.
