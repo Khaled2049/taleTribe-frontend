@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Link, useParams } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useMatch,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import { publicStoryRepo } from "@novelsync/story-data-client";
 import { Chapter, Story } from "@novelsync/story-data-client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -52,7 +58,11 @@ const StoryDetail: React.FC = () => {
   const { uid, loading: authLoading } = useAuthIdentity();
   const queryClient = useQueryClient();
 
-  const [viewMode, setViewMode] = useState<ViewMode>("details");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const readerMatch = useMatch("/story/:id/read/:chapterId?");
+  const viewMode: ViewMode = readerMatch ? "reader" : "details";
+  const routeChapterId = readerMatch?.params.chapterId;
   const [hoveredHeroStar, setHoveredHeroStar] = useState<number | null>(null);
 
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
@@ -62,6 +72,11 @@ const StoryDetail: React.FC = () => {
   const viewerQuery = useStoryViewer(id, uid);
   const story = detailQuery.data?.story ?? null;
   const chapters = detailQuery.data?.chapters ?? NO_CHAPTERS;
+  const routeIndex = routeChapterId
+    ? chapters.findIndex((chapter) => chapter.id === routeChapterId)
+    : -1;
+  const activeIndex =
+    viewMode === "reader" && routeIndex >= 0 ? routeIndex : currentChapterIndex;
   const chapterCount = detailQuery.isPlaceholderData
     ? (story?.chapterCount ?? 0)
     : chapters.length;
@@ -85,9 +100,7 @@ const StoryDetail: React.FC = () => {
   const viewRecordedFor = useRef<string | null>(null);
 
   const chapterMeta =
-    story && openedStoryId === story.id
-      ? chapters[currentChapterIndex]
-      : undefined;
+    story && openedStoryId === story.id ? chapters[activeIndex] : undefined;
   const chapterQuery = useQuery({
     ...publicChapterQuery(id ?? "", chapterMeta?.id ?? "", story?.userId ?? ""),
     enabled: !!id && !!story && !!chapterMeta,
@@ -143,8 +156,8 @@ const StoryDetail: React.FC = () => {
     if (viewMode !== "reader" || !id || !story || !currentChapter) return;
     if (chapterLoading) return;
     const neighbours = [
-      chapters[currentChapterIndex + 1],
-      chapters[currentChapterIndex - 1],
+      chapters[activeIndex + 1],
+      chapters[activeIndex - 1],
     ].filter((meta): meta is Omit<Chapter, "content"> => !!meta);
     return onIdle(() => {
       for (const meta of neighbours) {
@@ -158,7 +171,7 @@ const StoryDetail: React.FC = () => {
     id,
     story,
     chapters,
-    currentChapterIndex,
+    activeIndex,
     currentChapter,
     chapterLoading,
     queryClient,
@@ -296,19 +309,58 @@ const StoryDetail: React.FC = () => {
       if (!target) return;
       if (id && uid) readingHistoryRepo.saveProgress(id, target.id);
       setCurrentChapterIndex(index);
+      navigate(`/story/${id}/read/${target.id}`, {
+        replace: true,
+        state: location.state,
+      });
     },
-    [id, uid, chapters],
+    [id, uid, chapters, navigate, location.state],
   );
 
   const handlePrevChapter = useCallback(
-    () => goToChapter(Math.max(currentChapterIndex - 1, 0)),
-    [goToChapter, currentChapterIndex],
+    () => goToChapter(Math.max(activeIndex - 1, 0)),
+    [goToChapter, activeIndex],
   );
 
   const handleNextChapter = useCallback(
-    () => goToChapter(Math.min(currentChapterIndex + 1, chapters.length - 1)),
-    [goToChapter, currentChapterIndex, chapters.length],
+    () => goToChapter(Math.min(activeIndex + 1, chapters.length - 1)),
+    [goToChapter, activeIndex, chapters.length],
   );
+
+  const handleBackToDetails = useCallback(() => {
+    if ((location.state as { fromDetails?: boolean } | null)?.fromDetails) {
+      navigate(-1);
+    } else {
+      navigate(`/story/${id}`, { replace: true });
+    }
+  }, [location.state, navigate, id]);
+
+  useEffect(() => {
+    if (viewMode !== "reader" || !id || !story) return;
+    if (openedStoryId !== story.id) return;
+    if (routeIndex >= 0) {
+      if (routeIndex !== currentChapterIndex)
+        setCurrentChapterIndex(routeIndex);
+      return;
+    }
+    const target = chapters[currentChapterIndex];
+    if (target) {
+      navigate(`/story/${id}/read/${target.id}`, {
+        replace: true,
+        state: location.state,
+      });
+    }
+  }, [
+    viewMode,
+    id,
+    story,
+    openedStoryId,
+    routeIndex,
+    currentChapterIndex,
+    chapters,
+    navigate,
+    location.state,
+  ]);
 
   const { refetch: refetchChapter } = chapterQuery;
   const handleRetryChapter = useCallback(() => {
@@ -540,7 +592,7 @@ const StoryDetail: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={() => {
-                      const chapter = chapters[currentChapterIndex];
+                      const chapter = chapters[activeIndex];
                       if (id && uid && chapter) {
                         const resume = resumeRef.current;
                         readingHistoryRepo.saveProgress(
@@ -551,7 +603,11 @@ const StoryDetail: React.FC = () => {
                             : 0,
                         );
                       }
-                      setViewMode("reader");
+                      if (chapter) {
+                        navigate(`/story/${id}/read/${chapter.id}`, {
+                          state: { fromDetails: true },
+                        });
+                      }
                     }}
                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-ns-accent text-white font-ui text-sm font-medium rounded-ns shadow-ns-sm hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150"
                   >
@@ -628,9 +684,7 @@ const StoryDetail: React.FC = () => {
   if (!currentChapter) {
     return (
       <ReaderSkeleton
-        title={
-          chapters.length > 1 ? chapters[currentChapterIndex]?.title : undefined
-        }
+        title={chapters.length > 1 ? chapters[activeIndex]?.title : undefined}
       />
     );
   }
@@ -647,12 +701,12 @@ const StoryDetail: React.FC = () => {
   return (
     <ChapterReader
       currentChapter={currentChapter}
-      currentChapterIndex={currentChapterIndex}
+      currentChapterIndex={activeIndex}
       totalChapters={chapters.length}
       chapterLoading={chapterLoading}
       chapterError={chapterError}
       onRetryChapter={handleRetryChapter}
-      onBackToDetails={() => setViewMode("details")}
+      onBackToDetails={handleBackToDetails}
       onPrevChapter={handlePrevChapter}
       onNextChapter={handleNextChapter}
       resumeScrollPercent={resumeScrollPercent}

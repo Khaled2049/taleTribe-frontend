@@ -9,6 +9,7 @@ import {
 } from "@/hooks/queries/publicStory";
 import { publishedStoriesQuery } from "@/hooks/queries/publishedStories";
 import { queryKeys } from "@/hooks/queries/queryKeys";
+import { prefetchReaderChapter } from "@/routes/Story/prefetchStoryDetail";
 
 const STORY_ID = "11111111-1111-1111-1111-111111111111";
 
@@ -110,6 +111,31 @@ describe("publicChapterQuery", () => {
       client.getQueryData(queryKeys.stories.chapter(STORY_ID, "c2")),
     ).toMatchObject({ id: "c2", content: "<p>Body</p>", userId: "author-1" });
     expect(urls).toHaveLength(1);
+  });
+});
+
+describe("prefetchReaderChapter", () => {
+  it("prefetches a linked chapter using the author from the detail", async () => {
+    responses[`/v1/public/stories/${STORY_ID}`] = {
+      story: apiStory,
+      chapters: [],
+    };
+    responses[`/v1/public/stories/${STORY_ID}/chapters/c4`] = {
+      id: "c4",
+      storyId: STORY_ID,
+      title: "Four",
+      content: "<p>Four</p>",
+      position: 4,
+      wordCount: 1,
+    };
+    const client = new QueryClient();
+
+    await prefetchReaderChapter(STORY_ID, "c4", client);
+
+    expect(
+      client.getQueryData(queryKeys.stories.chapter(STORY_ID, "c4")),
+    ).toMatchObject({ id: "c4", userId: "author-1" });
+    expect(urls).toHaveLength(2);
   });
 });
 
