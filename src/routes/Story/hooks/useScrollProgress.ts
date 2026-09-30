@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { findScrollParent } from "@/lib/scrollParent";
 
 const PERSIST_THROTTLE_MS = 10000;
 const RESTORE_SUPPRESS_MS = 500;
@@ -6,12 +7,34 @@ const RESTORE_REAPPLY_MS = 300;
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
-function currentScrollPercent(): number {
-  const max = document.documentElement.scrollHeight - window.innerHeight;
-  return max > 0 ? clamp01(window.scrollY / max) : 0;
+export function scrollFraction(
+  scrollTop: number,
+  scrollHeight: number,
+  clientHeight: number,
+): number {
+  const max = scrollHeight - clientHeight;
+  return max > 0 ? clamp01(scrollTop / max) : 0;
 }
 
+interface Scroller {
+  target: EventTarget;
+  element: Element;
+}
+
+function resolveScroller(node: Element | null): Scroller {
+  const parent = node ? findScrollParent(node) : null;
+  if (parent) return { target: parent, element: parent };
+  return {
+    target: window,
+    element: document.scrollingElement ?? document.documentElement,
+  };
+}
+
+const currentFraction = (el: Element) =>
+  scrollFraction(el.scrollTop, el.scrollHeight, el.clientHeight);
+
 interface UseScrollProgressOptions {
+  contentRef: React.RefObject<Element | null>;
   /** Stable id of the chapter currently shown. */
   chapterId: string;
   /** True once the chapter content is actually in the DOM. */
@@ -23,31 +46,29 @@ interface UseScrollProgressOptions {
 }
 
 /**
- * Tracks window scroll as a 0–1 fraction (robust to font-size reflow),
- * persists it throttled (+ flush on unmount/tab-hide), and restores a saved
- * position once per chapter entry after content has rendered.
+ * Tracks the reader's scroll container as a 0–1 fraction (robust to font-size
+ * reflow), persists it throttled (+ flush on unmount/tab-hide), and on each
+ * chapter entry either restores a saved position or returns to the top.
  */
 export function useScrollProgress({
+  contentRef,
   chapterId,
   contentReady,
   savedPercentForChapter,
   onPersist,
 }: UseScrollProgressOptions): { scrollPercent: number } {
   const [scrollPercent, setScrollPercent] = useState(0);
-  const scrollPercentRef = useRef(0);
+  const scrollPercentRef = useRef(savedPercentForChapter ?? 0);
   const rafRef = useRef<number | null>(null);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Restore bookkeeping.
-  const restoredForRef = useRef<string | null>(null);
+  const enteredRef = useRef<string | null>(null);
   const userScrolledRef = useRef(false);
   const suppressUntilRef = useRef(0);
 
-  // Keep the latest persist callback without re-subscribing the scroll listener.
   const onPersistRef = useRef(onPersist);
   onPersistRef.current = onPersist;
 
-  // Flush the latest position on unmount and when the tab is hidden.
   useEffect(() => {
     const flush = () => onPersistRef.current(scrollPercentRef.current);
     const onVisibility = () => {
@@ -60,13 +81,12 @@ export function useScrollProgress({
     };
   }, []);
 
-  // Live tracking + throttled persistence; re-subscribed per chapter.
   useEffect(() => {
     userScrolledRef.current = false;
+    const { target, element } = resolveScroller(contentRef.current);
 
     const handleScroll = () => {
-      const p = currentScrollPercent();
-      scrollPercentRef.current = p;
+      scrollPercentRef.current = currentFraction(element);
       if (Date.now() >= suppressUntilRef.current) {
         userScrolledRef.current = true;
       }
@@ -82,31 +102,34 @@ export function useScrollProgress({
       }, PERSIST_THROTTLE_MS);
     };
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
+    target.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
-      window.removeEventListener("scroll", handleScroll);
+      target.removeEventListener("scroll", handleScroll);
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     };
-  }, [chapterId]);
+  }, [chapterId, contentRef]);
 
-  // Restore saved position once per chapter entry, after content is in the DOM.
   useLayoutEffect(() => {
-    if (
-      !contentReady ||
-      savedPercentForChapter == null ||
-      restoredForRef.current === chapterId
-    ) {
-      return;
-    }
-    restoredForRef.current = chapterId;
+    if (!contentReady || enteredRef.current === chapterId) return;
+    enteredRef.current = chapterId;
     userScrolledRef.current = false;
     suppressUntilRef.current = Date.now() + RESTORE_SUPPRESS_MS;
+    const { element } = resolveScroller(contentRef.current);
+
+    if (savedPercentForChapter == null) {
+      element.scrollTop = 0;
+      scrollPercentRef.current = 0;
+      setScrollPercent(0);
+      return;
+    }
 
     const apply = () => {
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      window.scrollTo(0, clamp01(savedPercentForChapter) * max);
+      const max = element.scrollHeight - element.clientHeight;
+      element.scrollTop = clamp01(savedPercentForChapter) * max;
+      scrollPercentRef.current = currentFraction(element);
+      setScrollPercent(scrollPercentRef.current);
     };
 
     // Double rAF lets initial layout settle; a delayed re-apply absorbs
@@ -119,7 +142,7 @@ export function useScrollProgress({
         }, RESTORE_REAPPLY_MS);
       });
     });
-  }, [chapterId, contentReady, savedPercentForChapter]);
+  }, [chapterId, contentReady, savedPercentForChapter, contentRef]);
 
   return { scrollPercent };
 }
