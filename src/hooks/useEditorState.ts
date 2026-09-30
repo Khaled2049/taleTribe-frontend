@@ -1,11 +1,14 @@
 import { useReducer, useMemo } from "react";
-import { Chapter, Story } from "@novelsync/story-data-client";
+import { Chapter, ChapterSummary, Story } from "@novelsync/story-data-client";
+import { toChapterSummary } from "@/lib/chapterIndex";
 
 // State type
 export interface EditorState {
   story: Story | null;
-  chapters: Chapter[];
+  chapters: ChapterSummary[];
   currentChapter: Chapter | null;
+  /** A selected chapter whose body is still loading; the canvas is read-only. */
+  openingChapter: ChapterSummary | null;
   storyTitle: string;
   storyDescription: string;
   chapterTitle: string;
@@ -25,11 +28,13 @@ type EditorAction =
       type: "LOAD_STORY";
       payload: {
         story: Story;
-        chapters: Chapter[];
+        chapters: ChapterSummary[];
         currentChapter: Chapter | null;
         leftSidebarOpen: boolean;
       };
     }
+  | { type: "BEGIN_CHAPTER_OPEN"; payload: ChapterSummary }
+  | { type: "CHAPTER_OPEN_FAILED" }
   | { type: "SELECT_CHAPTER"; payload: Chapter }
   | { type: "UPDATE_STORY_TITLE"; payload: string }
   | { type: "UPDATE_STORY_DESCRIPTION"; payload: string }
@@ -55,6 +60,7 @@ export const initialEditorState: EditorState = {
   story: null,
   chapters: [],
   currentChapter: null,
+  openingChapter: null,
   storyTitle: "",
   storyDescription: "",
   chapterTitle: "",
@@ -87,6 +93,7 @@ export function editorReducer(
         story: action.payload.story,
         chapters: action.payload.chapters,
         currentChapter: action.payload.currentChapter,
+        openingChapter: null,
         storyTitle: action.payload.story.title,
         storyDescription: action.payload.story.description,
         chapterTitle: action.payload.currentChapter?.title || "",
@@ -97,10 +104,17 @@ export function editorReducer(
         metadataChanged: false,
       };
 
+    case "BEGIN_CHAPTER_OPEN":
+      return { ...state, openingChapter: action.payload };
+
+    case "CHAPTER_OPEN_FAILED":
+      return { ...state, openingChapter: null };
+
     case "SELECT_CHAPTER":
       return {
         ...state,
         currentChapter: action.payload,
+        openingChapter: null,
         chapterTitle: action.payload.title,
       };
 
@@ -141,8 +155,9 @@ export function editorReducer(
     case "ADD_CHAPTER":
       return {
         ...state,
-        chapters: [...state.chapters, action.payload],
+        chapters: [...state.chapters, toChapterSummary(action.payload)],
         currentChapter: action.payload,
+        openingChapter: null,
         chapterTitle: action.payload.title,
       };
 
@@ -152,15 +167,12 @@ export function editorReducer(
       );
       const wasCurrentChapter = state.currentChapter?.id === action.payload;
 
+      // The index holds no bodies, so the caller opens the next chapter.
       return {
         ...state,
         chapters: remainingChapters,
-        currentChapter: wasCurrentChapter
-          ? remainingChapters[0] || null
-          : state.currentChapter,
-        chapterTitle: wasCurrentChapter
-          ? remainingChapters[0]?.title || ""
-          : state.chapterTitle,
+        currentChapter: wasCurrentChapter ? null : state.currentChapter,
+        chapterTitle: wasCurrentChapter ? "" : state.chapterTitle,
       };
     }
 
@@ -169,7 +181,7 @@ export function editorReducer(
         ...state,
         chapters: state.chapters.map((ch) =>
           ch.id === action.payload.id
-            ? { ...ch, ...action.payload.updates }
+            ? toChapterSummary({ ...ch, ...action.payload.updates })
             : ch,
         ),
         currentChapter:
@@ -226,7 +238,7 @@ export function useEditorState() {
 
       loadStory: (
         story: Story,
-        chapters: Chapter[],
+        chapters: ChapterSummary[],
         currentChapter: Chapter | null,
         options?: { leftSidebarOpen?: boolean },
       ) =>
@@ -239,6 +251,11 @@ export function useEditorState() {
             leftSidebarOpen: options?.leftSidebarOpen ?? true,
           },
         }),
+
+      beginChapterOpen: (chapter: ChapterSummary) =>
+        dispatch({ type: "BEGIN_CHAPTER_OPEN", payload: chapter }),
+
+      chapterOpenFailed: () => dispatch({ type: "CHAPTER_OPEN_FAILED" }),
 
       selectChapter: (chapter: Chapter) =>
         dispatch({ type: "SELECT_CHAPTER", payload: chapter }),
