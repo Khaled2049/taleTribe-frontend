@@ -79,6 +79,8 @@ import {
   chapterWordCount,
 } from "@/utils/chapterWordLimit";
 import { nextChapterPosition } from "@/utils/chapterPosition";
+import { loadWorkspace } from "@/lib/workspaceLoad";
+import { Button } from "@/components/ui/button";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { InteractiveStoryPanel } from "@/components/editor/InteractiveStoryPanel";
 import { useCoWrite } from "@/hooks/useCoWrite";
@@ -365,30 +367,43 @@ export function SimpleEditor() {
     };
   }, [currentChapterId, currentStoryId, editor, editorBridge]);
 
-  // Load story and chapters
-  const loadStory = useCallback(
-    async (loadStoryId: string) => {
-      actions.setLoading(true);
-      resetSaveState();
-
-      const story = await storyWorkspaceRepo.getStory(loadStoryId);
-      if (story) {
-        const storyChapters = await storyWorkspaceRepo.getChapters(story);
-        const firstChapter = storyChapters.length > 0 ? storyChapters[0] : null;
-        actions.loadStory(story, storyChapters, firstChapter, {
-          leftSidebarOpen: isLgUp,
-        });
-      }
-    },
-    [actions, isLgUp, resetSaveState],
-  );
-
-  // Load story on component mount
+  // Read at load time only: a reload discards the unsaved buffer and resets
+  // autosave, so the breakpoint and profile object must not be dependencies.
+  const isLgUpRef = useRef(isLgUp);
   useEffect(() => {
-    if (storyId) {
-      loadStory(storyId);
-    }
-  }, [storyId, user, loadStory]);
+    isLgUpRef.current = isLgUp;
+  }, [isLgUp]);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!storyId) return;
+    let cancelled = false;
+    actions.setLoading(true);
+    resetSaveState();
+
+    loadWorkspace(storyWorkspaceRepo, storyId).then((result) => {
+      if (cancelled) return;
+      if (result.status === "loaded") {
+        actions.loadStory(
+          result.story,
+          result.chapters,
+          result.chapters[0] ?? null,
+          {
+            leftSidebarOpen: isLgUpRef.current,
+          },
+        );
+        return;
+      }
+      if (result.status === "error") {
+        console.error("Error loading story:", result.error);
+      }
+      actions.loadFailed(result.status);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storyId, loadAttempt, actions, resetSaveState]);
 
   // The shelf renders a chapter count derived server-side, so adding or
   // removing a chapter here makes its cached list wrong. The query is not
@@ -1155,7 +1170,24 @@ export function SimpleEditor() {
 
   return (
     <div className="relative w-full h-full bg-ns-bg flex overflow-hidden">
-      {state.isLoading ? (
+      {state.loadError ? (
+        <div className="flex flex-col items-center justify-center w-full h-full gap-4 font-ui text-ns-ink">
+          <p className="font-heading italic text-lg text-ns-ink-muted">
+            {state.loadError === "missing"
+              ? "This story no longer exists."
+              : "We couldn't open your story."}
+          </p>
+          {state.loadError === "missing" ? (
+            <Button onClick={() => navigate("/user-stories")}>
+              Back to My Stories
+            </Button>
+          ) : (
+            <Button onClick={() => setLoadAttempt((n) => n + 1)}>
+              Try again
+            </Button>
+          )}
+        </div>
+      ) : state.isLoading ? (
         /* ── Loading State ── */
         <div className="flex flex-col items-center justify-center w-full h-full gap-4 animate-ns-fade-in">
           <Loader className="w-8 h-8 text-ns-accent animate-spin" />

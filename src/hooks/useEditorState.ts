@@ -10,6 +10,7 @@ export interface EditorState {
   storyDescription: string;
   chapterTitle: string;
   isLoading: boolean;
+  loadError: "missing" | "error" | null;
   metadataChanged: boolean;
   leftSidebarOpen: boolean;
   rightSidebarOpen: boolean;
@@ -19,6 +20,7 @@ export interface EditorState {
 // Action types
 type EditorAction =
   | { type: "SET_LOADING"; payload: boolean }
+  | { type: "LOAD_FAILED"; payload: "missing" | "error" }
   | {
       type: "LOAD_STORY";
       payload: {
@@ -49,8 +51,7 @@ type EditorAction =
   | { type: "SET_STORY_PUBLISHED"; payload: boolean }
   | { type: "RESET" };
 
-// Initial state
-const initialState: EditorState = {
+export const initialEditorState: EditorState = {
   story: null,
   chapters: [],
   currentChapter: null,
@@ -58,17 +59,27 @@ const initialState: EditorState = {
   storyDescription: "",
   chapterTitle: "",
   isLoading: true,
+  loadError: null,
   metadataChanged: false,
   leftSidebarOpen: true,
   rightSidebarOpen: false,
   rightTab: "format",
 };
 
-// Reducer
-function editorReducer(state: EditorState, action: EditorAction): EditorState {
+export function editorReducer(
+  state: EditorState,
+  action: EditorAction,
+): EditorState {
   switch (action.type) {
     case "SET_LOADING":
-      return { ...state, isLoading: action.payload };
+      return {
+        ...state,
+        isLoading: action.payload,
+        loadError: action.payload ? null : state.loadError,
+      };
+
+    case "LOAD_FAILED":
+      return { ...state, isLoading: false, loadError: action.payload };
 
     case "LOAD_STORY":
       return {
@@ -82,6 +93,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         leftSidebarOpen: action.payload.leftSidebarOpen,
         rightSidebarOpen: false,
         isLoading: false,
+        loadError: null,
         metadataChanged: false,
       };
 
@@ -192,7 +204,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       };
 
     case "RESET":
-      return initialState;
+      return initialEditorState;
 
     default:
       return state;
@@ -201,13 +213,16 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
 // Hook
 export function useEditorState() {
-  const [state, dispatch] = useReducer(editorReducer, initialState);
+  const [state, dispatch] = useReducer(editorReducer, initialEditorState);
 
   // Action creators
   const actions = useMemo(
     () => ({
       setLoading: (loading: boolean) =>
         dispatch({ type: "SET_LOADING", payload: loading }),
+
+      loadFailed: (reason: "missing" | "error") =>
+        dispatch({ type: "LOAD_FAILED", payload: reason }),
 
       loadStory: (
         story: Story,
