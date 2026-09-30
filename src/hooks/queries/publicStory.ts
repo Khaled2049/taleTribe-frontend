@@ -97,6 +97,7 @@ export function publicStoryPlaceholder(
       if (story?.userId) {
         return {
           story: { ...story, userId: story.userId },
+          author: {},
           chapters: [],
         };
       }

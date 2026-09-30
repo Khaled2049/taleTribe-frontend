@@ -9,6 +9,7 @@ import {
 } from "@/hooks/queries/publicStory";
 import { publishedStoriesQuery } from "@/hooks/queries/publishedStories";
 import { queryKeys } from "@/hooks/queries/queryKeys";
+import { prefetchReaderChapter } from "@/routes/Story/prefetchStoryDetail";
 
 const STORY_ID = "11111111-1111-1111-1111-111111111111";
 
@@ -67,6 +68,10 @@ describe("publicStoryQuery", () => {
   it("caches the detail under the key the loader and page share", async () => {
     responses[`/v1/public/stories/${STORY_ID}`] = {
       story: apiStory,
+      author: {
+        bio: "Writes about the sea.",
+        photoUrl: "https://x.test/a.png",
+      },
       chapters: [
         {
           id: "c1",
@@ -85,9 +90,27 @@ describe("publicStoryQuery", () => {
     const cached = client.getQueryData(queryKeys.stories.detail(STORY_ID));
     expect(cached).toMatchObject({
       story: { id: STORY_ID, userId: "author-1", likes: 2 },
+      author: {
+        bio: "Writes about the sea.",
+        photoUrl: "https://x.test/a.png",
+      },
       chapters: [{ id: "c1", title: "One" }],
     });
     expect(urls).toHaveLength(1);
+  });
+});
+
+describe("publicStoryQuery without an author profile", () => {
+  it("reads a missing author as an empty profile", async () => {
+    responses[`/v1/public/stories/${STORY_ID}`] = {
+      story: apiStory,
+      chapters: [],
+    };
+    const detail = await new QueryClient().fetchQuery(
+      publicStoryQuery(STORY_ID),
+    );
+
+    expect(detail?.author).toEqual({});
   });
 });
 
@@ -110,6 +133,31 @@ describe("publicChapterQuery", () => {
       client.getQueryData(queryKeys.stories.chapter(STORY_ID, "c2")),
     ).toMatchObject({ id: "c2", content: "<p>Body</p>", userId: "author-1" });
     expect(urls).toHaveLength(1);
+  });
+});
+
+describe("prefetchReaderChapter", () => {
+  it("prefetches a linked chapter using the author from the detail", async () => {
+    responses[`/v1/public/stories/${STORY_ID}`] = {
+      story: apiStory,
+      chapters: [],
+    };
+    responses[`/v1/public/stories/${STORY_ID}/chapters/c4`] = {
+      id: "c4",
+      storyId: STORY_ID,
+      title: "Four",
+      content: "<p>Four</p>",
+      position: 4,
+      wordCount: 1,
+    };
+    const client = new QueryClient();
+
+    await prefetchReaderChapter(STORY_ID, "c4", client);
+
+    expect(
+      client.getQueryData(queryKeys.stories.chapter(STORY_ID, "c4")),
+    ).toMatchObject({ id: "c4", userId: "author-1" });
+    expect(urls).toHaveLength(2);
   });
 });
 
@@ -150,6 +198,7 @@ describe("publicStoryPlaceholder", () => {
       chapterCount: 6,
     });
     expect(placeholder?.chapters).toEqual([]);
+    expect(placeholder?.author).toEqual({});
   });
 
   it("returns nothing for a story the list has not loaded", () => {
