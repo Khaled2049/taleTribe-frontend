@@ -170,12 +170,16 @@ export class SaveQueue {
     }
   }
 
+  // Typing calls trigger on every keystroke; re-emitting an unchanged status
+  // or dirty flag would re-render the whole editor page each time.
   private setStatus(status: SaveStatus) {
+    if (this.state.status === status) return;
     this.state = { ...this.state, status };
     this.options.onStateChange(this.state);
   }
 
   private setDirty(dirty: boolean) {
+    if (this.dirty === dirty) return;
     this.dirty = dirty;
     this.options.onDirtyChange(dirty);
   }
