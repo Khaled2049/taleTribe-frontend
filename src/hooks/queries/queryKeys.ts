@@ -25,8 +25,7 @@ export const queryKeys = {
     wall: (filter: string) => ["guestbook", "wall", filter] as const,
   },
   comments: {
-    byChapter: (storyId: string, chapterId: string) =>
-      ["comments", storyId, chapterId] as const,
+    byStory: (storyId: string) => ["comments", storyId] as const,
   },
   bookClubs: {
     all: () => ["bookClubs"] as const,

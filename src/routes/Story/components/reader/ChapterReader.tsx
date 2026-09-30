@@ -122,6 +122,7 @@ export const ChapterReader: React.FC<ChapterReaderProps> = ({
     [onScrollPersist],
   );
   const { scrollPercent } = useScrollProgress({
+    contentRef,
     chapterId: currentChapter.id,
     contentReady: !chapterLoading && !!currentChapter.content,
     savedPercentForChapter: resumeScrollPercent,

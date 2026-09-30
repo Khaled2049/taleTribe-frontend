@@ -48,7 +48,7 @@ the suite touches now lives in this repo's `src/` or in `packages/`; nothing und
 `functions/src/` is reachable from `tests/`.
 
 There is no component-level coverage. E2E lives in `cypress/e2e/`
-(`story_lifecycle`, `ai_chat`, `worldbuilding_indexing`, `chapter_comments`,
+(`story_lifecycle`, `ai_chat`, `worldbuilding_indexing`, `story_comments`,
 `public_discovery`) and is not part of `yarn test` — run it with `yarn e2e`, which
 brings up the whole stack via `scripts/e2e-stack.sh`, or `yarn cy:open` /
 `yarn cy:run` against an already-running stack. Nothing covers competitions yet;
@@ -332,7 +332,7 @@ Light theme: warm parchment (`#FDFCF9`) bg, sealing-wax red accent (`#B91C1C`). 
 - `layout/` — Navbar, Footer, SidebarPanel (+ `navbar/` subdir)
 - `story/` — StoryMetadata, StoriesHeader (+ `characters/`, `places/` subdirs)
 - `plot/` — Plot timeline and event editing
-- `community/` — Story/chapter comments
+- `community/` — Story comments
 - `guestbook/` — Per-user profile guestbook (entries, replies, votes)
 - `web3/` — Wallet connect, fee cards, transaction status
 - `common/` — Shared utilities (Modal, ConfirmDialog, ThemeToggle, Icons, etc.)

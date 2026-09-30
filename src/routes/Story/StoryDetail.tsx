@@ -86,14 +86,8 @@ const StoryDetail: React.FC = () => {
     ratingsCount: 0,
   });
 
-  const { data: comments = [], isPending: commentsLoading } = useComments(
-    id,
-    state.currentChapter?.id,
-  );
-  const { upsert: upsertComment, remove: removeComment } = useCommentCache(
-    id,
-    state.currentChapter?.id,
-  );
+  const { data: comments = [], isPending: commentsLoading } = useComments(id);
+  const { upsert: upsertComment, remove: removeComment } = useCommentCache(id);
 
   const { walletAddress: authorWalletAddress } = useUserWalletAddress(
     state.story?.userId,
@@ -108,7 +102,6 @@ const StoryDetail: React.FC = () => {
     chapterId: string | null;
     scrollPercent: number;
   } | null>(null);
-  const [readNowPending, setReadNowPending] = useState(false);
 
   // --- Data Loading ---
 
@@ -207,20 +200,20 @@ const StoryDetail: React.FC = () => {
   );
 
   const loadStory = useCallback(
-    async (
-      storyId: string,
-      chapterIndex: number = 0,
-      resumeChapterId: string | null = null,
-    ) => {
+    async (storyId: string) => {
       try {
         setState((prev) => ({ ...prev, loading: true, error: null }));
 
-        const [detail, me] = await Promise.all([
+        const [detail, me, progress] = await Promise.all([
           publicStoryRepo.getStoryDetail(storyId),
           user
             ? storySocialRepo.getMe(storyId).catch(() => null)
             : Promise.resolve(null),
+          user
+            ? readingHistoryRepo.getProgress(storyId)
+            : Promise.resolve(null),
         ]);
+        resumeRef.current = progress;
 
         if (!detail) {
           setState((prev) => ({
@@ -232,17 +225,14 @@ const StoryDetail: React.FC = () => {
         }
 
         const { story: storyData, chapters: chaptersMetaList } = detail;
-        const savedChapterIndex = resumeChapterId
+        const savedChapterIndex = progress?.chapterId
           ? chaptersMetaList.findIndex(
-              (chapter) => chapter.id === resumeChapterId,
+              (chapter) => chapter.id === progress.chapterId,
             )
           : -1;
         const validChapterIndex = Math.max(
           0,
-          Math.min(
-            savedChapterIndex >= 0 ? savedChapterIndex : chapterIndex,
-            chaptersMetaList.length - 1,
-          ),
+          Math.min(savedChapterIndex, chaptersMetaList.length - 1),
         );
 
         setState((prev) => ({
@@ -374,7 +364,6 @@ const StoryDetail: React.FC = () => {
 
     if (!cached)
       loadChapterContent(prevIndex, state.chapters, state.story?.userId || "");
-    window.scrollTo(0, 0);
   }, [
     id,
     user,
@@ -415,7 +404,6 @@ const StoryDetail: React.FC = () => {
 
     if (!cached)
       loadChapterContent(nextIndex, state.chapters, state.story?.userId || "");
-    window.scrollTo(0, 0);
   }, [
     id,
     user,
@@ -452,106 +440,70 @@ const StoryDetail: React.FC = () => {
   // rather than re-fetched whole.
   const handleCreateComment = useCallback(
     async (message: string) => {
-      if (!id || !state.currentChapter) return;
-      upsertComment(
-        await storySocialRepo.createComment(
-          id,
-          state.currentChapter.id,
-          message,
-        ),
-      );
+      if (!id) return;
+      upsertComment(await storySocialRepo.createComment(id, message));
     },
-    [id, state.currentChapter, upsertComment],
+    [id, upsertComment],
   );
 
   const handleReply = useCallback(
     async (parentId: string, message: string) => {
-      if (!id || !state.currentChapter) return;
+      if (!id) return;
       try {
         upsertComment(
-          await storySocialRepo.createComment(
-            id,
-            state.currentChapter.id,
-            message,
-            parentId,
-          ),
+          await storySocialRepo.createComment(id, message, parentId),
         );
       } catch (error) {
         console.error("Error adding reply:", error);
       }
     },
-    [id, state.currentChapter, upsertComment],
+    [id, upsertComment],
   );
 
   const handleDelete = useCallback(
     async (commentId: string) => {
-      if (!id || !state.currentChapter) return;
+      if (!id) return;
       try {
-        await storySocialRepo.deleteComment(
-          id,
-          state.currentChapter.id,
-          commentId,
-        );
+        await storySocialRepo.deleteComment(id, commentId);
         removeComment(commentId);
       } catch (error) {
         console.error("Error deleting comment:", error);
       }
     },
-    [id, state.currentChapter, removeComment],
+    [id, removeComment],
   );
 
   const handleEdit = useCallback(
     async (commentId: string, newMessage: string) => {
-      if (!id || !state.currentChapter) return;
+      if (!id) return;
       try {
         upsertComment(
-          await storySocialRepo.updateComment(
-            id,
-            state.currentChapter.id,
-            commentId,
-            newMessage,
-          ),
+          await storySocialRepo.updateComment(id, commentId, newMessage),
         );
       } catch (error) {
         console.error("Error updating comment:", error);
       }
     },
-    [id, state.currentChapter, upsertComment],
+    [id, upsertComment],
   );
 
   const handleCommentLike = useCallback(
     async (commentId: string, liked: boolean) => {
-      if (!id || !state.currentChapter) return;
+      if (!id) return;
       try {
         upsertComment(
-          await storySocialRepo.setCommentLike(
-            id,
-            state.currentChapter.id,
-            commentId,
-            liked,
-          ),
+          await storySocialRepo.setCommentLike(id, commentId, liked),
         );
       } catch (error) {
         console.error("Error updating comment like:", error);
       }
     },
-    [id, state.currentChapter, upsertComment],
+    [id, upsertComment],
   );
 
   // --- Effects ---
   useEffect(() => {
-    if (!id) return;
-    const init = async () => {
-      const startIndex = 0;
-      if (user) {
-        const progress = await readingHistoryRepo.getProgress(id);
-        resumeRef.current = progress;
-        loadStory(id, startIndex, progress.chapterId);
-        return;
-      }
-      loadStory(id, startIndex);
-    };
-    init();
+    if (id) loadStory(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -709,52 +661,23 @@ const StoryDetail: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={() => {
-                      if (readNowPending) return;
-                      setReadNowPending(true);
-                      if (id && user && state.story) {
-                        if (state.currentChapter)
-                          readingHistoryRepo.saveProgress(
-                            id,
-                            state.currentChapter.id,
-                          );
+                      const chapter = state.chapters[state.currentChapterIndex];
+                      if (id && user && chapter) {
+                        const resume = resumeRef.current;
+                        readingHistoryRepo.saveProgress(
+                          id,
+                          chapter.id,
+                          resume?.chapterId === chapter.id
+                            ? resume.scrollPercent
+                            : 0,
+                        );
                       }
-                      setTimeout(() => {
-                        setReadNowPending(false);
-                        setViewMode("reader");
-                      }, 500);
+                      setViewMode("reader");
                     }}
-                    disabled={readNowPending}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-ns-accent text-white font-ui text-sm font-medium rounded-ns shadow-ns-sm hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150 disabled:opacity-70 disabled:cursor-wait"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-ns-accent text-white font-ui text-sm font-medium rounded-ns shadow-ns-sm hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150"
                   >
-                    {readNowPending ? (
-                      <>
-                        <svg
-                          className="w-4 h-4 animate-spin"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                          />
-                        </svg>
-                        Opening…
-                      </>
-                    ) : (
-                      <>
-                        <BookOpen className="w-4 h-4" />
-                        Read Now
-                      </>
-                    )}
+                    <BookOpen className="w-4 h-4" />
+                    Read Now
                   </button>
                   <button
                     onClick={handleLike}
@@ -799,18 +722,16 @@ const StoryDetail: React.FC = () => {
                 <div className="flex-1 h-px bg-ns-border" />
               </div>
 
-              {state.currentChapter && (
-                <StoryCommentsSection
-                  comments={comments}
-                  commentsLoading={commentsLoading}
-                  currentUser={user}
-                  onCreate={handleCreateComment}
-                  onReply={handleReply}
-                  onDelete={handleDelete}
-                  onEdit={handleEdit}
-                  onLike={handleCommentLike}
-                />
-              )}
+              <StoryCommentsSection
+                comments={comments}
+                commentsLoading={commentsLoading}
+                currentUser={user}
+                onCreate={handleCreateComment}
+                onReply={handleReply}
+                onDelete={handleDelete}
+                onEdit={handleEdit}
+                onLike={handleCommentLike}
+              />
             </main>
           </div>
         </div>
