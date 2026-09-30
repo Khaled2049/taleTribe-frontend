@@ -26,7 +26,13 @@ export type {
   TimeConstraint,
 } from "./types/IPlot";
 export type { IReadingProgress } from "./types/IReadingProgress";
-export type { Chapter, ILikes, Story, StoryMetadata } from "./types/IStory";
+export type {
+  Chapter,
+  ChapterSummary,
+  ILikes,
+  Story,
+  StoryMetadata,
+} from "./types/IStory";
 
 export { guestbookRepo } from "./repos/GuestbookRepo";
 export {
