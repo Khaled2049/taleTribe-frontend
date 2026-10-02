@@ -141,7 +141,7 @@ function splitValidationError(sections: DocumentSection[]): string | null {
 
 export function SimpleEditor() {
   const { storyId } = useParams<{ storyId: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
   const openInteractivePanelOnMount = searchParams.get("wizard") === "true";
@@ -425,6 +425,8 @@ export function SimpleEditor() {
 
   // Read at load time only: a reload discards the unsaved buffer and resets
   // autosave, so the breakpoint and profile object must not be dependencies.
+  const chapterParamRef = useRef(searchParams.get("chapter"));
+  chapterParamRef.current = searchParams.get("chapter");
   const isLgUpRef = useRef(isLgUp);
   useEffect(() => {
     isLgUpRef.current = isLgUp;
@@ -506,7 +508,7 @@ export function SimpleEditor() {
         queryClient.fetchQuery(workspaceChapterQuery(uid, id, chapterId)),
     };
 
-    loadWorkspace(reader, storyId).then((result) => {
+    loadWorkspace(reader, storyId, chapterParamRef.current).then((result) => {
       queryClient.removeQueries({
         queryKey: workspaceChapterIndexQuery(uid, storyId).queryKey,
       });
@@ -546,6 +548,31 @@ export function SimpleEditor() {
     queryClient,
     resetSaveState,
     prefetchNeighbours,
+  ]);
+
+  const loadedStoryId = state.story?.id;
+  const assistantNavigationPending =
+    (location.state as { assistantChapterId?: unknown } | null)
+      ?.assistantChapterId !== undefined;
+  useEffect(() => {
+    if (!currentChapterId || loadedStoryId !== storyId) return;
+    if (assistantNavigationPending) return;
+    if (searchParams.get("chapter") === currentChapterId) return;
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.set("chapter", currentChapterId);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [
+    assistantNavigationPending,
+    currentChapterId,
+    loadedStoryId,
+    searchParams,
+    setSearchParams,
+    storyId,
   ]);
 
   // The shelf renders a chapter count derived server-side, so adding or

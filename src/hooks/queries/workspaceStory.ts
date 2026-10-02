@@ -37,7 +37,7 @@ export const workspaceChapterQuery = (
   });
 
 /**
- * Warms what the editor reads on entry — story, index, then the first body —
+ * Warms what the editor reads on entry — story, index, then the opening body —
  * without downloading the rest of the manuscript. Never rejects: a failed
  * prefetch just leaves the editor to fetch for itself.
  */
@@ -45,7 +45,16 @@ export async function prefetchWorkspaceData(
   queryClient: QueryClient,
   uid: string,
   storyId: string,
+  chapterId?: string | null,
 ) {
+  if (chapterId) {
+    await Promise.all([
+      queryClient.prefetchQuery(workspaceStoryQuery(uid, storyId)),
+      queryClient.prefetchQuery(workspaceChapterIndexQuery(uid, storyId)),
+      queryClient.prefetchQuery(workspaceChapterQuery(uid, storyId, chapterId)),
+    ]);
+    return;
+  }
   const [, index] = await Promise.all([
     queryClient.prefetchQuery(workspaceStoryQuery(uid, storyId)),
     queryClient

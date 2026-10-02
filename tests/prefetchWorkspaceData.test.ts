@@ -51,6 +51,15 @@ describe("prefetchWorkspaceData", () => {
     expect(repo.getChapter.mock.calls.map((call) => call[1])).toEqual(["c1"]);
   });
 
+  it("warms a requested chapter instead of the first", async () => {
+    const repo = stubRepo();
+    await prefetchWorkspaceData(new QueryClient(), "u1", "s1", "c2");
+
+    expect(repo.getStory).toHaveBeenCalledTimes(1);
+    expect(repo.getChapterIndex).toHaveBeenCalledTimes(1);
+    expect(repo.getChapter.mock.calls.map((call) => call[1])).toEqual(["c2"]);
+  });
+
   it("fetches no body for an empty story", async () => {
     const repo = stubRepo([]);
     await prefetchWorkspaceData(new QueryClient(), "u1", "s1");
