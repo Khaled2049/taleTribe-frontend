@@ -138,7 +138,6 @@ function snapshot(session: EditorSession): AssistantEditorContext {
 
 export class EditorBridgeStore {
   private active: EditorSession | null = null;
-  private version = 0;
   private readonly listeners = new Set<() => void>();
 
   constructor(readonly storyId: string) {}
@@ -148,13 +147,10 @@ export class EditorBridgeStore {
     return () => this.listeners.delete(listener);
   };
 
-  getVersion = () => this.version;
-
   /** Whether an editor has registered a chapter, i.e. the canvas is ready. */
   isActive = () => this.active !== null;
 
   private emit() {
-    this.version += 1;
     this.listeners.forEach((listener) => listener());
   }
 
@@ -198,6 +194,11 @@ export class EditorBridgeStore {
     };
   }
 
+  getActiveChapterId(): string | null {
+    if (!this.active || this.active.storyId !== this.storyId) return null;
+    return this.active.chapterId;
+  }
+
   getSnapshot(): AssistantEditorContext | null {
     if (!this.active || this.active.storyId !== this.storyId) return null;
     return snapshot(this.active);
@@ -232,10 +233,9 @@ export class EditorBridgeStore {
       return { ok: false, reason: "wrong_story" };
     if (proposal.chapterId !== active.chapterId)
       return { ok: false, reason: "wrong_chapter" };
-    const current = snapshot(active);
-    if (proposal.baseRevision !== current.persistedRevision)
+    if (proposal.baseRevision !== sessionRevision(active))
       return { ok: false, reason: "stale_revision" };
-    if (proposal.baseDocumentVersion !== current.documentVersion)
+    if (proposal.baseDocumentVersion !== active.documentVersion)
       return { ok: false, reason: "stale_document" };
     if (proposal.operations.length !== 1)
       return { ok: false, reason: "unsupported_operation" };
@@ -341,13 +341,45 @@ export function useEditorBridge() {
   return useContext(EditorBridgeContext);
 }
 
+const noopSubscribe = () => () => undefined;
+
 // eslint-disable-next-line react-refresh/only-export-components
-export function useEditorBridgeSnapshot() {
+export function useEditorBridgeChapterId() {
   const bridge = useEditorBridge();
-  useSyncExternalStore(
-    bridge?.subscribe ?? (() => () => undefined),
-    bridge?.getVersion ?? (() => 0),
-    bridge?.getVersion ?? (() => 0),
+  const getChapterId = () => bridge?.getActiveChapterId() ?? null;
+  return useSyncExternalStore(
+    bridge?.subscribe ?? noopSubscribe,
+    getChapterId,
+    getChapterId,
   );
-  return bridge?.getSnapshot() ?? null;
+}
+
+type ProposalCheckReason =
+  "ok" | Extract<ProposalCheck, { ok: false }>["reason"];
+
+function proposalCheckReason(
+  bridge: EditorBridgeStore | null,
+  proposal: ProposeEditorEditArgs | null,
+): ProposalCheckReason {
+  if (!proposal) return "unsupported_operation";
+  if (!bridge) return "no_editor";
+  const check = bridge.inspectProposal(proposal);
+  return check.ok ? "ok" : check.reason;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function useProposalCheck(
+  proposal: ProposeEditorEditArgs | null,
+): ProposalCheck {
+  const bridge = useEditorBridge();
+  const getReason = () => proposalCheckReason(bridge, proposal);
+  const reason = useSyncExternalStore(
+    bridge?.subscribe ?? noopSubscribe,
+    getReason,
+    getReason,
+  );
+  return useMemo(
+    () => (reason === "ok" ? { ok: true } : { ok: false, reason }),
+    [reason],
+  );
 }

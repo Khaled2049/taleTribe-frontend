@@ -64,7 +64,8 @@ import {
 import { AssistantMarkdown } from "@/components/chat/AssistantMarkdown";
 import {
   useEditorBridge,
-  useEditorBridgeSnapshot,
+  useEditorBridgeChapterId,
+  useProposalCheck,
   type ProposalCheck,
 } from "@/components/editor/EditorBridge";
 import {
@@ -355,7 +356,7 @@ function ApplyEditorEditCard({
   const presentProposal = proposalPreview?.present;
   const clearProposal = proposalPreview?.clear;
   const bridge = useEditorBridge();
-  const editorSnapshot = useEditorBridgeSnapshot();
+  const activeChapterId = useEditorBridgeChapterId();
   const { isOnline } = useNetworkStatus();
   const messageContent = useAuiState((state) => state.message.content);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -380,15 +381,7 @@ function ApplyEditorEditCard({
     proposal.operations[0]?.type === "replace"
       ? proposal.operations[0]
       : null;
-  const proposalCheck = proposal
-    ? (bridge?.inspectProposal(proposal) ?? {
-        ok: false as const,
-        reason: "no_editor" as const,
-      })
-    : ({
-        ok: false as const,
-        reason: "unsupported_operation" as const,
-      } satisfies ProposalCheck);
+  const proposalCheck = useProposalCheck(proposal);
   const resolved =
     approval?.approved !== undefined || action.status === "resolved";
   const busy = action.status === "applying";
@@ -668,7 +661,7 @@ function ApplyEditorEditCard({
           </div>
         )}
         <span className="sr-only" aria-live="polite">
-          {editorSnapshot?.chapterId ? terminalMessage : null}
+          {activeChapterId ? terminalMessage : null}
         </span>
       </div>
     </section>

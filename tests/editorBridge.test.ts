@@ -237,4 +237,65 @@ describe("EditorBridgeStore", () => {
     registration.unregister();
     expect(bridge.getSnapshot()).toBeNull();
   });
+
+  it("reports the active chapter only while an editor is registered", () => {
+    const fake = fakeEditor("Hello brave world");
+    const bridge = new EditorBridgeStore("story-1");
+    const registration = bridge.register({
+      storyId: "story-1",
+      chapterId: "chapter-1",
+      editor: fake.editor,
+      getChapterTitle: () => "Arrival",
+      getPersistedRevision: () => 3,
+      getDirty: () => false,
+      flushAndWait: async () => 3,
+    });
+    expect(bridge.getActiveChapterId()).toBe("chapter-1");
+    registration.unregister();
+    expect(bridge.getActiveChapterId()).toBeNull();
+  });
+
+  it("marks a proposal stale on the next document change", () => {
+    const fake = fakeEditor("Hello brave world", 7, 12);
+    const bridge = new EditorBridgeStore("story-1");
+    const registration = bridge.register({
+      storyId: "story-1",
+      chapterId: "chapter-1",
+      editor: fake.editor,
+      getChapterTitle: () => "Arrival",
+      getPersistedRevision: () => 3,
+      getDirty: () => false,
+      flushAndWait: async () => 3,
+    });
+    fake.connect(registration.transaction);
+    const proposal = {
+      chapterId: "chapter-1",
+      baseRevision: 3,
+      baseDocumentVersion: 0,
+      summary: "Tighten it",
+      operations: [
+        {
+          type: "replace" as const,
+          from: 7,
+          to: 12,
+          originalText: "brave",
+          replacementText: "bold",
+        },
+      ],
+    };
+    expect(bridge.inspectProposal(proposal)).toEqual({ ok: true });
+
+    fake.editor.view.dispatch(
+      fake.editor.state.tr.setSelection(
+        TextSelection.create(fake.editor.state.doc, 2, 4),
+      ),
+    );
+    expect(bridge.inspectProposal(proposal)).toEqual({ ok: true });
+
+    fake.editor.view.dispatch(fake.editor.state.tr.insertText("!", 18));
+    expect(bridge.inspectProposal(proposal)).toEqual({
+      ok: false,
+      reason: "stale_document",
+    });
+  });
 });
