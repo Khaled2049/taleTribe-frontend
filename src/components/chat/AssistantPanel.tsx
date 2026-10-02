@@ -108,6 +108,7 @@ const AssistantPanelContext = createContext<{
   storyId: string;
   navigateTo: (to: string, state?: { assistantChapterId: string }) => void;
   actionLedger: EditorActionLedger;
+  composerAutoFocus: boolean;
 } | null>(null);
 
 const noopSubscribe = () => () => undefined;
@@ -1054,11 +1055,12 @@ function EmptyAssistant() {
 }
 
 function Composer() {
+  const context = useContext(AssistantPanelContext);
   return (
     <>
       <ComposerPrimitive.Root className="rounded-ns-xl border border-ns-border-strong bg-ns-bg p-2 shadow-ns-sm focus-within:border-ns-accent focus-within:ring-2 focus-within:ring-[var(--ns-ring)]">
         <ComposerPrimitive.Input
-          autoFocus
+          autoFocus={context?.composerAutoFocus ?? true}
           aria-label="Ask about this story"
           data-cy="assistant-input"
           placeholder="Ask about this story…"
@@ -1099,25 +1101,47 @@ export default function AssistantPanel({
   setDesktopOpen,
   mobileOpen,
   setMobileOpen,
+  restored = false,
 }: {
   storyId: string;
   desktopOpen: boolean;
   setDesktopOpen: (open: boolean) => void;
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
+  restored?: boolean;
 }) {
   const [target, setTarget] = useState<ConversationTarget>({ mode: "latest" });
+  const [composerAutoFocus, setComposerAutoFocus] = useState(!restored);
+  const openDesktop = useCallback(
+    (open: boolean) => {
+      setComposerAutoFocus(true);
+      setDesktopOpen(open);
+    },
+    [setDesktopOpen],
+  );
+  const openMobile = useCallback(
+    (open: boolean) => {
+      setComposerAutoFocus(true);
+      setMobileOpen(open);
+    },
+    [setMobileOpen],
+  );
+  const select = useCallback((next: ConversationTarget) => {
+    setComposerAutoFocus(true);
+    setTarget(next);
+  }, []);
 
   return (
     <AssistantConversation
       key={conversationKey(target)}
       storyId={storyId}
       desktopOpen={desktopOpen}
-      setDesktopOpen={setDesktopOpen}
+      setDesktopOpen={openDesktop}
       mobileOpen={mobileOpen}
-      setMobileOpen={setMobileOpen}
+      setMobileOpen={openMobile}
       target={target}
-      onSelect={setTarget}
+      onSelect={select}
+      composerAutoFocus={composerAutoFocus}
     />
   );
 }
@@ -1155,6 +1179,7 @@ function AssistantConversation({
   setMobileOpen,
   target,
   onSelect,
+  composerAutoFocus,
 }: {
   storyId: string;
   desktopOpen: boolean;
@@ -1163,6 +1188,7 @@ function AssistantConversation({
   setMobileOpen: (open: boolean) => void;
   target: ConversationTarget;
   onSelect: (target: ConversationTarget) => void;
+  composerAutoFocus: boolean;
 }) {
   const activeRequest = useRef<AbortController | null>(null);
   const editorBridge = useEditorBridge();
@@ -1274,8 +1300,8 @@ function AssistantConversation({
     [isLgUp, navigate, setMobileOpen],
   );
   const panelContext = useMemo(
-    () => ({ storyId, navigateTo, actionLedger }),
-    [actionLedger, navigateTo, storyId],
+    () => ({ storyId, navigateTo, actionLedger, composerAutoFocus }),
+    [actionLedger, composerAutoFocus, navigateTo, storyId],
   );
 
   return (
