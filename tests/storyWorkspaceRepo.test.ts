@@ -111,3 +111,45 @@ describe("StoryWorkspaceRepo.getChapter", () => {
     ).resolves.toBeNull();
   });
 });
+
+describe("StoryWorkspaceRepo writes", () => {
+  it("sends the edited body's revision even after a newer read of it", async () => {
+    const repo = new StoryWorkspaceRepo();
+    respondWith(apiChapter(5), apiChapter(6), apiChapter(7));
+
+    const editing = await repo.getChapter("s1", "c1", "u1");
+    await repo.getChapter("s1", "c1", "u1");
+    await repo.updateChapter(story, editing!, "One", "<p>edit</p>");
+
+    expect(calls[2]).toMatchObject({ method: "PATCH", ifMatch: "5" });
+  });
+
+  it("sends the given story's revision even after a newer read of it", async () => {
+    const repo = new StoryWorkspaceRepo();
+    const apiStory = (revision: number) => ({
+      id: "s1",
+      ownerId: "u1",
+      title: "T",
+      description: "",
+      authorName: "",
+      category: "",
+      targetAudience: "",
+      language: "",
+      copyright: "",
+      coverImageUrl: "",
+      thumbnailUrl: "",
+      tags: [],
+      published: false,
+      revision,
+      createdAt: "2026-10-01T00:00:00Z",
+      updatedAt: "2026-10-01T00:00:00Z",
+    });
+    respondWith(apiStory(2), apiStory(3), apiStory(4));
+
+    const editing = await repo.getStory("s1");
+    await repo.getStory("s1");
+    await repo.updateStory({ ...editing!, title: "Renamed" });
+
+    expect(calls[2]).toMatchObject({ method: "PATCH", ifMatch: "2" });
+  });
+});
