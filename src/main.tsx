@@ -26,6 +26,10 @@ import {
 import { getCurrentUid } from "@novelsync/platform-auth";
 import { StoriesPageSkeleton } from "./routes/Story/StoriesPageSkeleton";
 import { StoryDetailSkeleton } from "./routes/Story/StoryDetailSkeleton";
+import {
+  EditorCanvasSkeleton,
+  EditorWorkspaceSkeleton,
+} from "./components/editor/EditorWorkspaceSkeleton";
 
 const Root = lazy(() => import("./routes/root"));
 const Signin = lazy(() => import("./routes/Auth/sign-in"));
@@ -317,9 +321,9 @@ const router = createBrowserRouter([
           }
           return null;
         },
-        hydrateFallbackElement: <LoadingFallback />,
+        hydrateFallbackElement: <EditorWorkspaceSkeleton />,
         element: (
-          <Suspense fallback={<LoadingFallback />}>
+          <Suspense fallback={<EditorWorkspaceSkeleton />}>
             <PrivateRoute />
           </Suspense>
         ),
@@ -327,7 +331,7 @@ const router = createBrowserRouter([
           {
             index: true,
             element: (
-              <Suspense fallback={<LoadingFallback />}>
+              <Suspense fallback={<EditorCanvasSkeleton />}>
                 <CreateStory />
               </Suspense>
             ),
