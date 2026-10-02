@@ -14,15 +14,9 @@ export function usePlaces(storyId: string | undefined) {
 export function useDeletePlace(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (placeId: string) =>
-      storyWorldbuildingRepo.deletePlace(
-        storyId!,
-        placeId,
-        queryClient
-          .getQueryData<Place[]>(queryKeys.places.byStory(storyId!))
-          ?.find((x) => x.id === placeId)?.revision,
-      ),
-    onMutate: async (placeId) => {
+    mutationFn: ({ id, revision }: { id: string; revision?: number }) =>
+      storyWorldbuildingRepo.deletePlace(storyId!, id, revision),
+    onMutate: async ({ id: placeId }) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.places.byStory(storyId!),
       });

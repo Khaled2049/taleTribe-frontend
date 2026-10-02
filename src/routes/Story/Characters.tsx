@@ -169,11 +169,15 @@ const Characters: React.FC = () => {
   };
 
   const handleDeleteCharacter = (characterId: string) => {
-    deleteCharacter.mutate(characterId, {
-      onSuccess: () => {
-        if (selectedCharacterId === characterId) selectCharacter(null);
+    const revision = characters.find((c) => c.id === characterId)?.revision;
+    deleteCharacter.mutate(
+      { id: characterId, revision },
+      {
+        onSuccess: () => {
+          if (selectedCharacterId === characterId) selectCharacter(null);
+        },
       },
-    });
+    );
   };
 
   const startEditing = () => {

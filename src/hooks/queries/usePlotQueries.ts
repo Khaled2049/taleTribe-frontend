@@ -85,15 +85,9 @@ export function useUpdatePlotLineMeta(storyId: string | undefined) {
 export function useDeletePlotLine(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (plotLineId: string) =>
-      storyWorldbuildingRepo.deletePlot(
-        storyId!,
-        plotLineId,
-        queryClient
-          .getQueryData<PlotLine[]>(queryKeys.plots.byStory(storyId!))
-          ?.find((x) => x.id === plotLineId)?.revision,
-      ),
-    onMutate: async (plotLineId) => {
+    mutationFn: ({ id, revision }: { id: string; revision?: number }) =>
+      storyWorldbuildingRepo.deletePlot(storyId!, id, revision),
+    onMutate: async ({ id: plotLineId }) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.plots.byStory(storyId!),
       });
@@ -208,18 +202,20 @@ export function useDeleteEvent(storyId: string | undefined) {
     mutationFn: ({
       plotLineId,
       eventId,
+      revision,
+      siblings,
     }: {
       plotLineId: string;
       eventId: string;
+      revision?: number;
+      siblings?: Pick<PlotEvent, "id" | "revision">[];
     }) =>
       storyWorldbuildingRepo.deleteEvent(
         storyId!,
         plotLineId,
         eventId,
-        queryClient
-          .getQueryData<PlotLine[]>(queryKeys.plots.byStory(storyId!))
-          ?.find((line) => line.id === plotLineId)
-          ?.events.find((event) => event.id === eventId)?.revision,
+        revision,
+        siblings,
       ),
     onMutate: async ({ plotLineId, eventId }) => {
       await queryClient.cancelQueries({
