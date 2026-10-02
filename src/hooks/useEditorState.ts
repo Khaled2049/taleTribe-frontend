@@ -14,7 +14,6 @@ export interface EditorState {
   chapterTitle: string;
   isLoading: boolean;
   loadError: "missing" | "error" | null;
-  metadataChanged: boolean;
   leftSidebarOpen: boolean;
   rightSidebarOpen: boolean;
   rightTab: "format" | "document";
@@ -46,7 +45,6 @@ type EditorAction =
       type: "UPDATE_CHAPTER_IN_LIST";
       payload: { id: string; updates: Partial<Chapter> };
     }
-  | { type: "CLEAR_METADATA_CHANGED" }
   | { type: "TOGGLE_LEFT_SIDEBAR" }
   | { type: "TOGGLE_RIGHT_SIDEBAR" }
   | { type: "SET_LEFT_SIDEBAR"; payload: boolean }
@@ -65,7 +63,6 @@ export const initialEditorState: EditorState = {
   chapterTitle: "",
   isLoading: true,
   loadError: null,
-  metadataChanged: false,
   leftSidebarOpen: true,
   rightSidebarOpen: false,
   rightTab: "format",
@@ -100,7 +97,6 @@ export function editorReducer(
         rightSidebarOpen: false,
         isLoading: false,
         loadError: null,
-        metadataChanged: false,
       };
 
     case "BEGIN_CHAPTER_OPEN":
@@ -121,14 +117,12 @@ export function editorReducer(
       return {
         ...state,
         storyTitle: action.payload,
-        metadataChanged: true,
       };
 
     case "UPDATE_STORY_DESCRIPTION":
       return {
         ...state,
         storyDescription: action.payload,
-        metadataChanged: true,
       };
 
     case "REPLACE_STORY":
@@ -138,7 +132,6 @@ export function editorReducer(
       return {
         ...state,
         chapterTitle: action.payload,
-        metadataChanged: true,
       };
 
     case "ADD_CHAPTER":
@@ -178,9 +171,6 @@ export function editorReducer(
             ? { ...state.currentChapter, ...action.payload.updates }
             : state.currentChapter,
       };
-
-    case "CLEAR_METADATA_CHANGED":
-      return { ...state, metadataChanged: false };
 
     case "TOGGLE_LEFT_SIDEBAR":
       return { ...state, leftSidebarOpen: !state.leftSidebarOpen };
@@ -269,8 +259,6 @@ export function useEditorState() {
 
       updateChapterInList: (id: string, updates: Partial<Chapter>) =>
         dispatch({ type: "UPDATE_CHAPTER_IN_LIST", payload: { id, updates } }),
-
-      clearMetadataChanged: () => dispatch({ type: "CLEAR_METADATA_CHANGED" }),
 
       toggleLeftSidebar: () => dispatch({ type: "TOGGLE_LEFT_SIDEBAR" }),
 
