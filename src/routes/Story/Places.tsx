@@ -5,6 +5,7 @@ import { storageService } from "@/services/StorageService";
 import { useParams } from "react-router-dom";
 import { SlideOverPanel } from "@/components/common";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useSelectionParam } from "@/hooks/useSelectionParam";
 import { toast } from "sonner";
 import { validateImageFile } from "@/utils/imageUpload";
 import {
@@ -64,6 +65,7 @@ const Places: React.FC = () => {
   const {
     data: places = [],
     isPending: placesLoading,
+    isFetching: placesFetching,
     isError: placesError,
     error: placesErrorValue,
   } = usePlaces(storyId);
@@ -71,7 +73,9 @@ const Places: React.FC = () => {
   const deletePlace = useDeletePlace(storyId);
   const updatePlace = useUpdatePlace(storyId);
 
-  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [selectedPlaceId, selectPlace] = useSelectionParam("place");
+  const selectedPlace =
+    places.find((item) => item.id === selectedPlaceId) ?? null;
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Edit state
@@ -79,12 +83,20 @@ const Places: React.FC = () => {
   const [draft, setDraft] = useState<Place | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [editingFor, setEditingFor] = useState(selectedPlaceId);
+  if (editingFor !== selectedPlaceId) {
+    setEditingFor(selectedPlaceId);
+    setEditing(false);
+    setDraft(null);
+    setImagePreview(null);
+    setImageFile(null);
+  }
   const saving = updatePlace.isPending;
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [isRosterOpen, setIsRosterOpen] = useState(false);
 
   const handlePlaceClick = (place: Place) => {
-    setSelectedPlace(place);
+    selectPlace(place.id);
     if (!isLgUp) {
       setIsRosterOpen(false);
     }
@@ -99,6 +111,16 @@ const Places: React.FC = () => {
       setIsRosterOpen(false);
     }
   }, [isLgUp]);
+
+  const selectionMissing =
+    !!selectedPlaceId &&
+    !selectedPlace &&
+    !placesLoading &&
+    !placesFetching &&
+    !placesError;
+  useEffect(() => {
+    if (selectionMissing) selectPlace(null);
+  }, [selectionMissing, selectPlace]);
 
   const handleAddPlace = async (
     placeData: Omit<Place, "id">,
@@ -116,15 +138,19 @@ const Places: React.FC = () => {
       newPlace = withImage;
     }
     setIsAddModalOpen(false);
-    setSelectedPlace(newPlace);
+    selectPlace(newPlace.id);
   };
 
   const handleDeletePlace = (placeId: string) => {
-    deletePlace.mutate(placeId, {
-      onSuccess: () => {
-        if (selectedPlace?.id === placeId) setSelectedPlace(null);
+    const revision = places.find((p) => p.id === placeId)?.revision;
+    deletePlace.mutate(
+      { id: placeId, revision },
+      {
+        onSuccess: () => {
+          if (selectedPlaceId === placeId) selectPlace(null);
+        },
       },
-    });
+    );
   };
 
   const startEditing = () => {
@@ -177,7 +203,6 @@ const Places: React.FC = () => {
       }
 
       await updatePlace.mutateAsync(updatedDraft);
-      setSelectedPlace(updatedDraft);
       setEditing(false);
       setDraft(null);
       setImagePreview(null);
