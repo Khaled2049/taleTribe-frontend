@@ -311,16 +311,20 @@ const router = createBrowserRouter([
         // client out of the entry bundle; the shelf's hover has usually loaded
         // it already. The uid is null until Firebase restores a session, so a
         // cold refresh preloads only code and the guard fetches the data.
-        loader: ({ params }) => {
+        loader: ({ params, request }) => {
           const { storyId } = params;
           if (storyId) {
             const uid = getCurrentUid();
+            const chapterId = new URL(request.url).searchParams.get("chapter");
             void import("./routes/Story/prefetchWorkspace").then(
-              ({ prefetchWorkspace }) => prefetchWorkspace(uid, storyId),
+              ({ prefetchWorkspace }) =>
+                prefetchWorkspace(uid, storyId, chapterId),
             );
           }
           return null;
         },
+        shouldRevalidate: ({ currentParams, nextParams }) =>
+          currentParams.storyId !== nextParams.storyId,
         hydrateFallbackElement: <EditorWorkspaceSkeleton />,
         element: (
           <Suspense fallback={<EditorWorkspaceSkeleton />}>

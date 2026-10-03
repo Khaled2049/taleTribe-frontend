@@ -1,11 +1,12 @@
-import { Navigate, useParams } from "react-router-dom";
-import { useEffect } from "react";
+import { Navigate, useParams, useSearchParams } from "react-router-dom";
+import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthIdentity } from "@novelsync/platform-auth";
 import { Button } from "@/components/ui/button";
 import { EditorWorkspaceSkeleton } from "@/components/editor/EditorWorkspaceSkeleton";
 import {
   workspaceChapterIndexQuery,
+  workspaceChapterQuery,
   workspaceStoryQuery,
 } from "@/hooks/queries/workspaceStory";
 import { workspaceAccess } from "@/lib/workspaceAccess";
@@ -19,6 +20,8 @@ import Story from "./Story/Story";
 const PrivateRoute = () => {
   const identity = useAuthIdentity();
   const { storyId } = useParams();
+  const [searchParams] = useSearchParams();
+  const requestedChapterId = searchParams.get("chapter");
   const uid = identity.loading ? null : identity.uid;
 
   const story = useQuery({
@@ -32,6 +35,16 @@ const PrivateRoute = () => {
   useEffect(() => {
     if (!uid || !storyId) return;
     void queryClient.prefetchQuery(workspaceChapterIndexQuery(uid, storyId));
+  }, [queryClient, uid, storyId]);
+
+  const requestedChapterRef = useRef(requestedChapterId);
+  requestedChapterRef.current = requestedChapterId;
+  useEffect(() => {
+    const chapterId = requestedChapterRef.current;
+    if (!uid || !storyId || !chapterId) return;
+    void queryClient.prefetchQuery(
+      workspaceChapterQuery(uid, storyId, chapterId),
+    );
   }, [queryClient, uid, storyId]);
 
   const access = workspaceAccess(identity, storyId, story);

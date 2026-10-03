@@ -10,7 +10,11 @@ export function preloadEditorCode() {
   import("./CreateStory").catch(() => undefined);
 }
 
-export function prefetchWorkspace(uid: string | null, storyId: string) {
+export function prefetchWorkspace(
+  uid: string | null,
+  storyId: string,
+  chapterId?: string | null,
+) {
   preloadEditorCode();
-  if (uid) void prefetchWorkspaceData(appQueryClient, uid, storyId);
+  if (uid) void prefetchWorkspaceData(appQueryClient, uid, storyId, chapterId);
 }

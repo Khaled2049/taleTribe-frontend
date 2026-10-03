@@ -101,6 +101,58 @@ describe("loadWorkspace", () => {
     expect(result).toMatchObject({ status: "loaded", currentChapter: null });
   });
 
+  it("opens the requested chapter, reading its body alongside the index", async () => {
+    let bodyStartedBeforeIndex = false;
+    let indexResolved = false;
+    let releaseIndex!: (value: ChapterSummary[]) => void;
+    const pending = loadWorkspace(
+      reader({
+        getChapterIndex: () =>
+          new Promise<ChapterSummary[]>((resolve) => {
+            releaseIndex = (value) => {
+              indexResolved = true;
+              resolve(value);
+            };
+          }),
+        getChapter: async (_storyId, chapterId) => {
+          if (!indexResolved) bodyStartedBeforeIndex = true;
+          return body(chapterId);
+        },
+      }),
+      "s1",
+      "c2",
+    );
+    await Promise.resolve();
+    releaseIndex(index);
+    await expect(pending).resolves.toMatchObject({
+      status: "loaded",
+      currentChapter: body("c2"),
+    });
+    expect(bodyStartedBeforeIndex).toBe(true);
+  });
+
+  it("falls back to the first chapter when the requested one is not in the index", async () => {
+    const result = await loadWorkspace(reader(), "s1", "gone");
+    expect(result).toMatchObject({ currentChapter: body("c1") });
+  });
+
+  it("re-reads the requested body when its early read failed", async () => {
+    let calls = 0;
+    const result = await loadWorkspace(
+      reader({
+        getChapter: async (_storyId, chapterId) => {
+          calls += 1;
+          if (calls === 1) throw new Error("503");
+          return body(chapterId);
+        },
+      }),
+      "s1",
+      "c2",
+    );
+    expect(result).toMatchObject({ currentChapter: body("c2") });
+    expect(calls).toBe(2);
+  });
+
   it.each([
     ["story", { getStory: () => Promise.reject(new Error("503")) }],
     ["index", { getChapterIndex: () => Promise.reject(new Error("503")) }],
