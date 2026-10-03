@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Loader2, Users, X } from "lucide-react";
+import { appScrollContainer } from "@/lib/scrollContainer";
 import {
   FOLLOWING_SIDEBAR_LIMIT,
   useFollowingProfiles,
@@ -185,10 +186,11 @@ export const FollowingDrawer: React.FC<FollowingProps> = ({
   // The page behind a drawer must not scroll under it.
   useEffect(() => {
     if (!isOpen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const scroller = appScrollContainer() ?? document.body;
+    const previous = scroller.style.overflow;
+    scroller.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = previous;
+      scroller.style.overflow = previous;
     };
   }, [isOpen]);
 
