@@ -4,6 +4,7 @@ import { PublicProfile } from "@novelsync/story-data-client";
 import { SearchField } from "@/components/common";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import {
   useUserSearch,
   useMemberDirectory,
@@ -35,6 +36,7 @@ const sortAZ = (a: PublicProfile, b: PublicProfile) =>
 
 const PeopleDirectory: React.FC = () => {
   const { user } = useAuthContext();
+  const { isLgUp } = useBreakpoint();
   const [term, setTerm] = useState("");
   const debouncedTerm = useDebouncedValue(term, 250);
   const [segment, setSegment] = useState<PeopleSegment>("all");
@@ -176,13 +178,15 @@ const PeopleDirectory: React.FC = () => {
           </div>
         </header>
 
-        <div className="lg:hidden mb-5 flex items-center gap-3 empty:hidden">
-          <FollowingDrawer following={user.following ?? []} />
-        </div>
+        {!isLgUp && (
+          <div className="lg:hidden mb-5 flex items-center gap-3 empty:hidden">
+            <FollowingDrawer following={user.following ?? []} />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_268px] gap-8 lg:gap-10 items-start">
           <div className="hidden lg:block lg:sticky lg:top-6">
-            <FollowingSidebar following={user.following ?? []} />
+            {isLgUp && <FollowingSidebar following={user.following ?? []} />}
           </div>
 
           <div className="min-w-0 flex flex-col gap-[22px]">

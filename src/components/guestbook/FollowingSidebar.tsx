@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Loader2, Users, X } from "lucide-react";
-import { useFollowingProfiles } from "@/hooks/queries/usePeopleQueries";
+import {
+  FOLLOWING_SIDEBAR_LIMIT,
+  useFollowingProfiles,
+} from "@/hooks/queries/usePeopleQueries";
 
 const PEOPLE_PATH = "/guestbook/people";
 
@@ -46,9 +49,9 @@ const SectionLabel: React.FC<{ className?: string }> = ({ className = "" }) => (
  * the list of whoever's wall you happen to be reading — it is a way to move
  * between walls, not a fact about the page.
  *
- * Two presentations, one query: this and FollowingDrawer both call
- * useFollowingProfiles with the same key, so React Query dedupes them to a
- * single fetch even though only one is ever visible at a given breakpoint.
+ * Shares its query key with FollowingDrawer. Pages mount only the one their
+ * breakpoint shows: this one fetches on mount, so mounting it under a CSS
+ * `hidden` would spend the request on a phone that never displays the list.
  */
 const FollowingSidebar: React.FC<FollowingProps> = ({
   following,
@@ -152,9 +155,12 @@ export const FollowingDrawer: React.FC<FollowingProps> = ({
   following,
   activeUserId,
 }) => {
-  const { data, isLoading } = useFollowingProfiles(following);
-  const people = data ?? [];
   const [isOpen, setIsOpen] = useState(false);
+  // Fetched on intent, not on mount: most visits never open the drawer.
+  const [wanted, setWanted] = useState(false);
+  const { data, isPending, isError } = useFollowingProfiles(following, wanted);
+  const people = data ?? [];
+  const want = () => setWanted(true);
   const triggerRef = useRef<HTMLButtonElement>(null);
   // The People tab renders this too, where the footer link would point at the
   // page you are already reading.
@@ -186,11 +192,7 @@ export const FollowingDrawer: React.FC<FollowingProps> = ({
     };
   }, [isOpen]);
 
-  // Nothing to show, or nothing resolvable (an error, or everyone you follow
-  // predates public profiles). An empty drawer is worse than no drawer — the
-  // People tab is one tap away either way.
   if (following.length === 0) return null;
-  if (!isLoading && people.length === 0) return null;
 
   // Spacing is deliberately not owned here: the trigger sits in a toolbar row
   // alongside controls this component knows nothing about, so the row places it.
@@ -201,18 +203,24 @@ export const FollowingDrawer: React.FC<FollowingProps> = ({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          want();
+          setIsOpen(true);
+        }}
+        onPointerEnter={want}
+        onFocus={want}
+        onTouchStart={want}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
         className="lg:hidden inline-flex items-center gap-2 rounded-full border border-ns-border bg-ns-surface px-3.5 py-2 font-ui text-[13px] font-semibold text-ns-ink-secondary transition-colors hover:border-ns-border-strong hover:text-ns-ink"
       >
         <Users className="h-4 w-4 shrink-0" aria-hidden="true" />
         Following
-        {!isLoading && (
-          <span className="font-ui text-[12px] font-medium text-ns-ink-muted">
-            {people.length}
-          </span>
-        )}
+        <span className="font-ui text-[12px] font-medium text-ns-ink-muted">
+          {data
+            ? people.length
+            : Math.min(following.length, FOLLOWING_SIDEBAR_LIMIT)}
+        </span>
       </button>
 
       {/* Scrim. Not `hidden` when closed — it fades, so it has to stay in the
@@ -230,6 +238,8 @@ export const FollowingDrawer: React.FC<FollowingProps> = ({
         aria-modal="true"
         aria-label="People you follow"
         aria-hidden={!isOpen}
+        // Off-screen is not out of the tab order; inert is.
+        inert={!isOpen}
         className={`lg:hidden fixed inset-y-0 left-0 z-50 flex w-[300px] max-w-[85vw] flex-col border-r border-ns-border bg-ns-bg transition-transform duration-300 ease-ns-spring ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -247,10 +257,18 @@ export const FollowingDrawer: React.FC<FollowingProps> = ({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          {isLoading ? (
+          {isError ? (
+            <p className="px-3 py-2 font-ui text-xs text-ns-destructive">
+              Could not load your list.
+            </p>
+          ) : isPending ? (
             <div className="flex justify-center py-6">
               <Loader2 className="h-4 w-4 animate-spin text-ns-ink-muted" />
             </div>
+          ) : people.length === 0 ? (
+            <p className="px-3 py-2 font-body text-[13px] leading-relaxed text-ns-ink-muted">
+              Nobody you follow has a public profile yet.
+            </p>
           ) : (
             <nav
               aria-label="People you follow"

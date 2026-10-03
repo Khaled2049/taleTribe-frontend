@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { UserX } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { getCurrentUid, useAuthIdentity } from "@novelsync/platform-auth";
 import { guestbookEntriesQuery } from "@/hooks/queries/useGuestbookQueries";
 import {
@@ -27,6 +28,7 @@ const GuestbookPage: React.FC = () => {
   const user =
     identityReady && hydratedUser?.uid === identity.uid ? hydratedUser : null;
   const isSelf = !!identity.uid && identity.uid === userId;
+  const { isLgUp } = useBreakpoint();
   const [entryCount, setEntryCount] = useState<number | undefined>(undefined);
   const queryClient = useQueryClient();
 
@@ -110,19 +112,24 @@ const GuestbookPage: React.FC = () => {
 
         {/* empty:hidden — FollowingDrawer renders nothing when you follow
             nobody, and a bare row would still contribute its margin. */}
-        <div className="lg:hidden mb-5 flex items-center gap-3 empty:hidden">
-          <FollowingDrawer
-            following={user?.following ?? []}
-            activeUserId={userId}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_268px] gap-8 lg:gap-10 items-start">
-          <div className="hidden lg:block lg:sticky lg:top-6">
-            <FollowingSidebar
+        {!isLgUp && (
+          <div className="lg:hidden mb-5 flex items-center gap-3 empty:hidden">
+            <FollowingDrawer
               following={user?.following ?? []}
               activeUserId={userId}
             />
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_268px] gap-8 lg:gap-10 items-start">
+          {/* The column stays so the grid keeps its three tracks. */}
+          <div className="hidden lg:block lg:sticky lg:top-6">
+            {isLgUp && (
+              <FollowingSidebar
+                following={user?.following ?? []}
+                activeUserId={userId}
+              />
+            )}
           </div>
 
           <div className="min-w-0">

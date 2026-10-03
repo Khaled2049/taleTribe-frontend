@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Loader, User } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { getCurrentUid, useAuthIdentity } from "@novelsync/platform-auth";
 import { useGuestbookPolicy } from "@/hooks/queries/useUserQueries";
 import { SEOHead } from "@/components/seo/SEOHead";
@@ -36,6 +37,9 @@ const WallPage: React.FC = () => {
   // is ready. A previous account's hydrated user must never accompany this uid.
   const user =
     identityReady && hydratedUser?.uid === identity.uid ? hydratedUser : null;
+  // Both sidebars fetch on mount, so a CSS `hidden` alone would still spend
+  // their requests on a phone. Mount only what this breakpoint shows.
+  const { isLgUp } = useBreakpoint();
   const [filter, setFilter] = useState<WallFilter>("all");
   const [isPosting, setIsPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
@@ -133,7 +137,7 @@ const WallPage: React.FC = () => {
         {/* Mobile toolbar: the people list on the left as a drawer trigger, the
             one setting on the right as a menu. Together they stand in for both
             desktop sidebars, which is what lets the feed start at the top. */}
-        {user && (
+        {user && !isLgUp && (
           <div className="lg:hidden mb-5 flex items-center gap-3">
             <FollowingDrawer following={user.following ?? []} />
             <GuestbookAccessMenu
@@ -146,7 +150,7 @@ const WallPage: React.FC = () => {
         )}
 
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[248px_minmax(0,1fr)_268px] lg:gap-10">
-          {user && (
+          {user && isLgUp && (
             <div className="hidden lg:sticky lg:top-6 lg:col-start-1 lg:row-start-1 lg:block">
               <FollowingSidebar following={user.following ?? []} />
             </div>
@@ -243,7 +247,7 @@ const WallPage: React.FC = () => {
 
           {/* Desktop only — on mobile this column's one interactive element is
               the toolbar menu above, so the card would just repeat it. */}
-          {user && (
+          {user && isLgUp && (
             <div className="hidden lg:sticky lg:top-6 lg:col-start-3 lg:row-start-1 lg:flex lg:flex-col lg:gap-5">
               <GuestbookAccessCard
                 userId={user.uid}
