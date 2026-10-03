@@ -5,7 +5,7 @@ import { Plus, Eye, BookOpen, PenLine } from "lucide-react";
 import { useAuthIdentity } from "@novelsync/platform-auth";
 import type { StoryMetadata } from "@novelsync/story-data-client";
 import { StoryRow } from "./components/StoryRow";
-import { useOwnerStories } from "@/hooks/queries/ownerStories";
+import { useOwnerStoryPages } from "@/hooks/queries/ownerStories";
 import { useStoryEarnings } from "@/hooks/queries/useStoryEarnings";
 import {
   useDeleteStory,
@@ -38,11 +38,16 @@ const UserStories = () => {
   const navigate = useNavigate();
 
   const {
-    data: stories = [],
+    data: storyPages,
     isPending: storiesPending,
     isError: storiesError,
     error: storiesErrorValue,
-  } = useOwnerStories(uid);
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useOwnerStoryPages(uid);
+  const stories = storyPages?.pages.flatMap((page) => page.stories) ?? [];
+  const summary = storyPages?.pages[0]?.summary;
   const earnings = useStoryEarnings(
     uid,
     stories.map((story) => story.id),
@@ -115,9 +120,9 @@ const UserStories = () => {
     clearHistory.mutate();
   };
 
-  const publishedCount = stories.filter((s) => s.isPublished).length;
-  const draftCount = stories.filter((s) => !s.isPublished).length;
-  const totalViews = stories.reduce((sum, s) => sum + (s.views || 0), 0);
+  const publishedCount = summary?.publishedCount ?? 0;
+  const draftCount = (summary?.totalStories ?? 0) - publishedCount;
+  const totalViews = summary?.totalViews ?? 0;
   const totalEthEarnings = stories.reduce(
     (sum, s) => sum + parseFloat(earnings.data?.[s.id]?.eth || "0"),
     0,
@@ -153,7 +158,10 @@ const UserStories = () => {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-8 text-xs sm:text-sm font-ui text-ns-ink-secondary">
               <span className="flex items-center gap-1.5">
                 <PenLine className="w-3.5 h-3.5 text-ns-ink-muted" />
-                {stories.length} {stories.length === 1 ? "story" : "stories"}
+                {summary?.totalStories ?? stories.length}{" "}
+                {(summary?.totalStories ?? stories.length) === 1
+                  ? "story"
+                  : "stories"}
               </span>
               {!recentlyReadLoading && recentlyRead.length > 0 && (
                 <span className="flex items-center gap-1.5">
@@ -207,9 +215,9 @@ const UserStories = () => {
               <span className="font-heading italic text-2xl sm:text-3xl">
                 My Writing
               </span>
-              {!loading && stories.length > 0 && (
+              {!loading && (summary?.totalStories ?? stories.length) > 0 && (
                 <span className="font-ui text-xs text-ns-ink-muted">
-                  {stories.length}
+                  {summary?.totalStories ?? stories.length}
                 </span>
               )}
               {activeTab === "writing" && (
@@ -246,7 +254,7 @@ const UserStories = () => {
               {!loading && hasEarnings && (
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 mb-8 bg-ns-surface border border-ns-border rounded-ns-lg">
                   <span className="text-xs font-ui font-semibold uppercase tracking-widest text-ns-ink-muted">
-                    Earnings
+                    {hasNextPage ? "Earnings from loaded stories" : "Earnings"}
                   </span>
                   {totalEthEarnings > 0 && (
                     <span className="text-sm font-ui font-medium text-emerald-600 dark:text-emerald-400">
@@ -300,26 +308,43 @@ const UserStories = () => {
 
               {/* Story list */}
               {!loading && stories.length > 0 && (
-                <div className="divide-y divide-ns-border">
-                  {stories.map((story) => (
-                    <StoryRow
-                      key={story.id}
-                      story={{ ...story, earnings: earnings.data?.[story.id] }}
-                      onEdit={editStory}
-                      onEditIntent={prefetchEditor}
-                      onDelete={handleDeleteStory}
-                      onPublish={handleTogglePublishStory}
-                      onUnpublish={handleTogglePublishStory}
-                      onEditDetails={(id) =>
-                        setEditingStory(
-                          stories.find((s) => s.id === id) ?? null,
-                        )
-                      }
-                      onImageUpdate={handleImageUpdate}
-                      isLoading={operationLoading === story.id}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div className="divide-y divide-ns-border">
+                    {stories.map((story) => (
+                      <StoryRow
+                        key={story.id}
+                        story={{
+                          ...story,
+                          earnings: earnings.data?.[story.id],
+                        }}
+                        onEdit={editStory}
+                        onEditIntent={prefetchEditor}
+                        onDelete={handleDeleteStory}
+                        onPublish={handleTogglePublishStory}
+                        onUnpublish={handleTogglePublishStory}
+                        onEditDetails={(id) =>
+                          setEditingStory(
+                            stories.find((s) => s.id === id) ?? null,
+                          )
+                        }
+                        onImageUpdate={handleImageUpdate}
+                        isLoading={operationLoading === story.id}
+                      />
+                    ))}
+                  </div>
+                  {hasNextPage && (
+                    <button
+                      type="button"
+                      onClick={() => void fetchNextPage()}
+                      disabled={isFetchingNextPage}
+                      className="mt-8 w-full rounded-ns border border-ns-border bg-ns-surface px-4 py-3 font-ui text-sm text-ns-ink hover:bg-ns-surface-hover disabled:opacity-50"
+                    >
+                      {isFetchingNextPage
+                        ? "Loading more…"
+                        : "Load more stories"}
+                    </button>
+                  )}
+                </>
               )}
             </>
           )}

@@ -1,9 +1,18 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type InfiniteData,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import { auth } from "@novelsync/platform-auth";
 import { storageService } from "@/services/StorageService";
-import type { Story, StoryMetadata } from "@novelsync/story-data-client";
+import type {
+  OwnerStoryPage,
+  Story,
+  StoryMetadata,
+} from "@novelsync/story-data-client";
 
 function patchOwnerStory(
   stories: StoryMetadata[] | undefined,
@@ -27,6 +36,62 @@ function patchOwnerStory(
         : story,
     )
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+}
+
+async function updateOwnerCaches(
+  queryClient: QueryClient,
+  userId: string,
+  storyId: string,
+  updated?: Story,
+) {
+  const listKey = queryKeys.user.stories(userId);
+  const pagesKey = queryKeys.user.storyPages(userId);
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: listKey }),
+    queryClient.cancelQueries({ queryKey: pagesKey }),
+  ]);
+  queryClient.setQueryData<StoryMetadata[]>(listKey, (stories) =>
+    updated
+      ? patchOwnerStory(stories, updated)
+      : stories?.filter((story) => story.id !== storyId),
+  );
+  queryClient.setQueryData<InfiniteData<OwnerStoryPage, string>>(
+    pagesKey,
+    (data) => {
+      if (!data) return data;
+      const rows = data.pages.flatMap((page) => page.stories);
+      const old = rows.find((story) => story.id === storyId);
+      if (!old) return data;
+      const nextRows = rows.filter((story) => story.id !== storyId);
+      if (updated) {
+        const replacement = patchOwnerStory([old], updated)?.[0];
+        if (replacement) nextRows.unshift(replacement);
+      }
+      let offset = 0;
+      const pages = data.pages.map((page, index) => {
+        const stories = nextRows.slice(offset, offset + page.stories.length);
+        offset += page.stories.length;
+        return {
+          ...page,
+          stories,
+          summary:
+            index === 0
+              ? {
+                  ...page.summary,
+                  totalStories: page.summary.totalStories - (updated ? 0 : 1),
+                  publishedCount:
+                    page.summary.publishedCount +
+                    (updated ? Number(updated.isPublished) : 0) -
+                    Number(old.isPublished),
+                  totalViews:
+                    page.summary.totalViews - (updated ? 0 : old.views),
+                }
+              : page.summary,
+        };
+      });
+      return { ...data, pages };
+    },
+  );
 }
 
 async function updateStoryCover(
@@ -76,11 +141,7 @@ export function useDeleteStory(userId: string | undefined) {
       storyWorkspaceRepo.deleteStoryByID(storyId),
     onSuccess: async (_result, storyId) => {
       if (userId) {
-        const key = queryKeys.user.stories(userId);
-        await queryClient.cancelQueries({ queryKey: key });
-        queryClient.setQueryData<StoryMetadata[]>(key, (stories) =>
-          stories?.filter((story) => story.id !== storyId),
-        );
+        await updateOwnerCaches(queryClient, userId, storyId);
       }
       queryClient.invalidateQueries({
         queryKey: queryKeys.workspace.all(userId!),
@@ -105,11 +166,7 @@ export function useTogglePublishStory(userId: string | undefined) {
     },
     onSuccess: async (updated) => {
       if (userId) {
-        const key = queryKeys.user.stories(userId);
-        await queryClient.cancelQueries({ queryKey: key });
-        queryClient.setQueryData<StoryMetadata[]>(key, (stories) =>
-          patchOwnerStory(stories, updated),
-        );
+        await updateOwnerCaches(queryClient, userId, updated.id, updated);
       }
       queryClient.invalidateQueries({
         queryKey: queryKeys.workspace.all(userId!),
@@ -141,11 +198,7 @@ export function useUpdateStoryMetadata(userId: string | undefined) {
     }) => storyWorkspaceRepo.updateStoryByID(storyId, data),
     onSuccess: async (updated) => {
       if (userId) {
-        const key = queryKeys.user.stories(userId);
-        await queryClient.cancelQueries({ queryKey: key });
-        queryClient.setQueryData<StoryMetadata[]>(key, (stories) =>
-          patchOwnerStory(stories, updated),
-        );
+        await updateOwnerCaches(queryClient, userId, updated.id, updated);
       }
       queryClient.invalidateQueries({
         queryKey: queryKeys.workspace.all(userId!),
@@ -168,11 +221,7 @@ export function useUpdateStoryCover(userId: string | undefined) {
     }) => updateStoryCover(storyId, imageFile, previewUrl),
     onSuccess: async (updated) => {
       if (userId) {
-        const key = queryKeys.user.stories(userId);
-        await queryClient.cancelQueries({ queryKey: key });
-        queryClient.setQueryData<StoryMetadata[]>(key, (stories) =>
-          patchOwnerStory(stories, updated),
-        );
+        await updateOwnerCaches(queryClient, userId, updated.id, updated);
       }
       queryClient.invalidateQueries({
         queryKey: queryKeys.workspace.all(userId!),

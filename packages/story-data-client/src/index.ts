@@ -61,6 +61,7 @@ export {
 export {
   storyWorkspaceRepo,
   StoryWorkspaceRepo,
+  type OwnerStoryPage,
 } from "./repos/StoryWorkspaceRepo";
 export {
   storyWorldbuildingRepo,

@@ -35,6 +35,12 @@ interface ApiStoryListItem extends ApiStory {
     ratingsCount: number;
 }
 
+export interface OwnerStoryPage {
+    stories: StoryMetadata[];
+    summary: { totalStories: number; publishedCount: number; totalViews: number };
+    nextCursor?: string;
+}
+
 interface ApiChapter {
     id: string;
     storyId: string;
@@ -94,7 +100,28 @@ export class StoryWorkspaceRepo {
     }
     async getUserStories(): Promise<StoryMetadata[]> {
         const stories = await this.request<ApiStoryListItem[]>("GET", "/v1/stories");
-        return stories.map((api) => ({
+        return stories.map((api) => this.storyListItem(api));
+    }
+    async getUserStoriesPage(limit = 24, cursor?: string): Promise<OwnerStoryPage> {
+        const params = new URLSearchParams({ limit: String(limit) });
+        if (cursor) params.set("cursor", cursor);
+        const page = await this.request<ApiStoryListItem[] | { stories: ApiStoryListItem[]; summary: OwnerStoryPage["summary"]; nextCursor?: string }>("GET", `/v1/stories?${params}`);
+        // Older story-data versions ignore pagination parameters and return
+        // the legacy array. Keep the shelf usable during a staggered deploy.
+        if (Array.isArray(page)) {
+            return {
+                stories: page.map((api) => this.storyListItem(api)),
+                summary: {
+                    totalStories: page.length,
+                    publishedCount: page.filter((api) => api.published).length,
+                    totalViews: page.reduce((total, api) => total + api.views, 0),
+                },
+            };
+        }
+        return { ...page, stories: page.stories.map((api) => this.storyListItem(api)) };
+    }
+    private storyListItem(api: ApiStoryListItem): StoryMetadata {
+        return {
             ...this.story(api),
             chapterCount: api.chapterCount,
             wordCount: api.wordCount,
@@ -102,7 +129,7 @@ export class StoryWorkspaceRepo {
             likes: api.likeCount,
             averageRating: api.averageRating,
             ratingsCount: api.ratingsCount,
-        }));
+        };
     }
     async createStory(input: Omit<ApiStory, "id" | "ownerId" | "revision" | "createdAt" | "updatedAt">): Promise<Story> {
         return this.story(await this.request<ApiStory>("POST", "/v1/stories", input));
