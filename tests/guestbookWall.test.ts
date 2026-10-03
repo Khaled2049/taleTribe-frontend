@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { dayLabel, groupByDay } from "@/lib/guestbookWall";
+import { dayLabel, feedView, groupByDay } from "@/lib/guestbookWall";
 
 const now = new Date(2026, 9, 3, 15, 0);
 const at = (day: number, hour: number) => ({
@@ -46,5 +46,26 @@ describe("guestbook wall day grouping", () => {
     expect(groupByDay(entries, new Date(2026, 9, 4, 0, 5))[0]).toMatchObject({
       label: "Yesterday",
     });
+  });
+});
+
+describe("guestbook feed view", () => {
+  it("shows placeholders until there is data or a failure", () => {
+    expect(feedView({ hasData: false, isError: false, count: 0 })).toBe(
+      "loading",
+    );
+  });
+
+  it("never calls a failed first load an empty wall", () => {
+    expect(feedView({ hasData: false, isError: true, count: 0 })).toBe("error");
+  });
+
+  it("claims an empty wall only once the server has said so", () => {
+    expect(feedView({ hasData: true, isError: false, count: 0 })).toBe("empty");
+  });
+
+  it("keeps posts on screen when a refresh fails", () => {
+    expect(feedView({ hasData: true, isError: true, count: 4 })).toBe("posts");
+    expect(feedView({ hasData: true, isError: false, count: 4 })).toBe("posts");
   });
 });

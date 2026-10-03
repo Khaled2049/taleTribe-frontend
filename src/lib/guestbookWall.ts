@@ -70,3 +70,23 @@ export function groupByDay<T extends { createdAt: GuestbookDate }>(
   }
   return rows;
 }
+
+export type FeedView = "loading" | "error" | "empty" | "posts";
+
+/**
+ * What the feed body shows. A failed first load is an error, never the empty
+ * state: "your wall is quiet" is a claim about the data, and there is none.
+ * A failed refresh keeps the posts it already has.
+ */
+export function feedView({
+  hasData,
+  isError,
+  count,
+}: {
+  hasData: boolean;
+  isError: boolean;
+  count: number;
+}): FeedView {
+  if (!hasData) return isError ? "error" : "loading";
+  return count === 0 ? "empty" : "posts";
+}

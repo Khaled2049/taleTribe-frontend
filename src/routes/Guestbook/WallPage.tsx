@@ -2,6 +2,11 @@ import { useGuestbookMutations } from "@/hooks/queries/useGuestbookMutations";
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Loader, User } from "lucide-react";
+import { FeedError } from "@/components/guestbook/FeedStatus";
+import {
+  WallFeedSkeleton,
+  WallPageSkeleton,
+} from "@/components/guestbook/WallSkeleton";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { getCurrentUid, useAuthIdentity } from "@novelsync/platform-auth";
@@ -18,7 +23,7 @@ import FollowingSidebar, {
   FollowingDrawer,
 } from "@/components/guestbook/FollowingSidebar";
 import { normalizePolicy } from "@/lib/guestbookPolicy";
-import { groupByDay } from "@/lib/guestbookWall";
+import { feedView, groupByDay } from "@/lib/guestbookWall";
 import { IGuestbookEntry } from "@novelsync/story-data-client";
 import { rateLimitMessage } from "@/lib/rateLimitError";
 import { useWallFeed, WallFilter } from "@/hooks/queries/useGuestbookQueries";
@@ -49,12 +54,14 @@ const WallPage: React.FC = () => {
 
   const {
     data,
-    isLoading,
     isError,
     error: loadError,
+    isFetching,
+    isRefetching,
     isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
+    refetch,
   } = useWallFeed(identityReady ? identity.uid : null, filter);
 
   const mutations = useGuestbookMutations(user?.uid ?? null);
@@ -64,6 +71,7 @@ const WallPage: React.FC = () => {
     [data],
   );
   // "Today" and "Yesterday" go stale at midnight, so the day is a dependency.
+  const view = feedView({ hasData: !!data, isError, count: entries.length });
   const today = new Date().toDateString();
   const rows = useMemo(
     () => groupByDay(entries, new Date(today)),
@@ -100,11 +108,7 @@ const WallPage: React.FC = () => {
   };
 
   if (!identityReady || (authLoading && !identity.uid)) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-ns-bg">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ns-accent"></div>
-      </div>
-    );
+    return <WallPageSkeleton title="Your guestbook" />;
   }
 
   if (!identity.uid) {
@@ -184,21 +188,28 @@ const WallPage: React.FC = () => {
               </div>
             )}
 
-            <WallFilters filter={filter} onChange={setFilter} />
+            <WallFilters
+              filter={filter}
+              onChange={setFilter}
+              onRefresh={() => refetch()}
+              isRefreshing={isRefetching && !isFetchingNextPage}
+            />
 
             {isError && (
-              <div className="px-4 py-3 bg-ns-accent-subtle border border-ns-destructive/20 rounded-ns font-ui text-sm text-ns-destructive">
-                {loadError instanceof Error
-                  ? loadError.message
-                  : "Failed to load your wall. Please refresh and try again."}
-              </div>
+              <FeedError
+                message={
+                  loadError instanceof Error
+                    ? loadError.message
+                    : "Failed to load your wall."
+                }
+                onRetry={() => refetch()}
+                isRetrying={isFetching}
+              />
             )}
 
-            {isLoading ? (
-              <div className="flex justify-center items-center py-16">
-                <Loader className="animate-spin text-ns-accent" size={28} />
-              </div>
-            ) : entries.length === 0 ? (
+            {view === "loading" ? (
+              <WallFeedSkeleton />
+            ) : view === "error" ? null : view === "empty" ? (
               <div className="text-center py-16">
                 <p className="font-heading text-title font-light text-ns-ink-muted mb-1">
                   Your wall is quiet

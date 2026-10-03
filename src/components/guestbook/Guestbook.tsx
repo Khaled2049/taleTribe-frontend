@@ -6,6 +6,9 @@ import { IGuestbookEntry } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
 import { rateLimitMessage } from "@/lib/rateLimitError";
 import WallPostCard from "./WallPostCard";
+import { FeedError, FeedRefreshButton } from "./FeedStatus";
+import { WallFeedSkeleton } from "./WallSkeleton";
+import { feedView } from "@/lib/guestbookWall";
 import SignGuestbookForm from "./SignGuestbookForm";
 import { GuestbookPolicyContext } from "./guestbookPolicyContext";
 import {
@@ -52,12 +55,14 @@ const Guestbook: React.FC<GuestbookProps> = ({
 
   const {
     data,
-    isLoading,
     isError,
     error: loadError,
+    isFetching,
+    isRefetching,
     isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
+    refetch,
   } = useGuestbookEntries(ownerId, viewerId);
 
   const mutations = useGuestbookMutations(viewerId);
@@ -73,6 +78,7 @@ const Guestbook: React.FC<GuestbookProps> = ({
     [canPost, policy, closedReason],
   );
   const totalCount = data?.pages[0]?.totalCount;
+  const view = feedView({ hasData: !!data, isError, count: entries.length });
 
   const { ref: loadMoreRef, inView } = useInView({
     threshold: 0,
@@ -148,18 +154,22 @@ const Guestbook: React.FC<GuestbookProps> = ({
           </div>
         )}
         {isError && (
-          <div className="mb-4 px-4 py-3 bg-ns-accent-subtle border border-ns-destructive/20 rounded-ns font-ui text-sm text-ns-destructive">
-            {loadError instanceof Error
-              ? loadError.message
-              : "Failed to load the guestbook. Please refresh and try again."}
+          <div className="mb-4">
+            <FeedError
+              message={
+                loadError instanceof Error
+                  ? loadError.message
+                  : "Failed to load the guestbook."
+              }
+              onRetry={() => refetch()}
+              isRetrying={isFetching}
+            />
           </div>
         )}
 
-        {isLoading ? (
-          <div className="flex justify-center items-center py-16">
-            <Loader className="animate-spin text-ns-accent" size={28} />
-          </div>
-        ) : entries.length === 0 ? (
+        {view === "loading" ? (
+          <WallFeedSkeleton />
+        ) : view === "error" ? null : view === "empty" ? (
           <div className="text-center py-16">
             <p className="font-heading text-title font-light text-ns-ink-muted mb-1">
               Guestbook is empty
@@ -179,6 +189,10 @@ const Guestbook: React.FC<GuestbookProps> = ({
                 Guestbook entries
               </span>
               <span className="flex-1 h-px bg-ns-border" />
+              <FeedRefreshButton
+                onRefresh={() => refetch()}
+                isRefreshing={isRefetching && !isFetchingNextPage}
+              />
             </div>
 
             <div className="flex flex-col gap-3.5">
