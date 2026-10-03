@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { IClub } from "@/types/IClub";
 import {
+  clubListView,
   filterClubs,
   withClubFirst,
   withMembership,
@@ -40,6 +41,36 @@ describe("filterClubs", () => {
 
   it("returns nothing when no field matches", () => {
     expect(filterClubs(clubs, "zzz")).toEqual([]);
+  });
+});
+
+describe("clubListView", () => {
+  it("is loading until the first answer arrives", () => {
+    expect(clubListView({ data: undefined, isError: false }, 0, "")).toBe(
+      "loading",
+    );
+  });
+
+  it("reports a failed first load as an error, not an empty list", () => {
+    expect(clubListView({ data: undefined, isError: true }, 0, "")).toBe(
+      "error",
+    );
+  });
+
+  it("keeps showing held rows when a refresh fails", () => {
+    expect(clubListView({ data: [club("a")], isError: true }, 1, "")).toBe(
+      "rows",
+    );
+  });
+
+  it("is empty only when the server returned no clubs", () => {
+    expect(clubListView({ data: [], isError: false }, 0, "  ")).toBe("empty");
+  });
+
+  it("distinguishes a search with no matches from an empty list", () => {
+    expect(clubListView({ data: [club("a")], isError: false }, 0, "zzz")).toBe(
+      "no-matches",
+    );
   });
 });
 

@@ -16,6 +16,7 @@ import {
   useBookClubs,
 } from "@/hooks/queries/useBookClubQueries";
 import {
+  clubListView,
   filterClubs,
   withClubFirst,
   withMembership,
@@ -24,10 +25,31 @@ import {
 
 const NO_CLUBS: IClub[] = [];
 
+const SKELETON_NAME_WIDTHS = ["w-2/5", "w-3/5", "w-1/3", "w-1/2", "w-2/3"];
+
+// Mirrors BookClubCard's padding and line height so the rows that replace it
+// land where these were.
+const ClubRowsSkeleton = () => (
+  <div role="status" aria-label="Loading book clubs" className="animate-pulse">
+    {SKELETON_NAME_WIDTHS.map((width, index) => (
+      <div
+        key={index}
+        className="flex items-center gap-3 sm:gap-5 pl-4 sm:pl-6 py-3 sm:py-3.5 border-b border-neutral-200 dark:border-neutral-800"
+      >
+        <div className="flex-1 min-w-0 h-7 flex items-center">
+          <div className={`h-4 ${width} bg-neutral-200 dark:bg-neutral-800`} />
+        </div>
+        <div className="h-7 w-14 shrink-0 bg-neutral-200 dark:bg-neutral-800" />
+      </div>
+    ))}
+  </div>
+);
+
 const BookClubs = () => {
   const { user } = useAuthContext();
 
-  const { data: bookClubs = NO_CLUBS } = useBookClubs();
+  const clubsQuery = useBookClubs();
+  const bookClubs = clubsQuery.data ?? NO_CLUBS;
   const patchClubs = useBookClubListCache();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -44,6 +66,15 @@ const BookClubs = () => {
   const filteredClubs = useMemo(
     () => filterClubs(bookClubs, searchQuery),
     [bookClubs, searchQuery],
+  );
+  const listView = clubListView(
+    {
+      data: clubsQuery.data,
+      // A retry in flight shows the skeleton again rather than a dead button.
+      isError: clubsQuery.isError && !clubsQuery.isFetching,
+    },
+    filteredClubs.length,
+    searchQuery,
   );
 
   const handleCreateClub = async (newClub: IClub) => {
@@ -271,7 +302,24 @@ const BookClubs = () => {
         <div className="mt-10 mb-0 border-t border-neutral-900 dark:border-neutral-100 opacity-100" />
 
         {/* Club list */}
-        {filteredClubs.length > 0 ? (
+        {listView === "loading" ? (
+          <ClubRowsSkeleton />
+        ) : listView === "error" ? (
+          <div className="py-28 text-center" role="alert">
+            <p className="font-heading italic text-3xl text-neutral-300 dark:text-neutral-700 mb-6">
+              The clubs didn’t load.
+            </p>
+            <p className="font-body text-sm text-neutral-400 dark:text-neutral-600 mb-10">
+              Check your connection and try again.
+            </p>
+            <button
+              onClick={() => void clubsQuery.refetch()}
+              className="font-ui text-[11px] font-bold tracking-[0.14em] uppercase px-7 py-3 border border-neutral-900 dark:border-white text-neutral-900 dark:text-white hover:bg-neutral-900 hover:text-white dark:hover:bg-white dark:hover:text-neutral-900 transition-colors duration-200"
+            >
+              Try Again
+            </button>
+          </div>
+        ) : listView === "rows" ? (
           <div>
             {filteredClubs.map((club: IClub, index) => (
               <BookClubCard
@@ -287,7 +335,7 @@ const BookClubs = () => {
               />
             ))}
           </div>
-        ) : searchQuery ? (
+        ) : listView === "no-matches" ? (
           <div className="py-28 text-center">
             <p className="font-heading italic text-3xl text-neutral-300 dark:text-neutral-700 mb-6">
               No matches.
