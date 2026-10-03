@@ -159,7 +159,8 @@ export function SimpleEditor() {
   // Editor instance for header
   const [editor, setEditor] = useState<Editor | null>(null);
   const editorBridge = useEditorBridge();
-  const persistedRevisionRef = useRef<number | undefined>(undefined);
+  const chapterBaseRef = useRef<Chapter | null>(null);
+  const storyBaseRef = useRef<Story | null>(null);
   const chapterTitleRef = useRef("");
   const dirtyRef = useRef(false);
   const flushAndWaitRef = useRef<() => Promise<number | undefined>>(
@@ -311,6 +312,7 @@ export function SimpleEditor() {
   // restore a title or publish state this session already changed.
   const replaceStory = useCallback(
     (saved: Story) => {
+      storyBaseRef.current = saved;
       actions.replaceStory(saved);
       if (uid) {
         queryClient.setQueryData(
@@ -322,52 +324,43 @@ export function SimpleEditor() {
     [actions, queryClient, uid],
   );
 
-  // Save function that will be passed to useAutosave
+  const adoptChapter = useCallback((chapter: Chapter | null) => {
+    chapterBaseRef.current = chapter;
+  }, []);
+
   const performSave = useCallback(
     async (content: string) => {
-      let persistedRevision = state.currentChapter?.revision;
-      if (!state.story) {
-        throw new Error("No story selected");
-      }
-
-      // Save chapter
-      if (state.currentChapter) {
+      if (!storyBaseRef.current) throw new Error("No story selected");
+      const base = chapterBaseRef.current;
+      if (base) {
         const savedChapter = await storyWorkspaceRepo.updateChapter(
-          state.story,
-          state.currentChapter,
-          state.chapterTitle,
+          storyBaseRef.current,
+          base,
+          chapterTitleRef.current,
           content,
         );
-
-        // Update chapter in list with new content and word count. `content`
-        // MUST be included — otherwise the in-memory chapters cache keeps the
-        // old text and switching back to this chapter shows stale content
-        // (Firestore is correct, only the cache is stale).
-        actions.updateChapterInList(state.currentChapter.id, {
-          ...savedChapter,
-        });
+        if (chapterBaseRef.current?.id === savedChapter.id) {
+          chapterBaseRef.current = savedChapter;
+        }
+        actions.updateChapterInList(savedChapter.id, { ...savedChapter });
         cacheChapter(savedChapter);
-        persistedRevision = savedChapter.revision;
-        persistedRevisionRef.current = persistedRevision;
         bridgeRegistrationRef.current?.revisionChanged();
       }
 
-      // Only update story metadata if it changed (optimization)
-      if (state.metadataChanged) {
-        const savedStory = await storyWorkspaceRepo.updateStory({
-          ...state.story,
-          title: state.storyTitle,
-          description: state.storyDescription,
-        });
-        replaceStory(savedStory);
+      const story = storyBaseRef.current;
+      if (story && state.metadataChanged) {
+        replaceStory(
+          await storyWorkspaceRepo.updateStory({
+            ...story,
+            title: state.storyTitle,
+            description: state.storyDescription,
+          }),
+        );
         actions.clearMetadataChanged();
       }
-      return persistedRevision;
+      return chapterBaseRef.current?.revision;
     },
     [
-      state.story,
-      state.currentChapter,
-      state.chapterTitle,
       state.storyTitle,
       state.storyDescription,
       state.metadataChanged,
@@ -392,7 +385,6 @@ export function SimpleEditor() {
     enabled: !!state.story && !!state.currentChapter,
   });
 
-  persistedRevisionRef.current = state.currentChapter?.revision;
   chapterTitleRef.current = state.chapterTitle;
   dirtyRef.current = isDirty;
   flushAndWaitRef.current = flushAndWait;
@@ -409,7 +401,7 @@ export function SimpleEditor() {
       chapterId: currentChapterId,
       editor,
       getChapterTitle: () => chapterTitleRef.current,
-      getPersistedRevision: () => persistedRevisionRef.current,
+      getPersistedRevision: () => chapterBaseRef.current?.revision,
       getDirty: () => dirtyRef.current,
       flushAndWait: () => flushAndWaitRef.current(),
     });
@@ -464,6 +456,7 @@ export function SimpleEditor() {
         );
         if (request !== openRequestRef.current) return;
         if (!chapter) throw new Error("This chapter no longer exists.");
+        adoptChapter(chapter);
         actions.selectChapter(chapter);
         prefetchNeighbours(chapter.id, state.chapters);
       } catch (error) {
@@ -476,7 +469,15 @@ export function SimpleEditor() {
         );
       }
     },
-    [actions, prefetchNeighbours, queryClient, state.chapters, storyId, uid],
+    [
+      actions,
+      adoptChapter,
+      prefetchNeighbours,
+      queryClient,
+      state.chapters,
+      storyId,
+      uid,
+    ],
   );
 
   useEffect(() => {
@@ -502,6 +503,8 @@ export function SimpleEditor() {
       });
       if (cancelled) return;
       if (result.status === "loaded") {
+        storyBaseRef.current = result.story;
+        adoptChapter(result.currentChapter);
         actions.loadStory(
           result.story,
           result.chapters,
@@ -529,6 +532,7 @@ export function SimpleEditor() {
     uid,
     loadAttempt,
     actions,
+    adoptChapter,
     queryClient,
     resetSaveState,
     prefetchNeighbours,
@@ -571,6 +575,7 @@ export function SimpleEditor() {
         nextChapterPosition(state.chapters),
       );
       openRequestRef.current += 1;
+      adoptChapter(newChapter);
       actions.addChapter(newChapter);
       cacheChapter(newChapter);
       resetSaveState();
@@ -601,7 +606,8 @@ export function SimpleEditor() {
   const splitPreview = `This creates ${splitChapterCount} chapters from your top-level headings. Each heading becomes a chapter title.`;
 
   const performSplit = async () => {
-    if (!state.story || !state.currentChapter || !editor) return;
+    const base = chapterBaseRef.current;
+    if (!state.story || !base || !editor) return;
     const sections = splitDocumentAtHeadings(editor);
     const validationError = splitValidationError(sections);
     if (validationError) {
@@ -612,8 +618,7 @@ export function SimpleEditor() {
     setIsSplitting(true);
     try {
       const [first, ...rest] = sections;
-      const firstTitle =
-        first.title || state.currentChapter.title || "Chapter 1";
+      const firstTitle = first.title || base.title || "Chapter 1";
       const basePosition = nextChapterPosition(state.chapters);
       const createdChapters: Chapter[] = [];
 
@@ -635,7 +640,7 @@ export function SimpleEditor() {
 
       const savedFirst = await storyWorkspaceRepo.updateChapter(
         state.story,
-        state.currentChapter,
+        base,
         firstTitle,
         first.html,
       );
@@ -644,6 +649,7 @@ export function SimpleEditor() {
       createdChapters.forEach(actions.addChapter);
       [savedFirst, ...createdChapters].forEach(cacheChapter);
       openRequestRef.current += 1;
+      adoptChapter(savedFirst);
       actions.selectChapter(savedFirst);
       editor.commands.setContent(first.html, { emitUpdate: false });
       resetSaveState();
@@ -666,6 +672,7 @@ export function SimpleEditor() {
             )
           : null;
         if (current) cacheChapter(current);
+        adoptChapter(current);
         actions.loadStory(state.story, chapters, current, {
           leftSidebarOpen: state.leftSidebarOpen,
         });
@@ -730,13 +737,15 @@ export function SimpleEditor() {
   const handlePublish = async () => {
     if (!state.story) return;
     if (!(await saveBeforeContinuing())) return;
+    const story = storyBaseRef.current;
+    if (!story) return;
 
-    const wasPublished = state.story.isPublished;
+    const wasPublished = story.isPublished;
 
     try {
       setIsPublishing(true);
       const savedStory = await storyWorkspaceRepo.updateStory({
-        ...state.story,
+        ...story,
         isPublished: !wasPublished,
       });
       replaceStory(savedStory);
@@ -759,6 +768,9 @@ export function SimpleEditor() {
   // Handle chapter selection with unsaved changes check
   const handleChapterSelect = useCallback(
     (chapter: ChapterSummary) => {
+      if (chapter.id === state.currentChapter?.id && !state.openingChapter) {
+        return;
+      }
       if (isDirty) {
         setPendingChapter(chapter);
         setUnsavedChangesDialogOpen(true);
@@ -767,7 +779,13 @@ export function SimpleEditor() {
         void openChapter(chapter);
       }
     },
-    [isDirty, openChapter, resetSaveState],
+    [
+      isDirty,
+      openChapter,
+      resetSaveState,
+      state.currentChapter?.id,
+      state.openingChapter,
+    ],
   );
 
   // Assistant chapter navigation is an explicit route-state contract. Consume
@@ -858,6 +876,7 @@ export function SimpleEditor() {
         state.currentChapter?.id === chapter.id
           ? state.chapters.find((item) => item.id !== chapter.id)
           : undefined;
+      if (chapterBaseRef.current?.id === chapter.id) adoptChapter(null);
       actions.deleteChapter(chapterToDelete);
       resetSaveState();
       if (next) void openChapter(next);

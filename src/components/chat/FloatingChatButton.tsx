@@ -113,6 +113,7 @@ export const FloatingChatButton: React.FC<FloatingChatButtonProps> = ({
         setDesktopOpen={setDesktopOpen}
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
+        restored={isLgUp && !openedByWriter}
       />
     </Suspense>
   );
