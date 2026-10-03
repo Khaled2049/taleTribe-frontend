@@ -161,7 +161,10 @@ export function SimpleEditor() {
   const editorBridge = useEditorBridge();
   const chapterBaseRef = useRef<Chapter | null>(null);
   const storyBaseRef = useRef<Story | null>(null);
+  const chapterDirtyRef = useRef(false);
+  const storyDirtyRef = useRef(false);
   const chapterTitleRef = useRef("");
+  const storyTitleRef = useRef("");
   const dirtyRef = useRef(false);
   const flushAndWaitRef = useRef<() => Promise<number | undefined>>(
     async () => undefined,
@@ -326,48 +329,52 @@ export function SimpleEditor() {
 
   const adoptChapter = useCallback((chapter: Chapter | null) => {
     chapterBaseRef.current = chapter;
+    chapterDirtyRef.current = false;
   }, []);
 
   const performSave = useCallback(
     async (content: string) => {
       if (!storyBaseRef.current) throw new Error("No story selected");
       const base = chapterBaseRef.current;
-      if (base) {
-        const savedChapter = await storyWorkspaceRepo.updateChapter(
-          storyBaseRef.current,
-          base,
-          chapterTitleRef.current,
-          content,
-        );
-        if (chapterBaseRef.current?.id === savedChapter.id) {
-          chapterBaseRef.current = savedChapter;
+      if (base && chapterDirtyRef.current) {
+        chapterDirtyRef.current = false;
+        try {
+          const savedChapter = await storyWorkspaceRepo.updateChapter(
+            storyBaseRef.current,
+            base,
+            chapterTitleRef.current,
+            content,
+          );
+          if (chapterBaseRef.current?.id === savedChapter.id) {
+            chapterBaseRef.current = savedChapter;
+          }
+          actions.updateChapterInList(savedChapter.id, { ...savedChapter });
+          cacheChapter(savedChapter);
+          bridgeRegistrationRef.current?.revisionChanged();
+        } catch (error) {
+          chapterDirtyRef.current = true;
+          throw error;
         }
-        actions.updateChapterInList(savedChapter.id, { ...savedChapter });
-        cacheChapter(savedChapter);
-        bridgeRegistrationRef.current?.revisionChanged();
       }
 
       const story = storyBaseRef.current;
-      if (story && state.metadataChanged) {
-        replaceStory(
-          await storyWorkspaceRepo.updateStory({
-            ...story,
-            title: state.storyTitle,
-            description: state.storyDescription,
-          }),
-        );
-        actions.clearMetadataChanged();
+      if (story && storyDirtyRef.current) {
+        storyDirtyRef.current = false;
+        try {
+          replaceStory(
+            await storyWorkspaceRepo.updateStory({
+              ...story,
+              title: storyTitleRef.current,
+            }),
+          );
+        } catch (error) {
+          storyDirtyRef.current = true;
+          throw error;
+        }
       }
       return chapterBaseRef.current?.revision;
     },
-    [
-      state.storyTitle,
-      state.storyDescription,
-      state.metadataChanged,
-      actions,
-      cacheChapter,
-      replaceStory,
-    ],
+    [actions, cacheChapter, replaceStory],
   );
 
   // Initialize autosave hook
@@ -382,10 +389,11 @@ export function SimpleEditor() {
   } = useAutosave({
     onSave: performSave,
     debounceMs: 3000,
-    enabled: !!state.story && !!state.currentChapter,
+    enabled: !!state.story,
   });
 
   chapterTitleRef.current = state.chapterTitle;
+  storyTitleRef.current = state.storyTitle;
   dirtyRef.current = isDirty;
   flushAndWaitRef.current = flushAndWait;
   const currentStoryId = state.story?.id;
@@ -504,6 +512,7 @@ export function SimpleEditor() {
       if (cancelled) return;
       if (result.status === "loaded") {
         storyBaseRef.current = result.story;
+        storyDirtyRef.current = false;
         adoptChapter(result.currentChapter);
         actions.loadStory(
           result.story,
@@ -840,14 +849,24 @@ export function SimpleEditor() {
   };
 
   const handleMetadataChange = () => {
-    if (state.currentChapter) {
-      triggerSave(editor?.getHTML() ?? state.currentChapter.content);
-    }
+    triggerSave(editor?.getHTML() ?? state.currentChapter?.content ?? "");
   };
 
-  // Handle save from editor (autosave trigger)
   const handleEditorSave = (content: string) => {
+    chapterDirtyRef.current = true;
     triggerSave(content);
+  };
+
+  const handleStoryTitleChange = (title: string) => {
+    storyTitleRef.current = title;
+    storyDirtyRef.current = title !== storyBaseRef.current?.title;
+    actions.updateStoryTitle(title);
+  };
+
+  const handleChapterTitleChange = (title: string) => {
+    chapterTitleRef.current = title;
+    if (title !== chapterBaseRef.current?.title) chapterDirtyRef.current = true;
+    actions.updateChapterTitle(title);
   };
 
   // Handle chapter delete request
@@ -1318,8 +1337,8 @@ export function SimpleEditor() {
     onChapterSelect: handleChapterSelect,
     onChapterDelete: handleChapterDeleteRequest,
     onChapterAdd: handleNewChapter,
-    onStoryTitleChange: actions.updateStoryTitle,
-    onChapterTitleChange: actions.updateChapterTitle,
+    onStoryTitleChange: handleStoryTitleChange,
+    onChapterTitleChange: handleChapterTitleChange,
     onMetadataChange: handleMetadataChange,
     singleDocument: isSingleDocument,
     outline,
@@ -1507,7 +1526,7 @@ export function SimpleEditor() {
                           onChoiceInserted={() => {
                             setInteractivePanelMode("continuation");
                             setCoWriteTurnCount((n) => n + 1);
-                            triggerSave(editor.getHTML());
+                            handleEditorSave(editor.getHTML());
                           }}
                         />
                       </Suspense>
