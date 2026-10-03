@@ -25,7 +25,29 @@ describe("assistant navigation", () => {
         { kind: "character", entityId: "char-1" },
         null,
       ),
-    ).toEqual({ to: "/create/story-1/characters", label: "Open characters" });
+    ).toEqual({
+      to: "/create/story-1/characters?character=char-1",
+      label: "Open character",
+    });
+    expect(
+      toolNavigationTarget(
+        "story-1",
+        "get_story_entity",
+        { kind: "place", entity_id: "place 1" },
+        null,
+      ),
+    ).toEqual({
+      to: "/create/story-1/places?place=place+1",
+      label: "Open place",
+    });
+    expect(
+      toolNavigationTarget(
+        "story-1",
+        "get_story_entity",
+        { kind: "plot", entity_id: "plot-1" },
+        null,
+      ),
+    ).toEqual({ to: "/create/story-1/plot", label: "Open plot" });
     expect(
       toolNavigationTarget(
         "story-1",

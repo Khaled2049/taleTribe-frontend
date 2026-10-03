@@ -35,6 +35,11 @@ function entitySegment(kind: string | null): string | null {
   }
 }
 
+const SELECTION_PARAMS: Record<string, string | undefined> = {
+  characters: "character",
+  places: "place",
+};
+
 /** Resolve only routes backed by an explicit workspace selection contract. */
 export function toolNavigationTarget(
   storyId: string,
@@ -63,10 +68,20 @@ export function toolNavigationTarget(
       stringAt(args, "kind") ?? stringAt(result, "kind"),
     );
     if (segment) {
-      return {
-        to: `${root}/${segment}`,
-        label: segment === "plot" ? "Open plot" : `Open ${segment}`,
-      };
+      const label = segment === "plot" ? "Open plot" : `Open ${segment}`;
+      const param = SELECTION_PARAMS[segment];
+      const entityId =
+        toolName === "get_story_entity"
+          ? (stringAt(args, "entityId", "entity_id") ??
+            stringAt(result, "entityId", "entity_id", "id"))
+          : null;
+      if (param && entityId) {
+        return {
+          to: `${root}/${segment}?${new URLSearchParams({ [param]: entityId })}`,
+          label: segment === "characters" ? "Open character" : "Open place",
+        };
+      }
+      return { to: `${root}/${segment}`, label };
     }
   }
   return null;
