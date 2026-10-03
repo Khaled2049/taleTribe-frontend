@@ -27,6 +27,7 @@ import { prefetchBookClub } from "./routes/BookClub/prefetchBookClub";
 import { getCurrentUid, useAuthIdentity } from "@novelsync/platform-auth";
 import { prefetchGuestbookRoute } from "./routes/Guestbook/prefetchGuestbook";
 import { StoriesPageSkeleton } from "./routes/Story/StoriesPageSkeleton";
+import { WallPageSkeleton } from "./components/guestbook/WallSkeleton";
 import { StoryDetailSkeleton } from "./routes/Story/StoryDetailSkeleton";
 import {
   EditorCanvasSkeleton,
@@ -94,7 +95,13 @@ const HomeRoute = () => {
   if (identity.loading || identity.uid !== getCurrentUid()) {
     return <LoadingFallback />;
   }
-  if (identity.uid) return <WallPage />;
+  if (identity.uid) {
+    return (
+      <Suspense fallback={<WallPageSkeleton title="Your guestbook" />}>
+        <WallPage />
+      </Suspense>
+    );
+  }
   if (loading) return <LoadingFallback />;
 
   return <Root />;
@@ -270,7 +277,7 @@ const router = createBrowserRouter([
           return null;
         },
         element: (
-          <Suspense fallback={<LoadingFallback />}>
+          <Suspense fallback={<WallPageSkeleton title="Your guestbook" />}>
             <WallPage />
           </Suspense>
         ),
@@ -304,7 +311,7 @@ const router = createBrowserRouter([
           return null;
         },
         element: (
-          <Suspense fallback={<LoadingFallback />}>
+          <Suspense fallback={<WallPageSkeleton />}>
             <GuestbookPage />
           </Suspense>
         ),

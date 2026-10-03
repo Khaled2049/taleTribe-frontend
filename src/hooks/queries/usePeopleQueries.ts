@@ -33,7 +33,10 @@ export const useUserSearch = (term: string) =>
  */
 export const FOLLOWING_SIDEBAR_LIMIT = 50;
 
-export const useFollowingProfiles = (uids: readonly string[]) => {
+export const useFollowingProfiles = (
+  uids: readonly string[],
+  enabled = true,
+) => {
   const capped = uids.slice(0, FOLLOWING_SIDEBAR_LIMIT);
 
   return useQuery<PublicProfile[]>({
@@ -45,7 +48,7 @@ export const useFollowingProfiles = (uids: readonly string[]) => {
         .map((uid) => map.get(uid)!)
         .sort((a, b) => a.username.localeCompare(b.username));
     },
-    enabled: capped.length > 0,
+    enabled: enabled && capped.length > 0,
     staleTime: FIVE_MINUTES,
   });
 };

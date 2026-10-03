@@ -1,9 +1,12 @@
 import React from "react";
 import { WallFilter } from "@/hooks/queries/useGuestbookQueries";
+import { FeedRefreshButton } from "./FeedStatus";
 
 interface WallFiltersProps {
   filter: WallFilter;
   onChange: (filter: WallFilter) => void;
+  onRefresh: () => void;
+  isRefreshing: boolean;
 }
 
 const FILTERS: { value: WallFilter; label: string }[] = [
@@ -17,7 +20,12 @@ const FILTERS: { value: WallFilter; label: string }[] = [
  * refiltering an already-loaded page — every filter still resolves to
  * `created_at DESC` server-side, so this never reorders or ranks anything.
  */
-const WallFilters: React.FC<WallFiltersProps> = ({ filter, onChange }) => {
+const WallFilters: React.FC<WallFiltersProps> = ({
+  filter,
+  onChange,
+  onRefresh,
+  isRefreshing,
+}) => {
   return (
     <div className="flex items-center gap-2 flex-wrap">
       {FILTERS.map((f) => {
@@ -27,6 +35,7 @@ const WallFilters: React.FC<WallFiltersProps> = ({ filter, onChange }) => {
             key={f.value}
             type="button"
             onClick={() => onChange(f.value)}
+            aria-pressed={active}
             className={`font-ui text-[13px] font-semibold px-[14px] py-[7px] rounded-full border transition-colors ${
               active
                 ? "bg-ns-accent border-ns-accent text-white"
@@ -39,8 +48,9 @@ const WallFilters: React.FC<WallFiltersProps> = ({ filter, onChange }) => {
       })}
       {/* Wrapped onto its own line the caption would otherwise sit flush right
           under the pills, reading as a stray fragment rather than a note. */}
-      <span className="w-full sm:w-auto sm:ml-auto font-ui text-[12.5px] text-ns-ink-muted">
+      <span className="w-full sm:w-auto sm:ml-auto flex items-center gap-3 font-ui text-[12.5px] text-ns-ink-muted">
         Newest first
+        <FeedRefreshButton onRefresh={onRefresh} isRefreshing={isRefreshing} />
       </span>
     </div>
   );

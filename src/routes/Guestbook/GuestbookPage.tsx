@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { UserX } from "lucide-react";
+import { UserX, WifiOff } from "lucide-react";
+import { WallPageSkeleton } from "@/components/guestbook/WallSkeleton";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { getCurrentUid, useAuthIdentity } from "@novelsync/platform-auth";
 import { guestbookEntriesQuery } from "@/hooks/queries/useGuestbookQueries";
 import {
@@ -27,12 +29,19 @@ const GuestbookPage: React.FC = () => {
   const user =
     identityReady && hydratedUser?.uid === identity.uid ? hydratedUser : null;
   const isSelf = !!identity.uid && identity.uid === userId;
+  const { isLgUp } = useBreakpoint();
   const [entryCount, setEntryCount] = useState<number | undefined>(undefined);
   const queryClient = useQueryClient();
 
   // Profile and first entries start in parallel. An unresolved identity must
   // not cache an anonymous page that immediately needs an authenticated reread.
-  const { data: profile, isLoading: profileLoading } = usePublicProfile(userId);
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileFailed,
+    isFetching: profileFetching,
+    refetch: retryProfile,
+  } = usePublicProfile(userId);
   const { data: guestbookPolicy } = useGuestbookPolicy(userId);
   useEffect(() => {
     if (!userId || isSelf || !identityReady) return;
@@ -42,11 +51,7 @@ const GuestbookPage: React.FC = () => {
   }, [queryClient, userId, isSelf, identityReady, identity.uid]);
 
   if (!identityReady || (authLoading && !identity.uid)) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-ns-bg">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ns-accent"></div>
-      </div>
-    );
+    return <WallPageSkeleton />;
   }
 
   // Your own wall now lives at the combined feed — this page is only for
@@ -56,9 +61,30 @@ const GuestbookPage: React.FC = () => {
   }
 
   if (profileLoading) {
+    return <WallPageSkeleton />;
+  }
+
+  // A missing profile resolves to null; only that means "doesn't exist".
+  if (profileFailed && !profile) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-ns-bg">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ns-accent"></div>
+      <div className="min-h-screen bg-ns-bg flex items-center justify-center px-4">
+        <div className="text-center" role="alert">
+          <WifiOff className="w-10 h-10 mx-auto mb-4 text-ns-ink-muted opacity-40" />
+          <h1 className="font-heading text-xl text-ns-ink mb-2">
+            Couldn't load this guestbook
+          </h1>
+          <p className="font-body text-sm text-ns-ink-secondary mb-6">
+            Something went wrong on the way. The guestbook may still be there.
+          </p>
+          <button
+            type="button"
+            onClick={() => retryProfile()}
+            disabled={profileFetching}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface hover:text-ns-ink transition-all duration-150 disabled:opacity-50"
+          >
+            {profileFetching ? "Retrying…" : "Try again"}
+          </button>
+        </div>
       </div>
     );
   }
@@ -110,19 +136,24 @@ const GuestbookPage: React.FC = () => {
 
         {/* empty:hidden — FollowingDrawer renders nothing when you follow
             nobody, and a bare row would still contribute its margin. */}
-        <div className="lg:hidden mb-5 flex items-center gap-3 empty:hidden">
-          <FollowingDrawer
-            following={user?.following ?? []}
-            activeUserId={userId}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_268px] gap-8 lg:gap-10 items-start">
-          <div className="hidden lg:block lg:sticky lg:top-6">
-            <FollowingSidebar
+        {!isLgUp && (
+          <div className="lg:hidden mb-5 flex items-center gap-3 empty:hidden">
+            <FollowingDrawer
               following={user?.following ?? []}
               activeUserId={userId}
             />
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_268px] gap-8 lg:gap-10 items-start">
+          {/* The column stays so the grid keeps its three tracks. */}
+          <div className="hidden lg:block lg:sticky lg:top-6">
+            {isLgUp && (
+              <FollowingSidebar
+                following={user?.following ?? []}
+                activeUserId={userId}
+              />
+            )}
           </div>
 
           <div className="min-w-0">
