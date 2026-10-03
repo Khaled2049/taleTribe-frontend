@@ -1,9 +1,9 @@
+import { useGuestbookMutations } from "@/hooks/queries/useGuestbookMutations";
 import React, { useEffect, useState } from "react";
 import { Loader } from "lucide-react";
 import { useInView } from "react-intersection-observer";
 import { IGuestbookEntry } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
-import { guestbookRepo } from "@novelsync/story-data-client";
 import { rateLimitMessage } from "@/lib/rateLimitError";
 import WallPostCard from "./WallPostCard";
 import SignGuestbookForm from "./SignGuestbookForm";
@@ -13,14 +13,11 @@ import {
   normalizePolicy,
   wallClosedReason,
 } from "@/lib/guestbookPolicy";
-import {
-  useGuestbookEntries,
-  useRemoveEntryFromCache,
-  useAddEntryToCache,
-} from "@/hooks/queries/useGuestbookQueries";
+import { useGuestbookEntries } from "@/hooks/queries/useGuestbookQueries";
 
 interface GuestbookProps {
   ownerId: string;
+  viewerId: string | null;
   currentUser: IUser | null;
   /** From the owner's public profile; absent reads as "everyone". */
   guestbookPolicy?: unknown;
@@ -31,6 +28,7 @@ interface GuestbookProps {
 
 const Guestbook: React.FC<GuestbookProps> = ({
   ownerId,
+  viewerId,
   currentUser,
   guestbookPolicy,
   ownerUsername,
@@ -38,8 +36,6 @@ const Guestbook: React.FC<GuestbookProps> = ({
 }) => {
   const [isSigning, setIsSigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const viewerId = currentUser?.uid ?? null;
 
   // Both sides of the relationship come off the viewer's own user document —
   // the owner's is unreadable. This only decides whether to render the form;
@@ -64,8 +60,7 @@ const Guestbook: React.FC<GuestbookProps> = ({
     hasNextPage,
   } = useGuestbookEntries(ownerId, viewerId);
 
-  const removeEntry = useRemoveEntryFromCache(ownerId, viewerId);
-  const addEntry = useAddEntryToCache(ownerId, viewerId);
+  const mutations = useGuestbookMutations(viewerId);
 
   const entries = data?.pages.flatMap((p) => p.entries) ?? [];
   const totalCount = data?.pages[0]?.totalCount;
@@ -91,10 +86,11 @@ const Guestbook: React.FC<GuestbookProps> = ({
     setIsSigning(true);
     setError(null);
 
-    const tempId = `temp-${Date.now()}`;
+    const tempId = `temp-${crypto.randomUUID()}`;
     const optimisticEntry: IGuestbookEntry = {
       id: tempId,
       ownerId,
+      ownerUsername,
       content,
       createdAt: new Date(),
       authorUsername: currentUser.username || "unknown",
@@ -105,15 +101,10 @@ const Guestbook: React.FC<GuestbookProps> = ({
       userVote: null,
     };
 
-    addEntry(optimisticEntry);
-
     try {
-      const created = await guestbookRepo.createEntry(ownerId, content);
-      removeEntry(tempId);
-      addEntry(created);
+      await mutations.createEntry(optimisticEntry);
     } catch (err) {
       console.error("Error signing guestbook:", err);
-      removeEntry(tempId);
       setError(
         rateLimitMessage(
           err,
@@ -187,7 +178,6 @@ const Guestbook: React.FC<GuestbookProps> = ({
                   key={entry.id}
                   entry={entry}
                   currentUser={currentUser}
-                  onEntryDeleted={removeEntry}
                   contextLineOverride={`left a note on ${ownerUsername}'s page`}
                 />
               ))}

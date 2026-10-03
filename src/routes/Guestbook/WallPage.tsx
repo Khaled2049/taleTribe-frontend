@@ -1,7 +1,9 @@
+import { useGuestbookMutations } from "@/hooks/queries/useGuestbookMutations";
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Loader, User } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { getCurrentUid, useAuthIdentity } from "@novelsync/platform-auth";
 import { useGuestbookPolicy } from "@/hooks/queries/useUserQueries";
 import { SEOHead } from "@/components/seo/SEOHead";
 import GuestbookTabs from "@/components/guestbook/GuestbookTabs";
@@ -16,14 +18,9 @@ import FollowingSidebar, {
 } from "@/components/guestbook/FollowingSidebar";
 import { normalizePolicy } from "@/lib/guestbookPolicy";
 import { groupByDay } from "@/lib/guestbookWall";
-import { guestbookRepo, IGuestbookEntry } from "@novelsync/story-data-client";
+import { IGuestbookEntry } from "@novelsync/story-data-client";
 import { rateLimitMessage } from "@/lib/rateLimitError";
-import {
-  useWallFeed,
-  useAddWallEntryToCache,
-  useRemoveWallEntryFromCache,
-  WallFilter,
-} from "@/hooks/queries/useGuestbookQueries";
+import { useWallFeed, WallFilter } from "@/hooks/queries/useGuestbookQueries";
 
 /**
  * The personal, strictly reverse-chronological combined feed: your own
@@ -32,7 +29,13 @@ import {
  * the signed-in user's home base in the social area.
  */
 const WallPage: React.FC = () => {
-  const { user, loading: authLoading } = useAuthContext();
+  const { user: hydratedUser, loading: authLoading } = useAuthContext();
+  const identity = useAuthIdentity();
+  const identityReady = !identity.loading && identity.uid === getCurrentUid();
+  // Authentication identifies the viewer before the app profile/follow graph
+  // is ready. A previous account's hydrated user must never accompany this uid.
+  const user =
+    identityReady && hydratedUser?.uid === identity.uid ? hydratedUser : null;
   const [filter, setFilter] = useState<WallFilter>("all");
   const [isPosting, setIsPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
@@ -48,23 +51,17 @@ const WallPage: React.FC = () => {
     isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
-  } = useWallFeed(user?.uid, filter);
+  } = useWallFeed(identityReady ? identity.uid : null, filter);
 
-  const addEntry = useAddWallEntryToCache(user?.uid, filter);
-  const removeEntry = useRemoveWallEntryFromCache(user?.uid, filter);
+  const mutations = useGuestbookMutations(user?.uid ?? null);
 
   const entries = data?.pages.flatMap((p) => p.entries) ?? [];
-  // A note you just posted only belongs in "all"/"mine" — the "following"
-  // filter is scoped to other people's authorship, so it never gains a row
-  // from your own post; that cache is left alone rather than corrupted.
-  const canShowOwnPostHere = filter !== "following";
-
   const handlePost = async (content: string) => {
     if (!user) return;
     setIsPosting(true);
     setPostError(null);
 
-    const tempId = `temp-${Date.now()}`;
+    const tempId = `temp-${crypto.randomUUID()}`;
     const optimisticEntry: IGuestbookEntry = {
       id: tempId,
       ownerId: user.uid,
@@ -78,17 +75,10 @@ const WallPage: React.FC = () => {
       downvoteCount: 0,
       userVote: null,
     };
-    if (canShowOwnPostHere) addEntry(optimisticEntry);
-
     try {
-      const created = await guestbookRepo.createEntry(user.uid, content);
-      if (canShowOwnPostHere) {
-        removeEntry(tempId);
-        addEntry({ ...created, ownerUsername: user.username || undefined });
-      }
+      await mutations.createEntry(optimisticEntry);
     } catch (err) {
       console.error("Error posting to wall:", err);
-      if (canShowOwnPostHere) removeEntry(tempId);
       setPostError(rateLimitMessage(err, "Failed to post. Please try again."));
       throw err;
     } finally {
@@ -96,7 +86,7 @@ const WallPage: React.FC = () => {
     }
   };
 
-  if (authLoading) {
+  if (!identityReady || (authLoading && !identity.uid)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-ns-bg">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ns-accent"></div>
@@ -104,7 +94,7 @@ const WallPage: React.FC = () => {
     );
   }
 
-  if (!user) {
+  if (!identity.uid) {
     return (
       <div className="min-h-screen bg-ns-bg flex items-center justify-center px-4">
         <div className="bg-ns-elevated border border-ns-border rounded-ns-xl p-8 max-w-sm w-full text-center">
@@ -143,28 +133,39 @@ const WallPage: React.FC = () => {
         {/* Mobile toolbar: the people list on the left as a drawer trigger, the
             one setting on the right as a menu. Together they stand in for both
             desktop sidebars, which is what lets the feed start at the top. */}
-        <div className="lg:hidden mb-5 flex items-center gap-3">
-          <FollowingDrawer following={user.following ?? []} />
-          <GuestbookAccessMenu
-            userId={user.uid}
-            current={guestbookPolicy}
-            isLoading={policyLoading}
-            className="ml-auto"
-          />
-        </div>
+        {user && (
+          <div className="lg:hidden mb-5 flex items-center gap-3">
+            <FollowingDrawer following={user.following ?? []} />
+            <GuestbookAccessMenu
+              userId={user.uid}
+              current={guestbookPolicy}
+              isLoading={policyLoading}
+              className="ml-auto"
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[248px_minmax(0,1fr)_268px] lg:gap-10">
-          <div className="hidden lg:sticky lg:top-6 lg:col-start-1 lg:row-start-1 lg:block">
-            <FollowingSidebar following={user.following ?? []} />
-          </div>
+          {user && (
+            <div className="hidden lg:sticky lg:top-6 lg:col-start-1 lg:row-start-1 lg:block">
+              <FollowingSidebar following={user.following ?? []} />
+            </div>
+          )}
 
           <div className="flex min-w-0 flex-col gap-[22px] lg:col-start-2 lg:row-start-1">
-            <WallComposer
-              currentUser={user}
-              policy={normalizePolicy(guestbookPolicy)}
-              onSubmit={handlePost}
-              isLoading={isPosting}
-            />
+            {user ? (
+              <WallComposer
+                currentUser={user}
+                policy={normalizePolicy(guestbookPolicy)}
+                onSubmit={handlePost}
+                isLoading={isPosting}
+              />
+            ) : authLoading ? (
+              <div
+                className="h-28 animate-pulse rounded-ns-lg border border-ns-border bg-ns-surface"
+                aria-label="Loading composer"
+              />
+            ) : null}
 
             {postError && (
               <div className="px-4 py-3 bg-ns-accent-subtle border border-ns-destructive/20 rounded-ns font-ui text-sm text-ns-destructive">
@@ -217,7 +218,6 @@ const WallPage: React.FC = () => {
                       key={row.entry.id}
                       entry={row.entry}
                       currentUser={user}
-                      onEntryDeleted={removeEntry}
                     />
                   ),
                 )}
@@ -243,14 +243,19 @@ const WallPage: React.FC = () => {
 
           {/* Desktop only — on mobile this column's one interactive element is
               the toolbar menu above, so the card would just repeat it. */}
-          <div className="hidden lg:sticky lg:top-6 lg:col-start-3 lg:row-start-1 lg:flex lg:flex-col lg:gap-5">
-            <GuestbookAccessCard
-              userId={user.uid}
-              current={guestbookPolicy}
-              isLoading={policyLoading}
-            />
-            <NewMembers viewerId={user.uid} following={user.following ?? []} />
-          </div>
+          {user && (
+            <div className="hidden lg:sticky lg:top-6 lg:col-start-3 lg:row-start-1 lg:flex lg:flex-col lg:gap-5">
+              <GuestbookAccessCard
+                userId={user.uid}
+                current={guestbookPolicy}
+                isLoading={policyLoading}
+              />
+              <NewMembers
+                viewerId={user.uid}
+                following={user.following ?? []}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

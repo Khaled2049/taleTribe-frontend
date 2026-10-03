@@ -4,6 +4,7 @@ import { configureStoryData } from "@novelsync/story-data-client";
 import { auth, getAuthContext, getCurrentUid } from "@novelsync/platform-auth";
 import { appQueryClient } from "@/lib/queryClient";
 import { useAuthStore } from "@/stores";
+import { prefetchGuestbookRoute } from "@/routes/Guestbook/prefetchGuestbook";
 
 // Runs at module load, not in an effect: a repo call can be issued by a route
 // loader before any component mounts, and an unconfigured client throws.
@@ -28,8 +29,13 @@ export const AuthBootstrap = () => {
         // The assistant transcript lives in the panel's local runtime and is
         // torn down with it on sign-out, so only cached queries need clearing.
         appQueryClient.clear();
+        useAuthStore.setState({ user: null, loading: !!nextUid });
       }
       previousUidRef.current = nextUid;
+
+      // Identity is known before profile/follow hydration. Request the first
+      // feed page while those reads and the lazy route chunk are in flight.
+      void prefetchGuestbookRoute(window.location.pathname, nextUid);
 
       try {
         await useAuthStore.getState().hydrateUser(firebaseUser);

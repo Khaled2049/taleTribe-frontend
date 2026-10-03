@@ -3,7 +3,7 @@ import { ChevronUp, Trash2, MoreHorizontal } from "lucide-react";
 import { Link } from "react-router-dom";
 import { IGuestbookEntry } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
-import { guestbookRepo } from "@novelsync/story-data-client";
+import { useGuestbookMutations } from "@/hooks/queries/useGuestbookMutations";
 import GuestbookReplies from "./GuestbookReplies";
 import {
   DropdownMenu,
@@ -19,7 +19,6 @@ import { toast } from "sonner";
 interface WallPostCardProps {
   entry: IGuestbookEntry;
   currentUser: IUser | null;
-  onEntryDeleted?: (entryId: string) => void;
   /**
    * Skips the computed postContextLine in favor of a fixed line. The classic
    * single-owner wall (visiting someone else's guestbook) doesn't have
@@ -41,48 +40,39 @@ interface WallPostCardProps {
 const WallPostCard: React.FC<WallPostCardProps> = ({
   entry,
   currentUser,
-  onEntryDeleted,
   contextLineOverride,
 }) => {
-  const [replyCount, setReplyCount] = useState(entry.commentCount || 0);
+  const mutations = useGuestbookMutations(currentUser?.uid ?? null);
+  const replyCount = entry.commentCount || 0;
   const [repliesExpanded, setRepliesExpanded] = useState(false);
-  const [upvoteCount, setUpvoteCount] = useState(entry.upvoteCount || 0);
-  const [hasUpvoted, setHasUpvoted] = useState(entry.userVote === "up");
+  const upvoteCount = entry.upvoteCount || 0;
+  const hasUpvoted = entry.userVote === "up";
+  const isTemporary = entry.id.startsWith("temp-");
   const [isVoting, setIsVoting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleUpvote = async () => {
-    if (!currentUser || isVoting) return;
+    if (!currentUser || isVoting || isTemporary) return;
 
-    const wasUpvoted = hasUpvoted;
-    const previousCount = upvoteCount;
-    setHasUpvoted(!wasUpvoted);
-    setUpvoteCount(wasUpvoted ? previousCount - 1 : previousCount + 1);
     setIsVoting(true);
 
     try {
-      await guestbookRepo.voteEntry(
-        entry.ownerId,
-        entry.id,
-        wasUpvoted ? null : "up",
-      );
+      await mutations.voteEntry(entry);
     } catch (error) {
       console.error("Error voting on guestbook entry:", error);
-      setHasUpvoted(wasUpvoted);
-      setUpvoteCount(previousCount);
+      toast.error("Failed to vote. Please try again.");
     } finally {
       setIsVoting(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!canDelete) return;
+    if (!canDelete || isTemporary) return;
 
     setIsDeleting(true);
     try {
-      await guestbookRepo.deleteEntry(entry.ownerId, entry.id);
-      onEntryDeleted?.(entry.id);
+      await mutations.deleteEntry(entry);
       toast.success("Entry deleted");
     } catch (error) {
       console.error("Error deleting guestbook entry:", error);
@@ -129,7 +119,7 @@ const WallPostCard: React.FC<WallPostCardProps> = ({
       return;
     }
     if (window.getSelection()?.toString()) return;
-    setRepliesExpanded(true);
+    if (!isTemporary) setRepliesExpanded(true);
   };
 
   return (
@@ -170,7 +160,7 @@ const WallPostCard: React.FC<WallPostCardProps> = ({
           <DropdownMenu>
             <DropdownMenuTrigger
               className="flex-shrink-0 p-1.5 rounded-full text-ns-ink-muted hover:text-ns-ink hover:bg-ns-surface-hover transition-colors focus:outline-none disabled:opacity-40"
-              disabled={isDeleting}
+              disabled={isDeleting || isTemporary}
               aria-label="Entry options"
             >
               <MoreHorizontal size={18} />
@@ -199,7 +189,7 @@ const WallPostCard: React.FC<WallPostCardProps> = ({
             e.stopPropagation();
             handleUpvote();
           }}
-          disabled={!currentUser || isVoting}
+          disabled={!currentUser || isVoting || isTemporary}
           className={`flex items-center gap-1.5 px-3 py-[7px] rounded-full font-ui text-[13.5px] font-bold transition-colors disabled:opacity-50 ${
             hasUpvoted
               ? "bg-ns-accent-subtle text-ns-accent"
@@ -216,6 +206,7 @@ const WallPostCard: React.FC<WallPostCardProps> = ({
             setRepliesExpanded((prev) => !prev);
           }}
           className="px-3 py-[7px] rounded-full font-ui text-[13.5px] font-semibold text-ns-ink-secondary hover:bg-ns-surface-hover transition-colors"
+          disabled={isTemporary}
           aria-expanded={repliesExpanded}
         >
           {replyLabel}
@@ -229,7 +220,6 @@ const WallPostCard: React.FC<WallPostCardProps> = ({
             entryId={entry.id}
             entryAuthorId={entry.authorId}
             currentUser={currentUser}
-            onReplyCountChange={setReplyCount}
             onHide={() => setRepliesExpanded(false)}
           />
         </div>

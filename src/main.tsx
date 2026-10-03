@@ -23,7 +23,8 @@ import {
   prefetchReaderChapter,
   prefetchStoryDetail,
 } from "./routes/Story/prefetchStoryDetail";
-import { getCurrentUid } from "@novelsync/platform-auth";
+import { getCurrentUid, useAuthIdentity } from "@novelsync/platform-auth";
+import { prefetchGuestbookRoute } from "./routes/Guestbook/prefetchGuestbook";
 import { StoriesPageSkeleton } from "./routes/Story/StoriesPageSkeleton";
 import { StoryDetailSkeleton } from "./routes/Story/StoryDetailSkeleton";
 import {
@@ -85,11 +86,17 @@ const LoadingFallback = () => (
  * page so returning members never see the marketing page flash on screen.
  */
 const HomeRoute = () => {
-  const { user, loading } = useAuthContext();
+  const { loading } = useAuthContext();
+  const identity = useAuthIdentity();
 
+  // The SDK may switch accounts before the React identity snapshot updates.
+  if (identity.loading || identity.uid !== getCurrentUid()) {
+    return <LoadingFallback />;
+  }
+  if (identity.uid) return <WallPage />;
   if (loading) return <LoadingFallback />;
 
-  return user ? <WallPage /> : <Root />;
+  return <Root />;
 };
 
 const router = createBrowserRouter([
@@ -100,6 +107,11 @@ const router = createBrowserRouter([
     children: [
       {
         path: "/",
+        loader: () => {
+          const uid = getCurrentUid();
+          if (uid) void prefetchGuestbookRoute("/", uid);
+          return null;
+        },
         element: (
           <Suspense fallback={<LoadingFallback />}>
             <HomeRoute />
@@ -246,6 +258,11 @@ const router = createBrowserRouter([
       // intent should not depend on knowing that.
       {
         path: "/guestbook",
+        loader: () => {
+          const uid = getCurrentUid();
+          if (uid) void prefetchGuestbookRoute("/guestbook", uid);
+          return null;
+        },
         element: (
           <Suspense fallback={<LoadingFallback />}>
             <WallPage />
@@ -273,6 +290,13 @@ const router = createBrowserRouter([
       },
       {
         path: "/guestbook/:userId",
+        loader: ({ params }) => {
+          const uid = getCurrentUid();
+          if (params.userId && uid) {
+            void prefetchGuestbookRoute(`/guestbook/${params.userId}`, uid);
+          }
+          return null;
+        },
         element: (
           <Suspense fallback={<LoadingFallback />}>
             <GuestbookPage />

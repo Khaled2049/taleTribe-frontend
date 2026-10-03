@@ -8,6 +8,8 @@ import NavLinks from "./navbar/NavLinks";
 import { APP_NAME } from "../../config/seo";
 import { WEB3_ENABLED } from "../../config/featureFlags";
 import { Web3Boundary } from "@/contexts/Web3Boundary";
+import { getCurrentUid } from "@novelsync/platform-auth";
+import { prefetchGuestbookRoute } from "@/routes/Guestbook/prefetchGuestbook";
 
 const WalletConnectButton = lazy(() =>
   import("../web3/WalletConnectButton").then((m) => ({
@@ -37,6 +39,11 @@ const Navbar = () => {
     setIsMobileMenuOpen(false);
   };
 
+  const prefetchHome = () => {
+    const uid = getCurrentUid();
+    if (uid) void prefetchGuestbookRoute("/", uid);
+  };
+
   return (
     <>
       <header className="relative z-50 w-full shrink-0 border-b border-ns-border bg-ns-bg/95 backdrop-blur-md transition-colors duration-300">
@@ -54,6 +61,9 @@ const Navbar = () => {
         >
           <Link
             to="/"
+            onMouseEnter={prefetchHome}
+            onFocus={prefetchHome}
+            onTouchStart={prefetchHome}
             className="group inline-flex shrink-0 items-center gap-3 text-ns-ink no-underline"
             aria-label={`${APP_NAME} home`}
           >
