@@ -366,7 +366,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   // getHTML() rarely matches the stored string byte-for-byte, so reacting to
   // initialContent would call setContent mid-typing and reset the caret. Keying on chapterId avoids that. The
   // `false` arg keeps the swap out of the undo history.
-  const loadedChapterIdRef = useRef<string | undefined>(undefined);
+  const loadedChapterIdRef = useRef<string | undefined>(chapterId);
   useEffect(() => {
     if (editor && chapterId !== loadedChapterIdRef.current) {
       editor.commands.setContent(initialContent, { emitUpdate: false });
