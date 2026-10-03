@@ -21,6 +21,7 @@ export const NavbarWrapper = () => {
       {!isEditorPage && <Navbar />}
 
       <main
+        data-app-scroll
         className={`w-full min-h-0 flex-1 bg-ns-bg ${
           isEditorPage || isAuthPage ? "overflow-hidden" : "overflow-y-auto"
         }`}

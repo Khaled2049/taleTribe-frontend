@@ -9,6 +9,7 @@ import WallPostCard from "./WallPostCard";
 import { FeedError, FeedRefreshButton } from "./FeedStatus";
 import { WallFeedSkeleton } from "./WallSkeleton";
 import { feedView } from "@/lib/guestbookWall";
+import { appScrollContainer } from "@/lib/scrollContainer";
 import SignGuestbookForm from "./SignGuestbookForm";
 import { GuestbookPolicyContext } from "./guestbookPolicyContext";
 import {
@@ -80,7 +81,12 @@ const Guestbook: React.FC<GuestbookProps> = ({
   const totalCount = data?.pages[0]?.totalCount;
   const view = feedView({ hasData: !!data, isError, count: entries.length });
 
+  // The margin only widens the root's box. Against the viewport it is clipped
+  // by the scrolling <main>, so the next page would not start early.
+  const [scrollRoot, setScrollRoot] = useState<Element | null>(null);
+  useEffect(() => setScrollRoot(appScrollContainer()), []);
   const { ref: loadMoreRef, inView } = useInView({
+    root: scrollRoot,
     threshold: 0,
     rootMargin: "200px",
   });
