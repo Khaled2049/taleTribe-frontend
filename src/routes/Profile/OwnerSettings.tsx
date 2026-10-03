@@ -4,7 +4,8 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useUserWalletAddress } from "@/hooks/useUserWalletAddress";
 import { useEarnings } from "@/hooks/useEarnings";
-import { useUserStoriesWithEarnings } from "@/hooks/queries/useStoryQueries";
+import { useOwnerStories } from "@/hooks/queries/ownerStories";
+import { useStoryEarnings } from "@/hooks/queries/useStoryEarnings";
 import { useMcpAccess } from "@/hooks/useMcpAccess";
 import {
   useAiCreditsQuery,
@@ -171,7 +172,11 @@ const OwnerSettings: React.FC<{ identity: React.ReactNode }> = ({
     setWalletAddress: setSavedWalletAddress,
   } = useUserWalletAddress(user?.uid);
   const { lifetimeEarnings, fetchLifetimeEarnings } = useEarnings();
-  const { data: stories = [] } = useUserStoriesWithEarnings(user?.uid);
+  const { data: stories = [] } = useOwnerStories(user?.uid);
+  const storyEarnings = useStoryEarnings(
+    user?.uid,
+    stories.map((story) => story.id),
+  );
 
   // Live wallet state
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
@@ -251,9 +256,13 @@ const OwnerSettings: React.FC<{ identity: React.ReactNode }> = ({
     parseFloat(lifetimeEarnings.eth) > 0 ||
     parseFloat(lifetimeEarnings.usdc) > 0;
 
-  const earningStories = stories.filter(
-    (s) => parseFloat(s.earnings.eth) > 0 || parseFloat(s.earnings.usdc) > 0,
-  );
+  const earningStories = stories.flatMap((story) => {
+    const earnings = storyEarnings.data?.[story.id];
+    return earnings &&
+      (parseFloat(earnings.eth) > 0 || parseFloat(earnings.usdc) > 0)
+      ? [{ ...story, earnings }]
+      : [];
+  });
 
   return (
     <div className="mt-12 grid animate-ns-fade-in gap-12 lg:grid-cols-2 lg:gap-16">

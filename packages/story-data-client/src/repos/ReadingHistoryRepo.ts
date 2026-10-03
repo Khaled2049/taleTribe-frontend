@@ -35,13 +35,8 @@ class ReadingHistoryRepo {
         }
     }
     async getRecentlyRead(limit = 5): Promise<IReadingProgress[]> {
-        try {
-            const items = await this.request<ApiHistoryItem[]>("GET", `/v1/me/reading-history?limit=${limit}`);
-            return items.map((item) => ({ storyId: item.storyId, chapterId: item.chapterId, chapterIndex: item.chapterIndex, scrollPercent: item.scrollPercent, lastReadAt: item.lastReadAt ? new Date(item.lastReadAt) : new Date(), storyTitle: item.storyTitle, storyAuthor: item.storyAuthor, coverImageUrl: item.coverImageUrl, thumbnailUrl: item.thumbnailUrl, totalChapters: item.totalChapters }));
-        } catch (error) {
-            console.warn("Unable to load reading history:", error);
-            return [];
-        }
+        const items = await this.request<ApiHistoryItem[]>("GET", `/v1/me/reading-history?limit=${limit}`);
+        return items.map((item) => ({ storyId: item.storyId, chapterId: item.chapterId, chapterIndex: item.chapterIndex, scrollPercent: item.scrollPercent, lastReadAt: item.lastReadAt ? new Date(item.lastReadAt) : new Date(), storyTitle: item.storyTitle, storyAuthor: item.storyAuthor, coverImageUrl: item.coverImageUrl, thumbnailUrl: item.thumbnailUrl, totalChapters: item.totalChapters }));
     }
     async clearAllProgress(): Promise<void> { await this.request<void>("DELETE", "/v1/me/reading-history"); }
 }

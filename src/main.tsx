@@ -27,6 +27,8 @@ import { prefetchBookClub } from "./routes/BookClub/prefetchBookClub";
 import { getCurrentUid, useAuthIdentity } from "@novelsync/platform-auth";
 import { prefetchGuestbookRoute } from "./routes/Guestbook/prefetchGuestbook";
 import { StoriesPageSkeleton } from "./routes/Story/StoriesPageSkeleton";
+import { UserStoriesSkeleton } from "./routes/Story/UserStoriesSkeleton";
+import { prefetchUserStories } from "./routes/Story/prefetchUserStories";
 import { StoryDetailSkeleton } from "./routes/Story/StoryDetailSkeleton";
 import {
   EditorCanvasSkeleton,
@@ -398,12 +400,19 @@ const router = createBrowserRouter([
       },
       {
         path: "/user-stories",
+        loader: () => {
+          prefetchUserStories(getCurrentUid());
+          return null;
+        },
+        hydrateFallbackElement: <UserStoriesSkeleton />,
         element: (
-          <Suspense fallback={<LoadingFallback />}>
-            <Web3Boundary>
-              <UserStories />
-            </Web3Boundary>
-          </Suspense>
+          <RequireAuth>
+            <Suspense fallback={<UserStoriesSkeleton />}>
+              <Web3Boundary>
+                <UserStories />
+              </Web3Boundary>
+            </Suspense>
+          </RequireAuth>
         ),
       },
       {

@@ -70,6 +70,8 @@ export const queryKeys = {
       ["user", "profileNames", uids] as const,
   },
   earnings: {
+    owner: (uid: string, chainId: number, storyIds: readonly string[]) =>
+      ["earnings", "owner", uid, chainId, storyIds] as const,
     story: (storyId: string, chainId: number) =>
       ["earnings", "story", storyId, chainId] as const,
     lifetime: (walletAddress: string, chainId: number) =>

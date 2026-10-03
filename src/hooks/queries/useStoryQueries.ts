@@ -1,15 +1,33 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { usePublicClient } from "wagmi";
-import { formatEther, formatUnits } from "viem";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
-import {
-  tippingPlatformConfig,
-  ZERO_ADDRESS,
-} from "@/blockchain/tippingPlatform";
-import { USDC_ADDRESS } from "@/blockchain/tokens";
 import { auth } from "@novelsync/platform-auth";
 import { storageService } from "@/services/StorageService";
+import type { Story, StoryMetadata } from "@novelsync/story-data-client";
+
+function patchOwnerStory(
+  stories: StoryMetadata[] | undefined,
+  updated: Story,
+): StoryMetadata[] | undefined {
+  if (!stories) return stories;
+  return stories
+    .map((story) =>
+      story.id === updated.id
+        ? {
+            ...story,
+            ...updated,
+            // The single-story response does not contain list aggregates.
+            chapterCount: story.chapterCount,
+            wordCount: story.wordCount,
+            views: story.views,
+            likes: story.likes,
+            averageRating: story.averageRating,
+            ratingsCount: story.ratingsCount,
+          }
+        : story,
+    )
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+}
 
 async function updateStoryCover(
   storyId: string,
@@ -49,76 +67,6 @@ async function updateStoryCover(
   });
 }
 
-const toBigInt = (value: unknown): bigint => {
-  if (typeof value === "bigint") return value;
-  return 0n;
-};
-
-export type StoryWithEarnings = Awaited<
-  ReturnType<typeof storyWorkspaceRepo.getUserStories>
->[number] & {
-  earnings: {
-    eth: string;
-    usdc: string;
-  };
-};
-
-const NO_EARNINGS = { eth: "0", usdc: "0" } as const;
-
-/**
- * Fetches user's own stories and their on-chain earnings in one query.
- * Earnings are fetched in parallel (fixes the N+1 problem).
- *
- * Only `userId` gates the query. The shelf is primarily a list of the user's
- * writing, so it must not sit disabled — rendering as an empty list — while
- * wagmi settles; a story with no reachable chain simply reports zero earnings.
- */
-export function useUserStoriesWithEarnings(userId: string | undefined) {
-  const publicClient = usePublicClient();
-  const chainId = publicClient?.chain?.id;
-
-  return useQuery<StoryWithEarnings[]>({
-    // Include chainId so a network switch invalidates stale earnings data.
-    queryKey: [...queryKeys.user.stories(userId!), chainId] as const,
-    queryFn: async () => {
-      const storyList = await storyWorkspaceRepo.getUserStories();
-      if (!publicClient) {
-        return storyList.map((story) => ({ ...story, earnings: NO_EARNINGS }));
-      }
-      return Promise.all(
-        storyList.map(async (story) => {
-          const [ethRaw, usdcRaw] = await Promise.all([
-            publicClient
-              .readContract({
-                ...tippingPlatformConfig,
-                functionName: "storyEarnings",
-                args: [story.id, ZERO_ADDRESS],
-              })
-              .catch(() => 0n),
-            publicClient
-              .readContract({
-                ...tippingPlatformConfig,
-                functionName: "storyEarnings",
-                args: [story.id, USDC_ADDRESS as `0x${string}`],
-              })
-              .catch(() => 0n),
-          ]);
-
-          return {
-            ...story,
-            earnings: {
-              eth: formatEther(toBigInt(ethRaw)),
-              usdc: formatUnits(toBigInt(usdcRaw), 6),
-            },
-          };
-        }),
-      );
-    },
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 5,
-  });
-}
-
 // ─── Mutations ───────────────────────────────────────────────────────────────
 
 export function useDeleteStory(userId: string | undefined) {
@@ -126,10 +74,14 @@ export function useDeleteStory(userId: string | undefined) {
   return useMutation({
     mutationFn: (storyId: string) =>
       storyWorkspaceRepo.deleteStoryByID(storyId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.user.stories(userId!),
-      });
+    onSuccess: async (_result, storyId) => {
+      if (userId) {
+        const key = queryKeys.user.stories(userId);
+        await queryClient.cancelQueries({ queryKey: key });
+        queryClient.setQueryData<StoryMetadata[]>(key, (stories) =>
+          stories?.filter((story) => story.id !== storyId),
+        );
+      }
       queryClient.invalidateQueries({
         queryKey: queryKeys.workspace.all(userId!),
       });
@@ -151,10 +103,14 @@ export function useTogglePublishStory(userId: string | undefined) {
         isPublished: !story.isPublished,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.user.stories(userId!),
-      });
+    onSuccess: async (updated) => {
+      if (userId) {
+        const key = queryKeys.user.stories(userId);
+        await queryClient.cancelQueries({ queryKey: key });
+        queryClient.setQueryData<StoryMetadata[]>(key, (stories) =>
+          patchOwnerStory(stories, updated),
+        );
+      }
       queryClient.invalidateQueries({
         queryKey: queryKeys.workspace.all(userId!),
       });
@@ -183,10 +139,14 @@ export function useUpdateStoryMetadata(userId: string | undefined) {
         copyright?: string;
       };
     }) => storyWorkspaceRepo.updateStoryByID(storyId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.user.stories(userId!),
-      });
+    onSuccess: async (updated) => {
+      if (userId) {
+        const key = queryKeys.user.stories(userId);
+        await queryClient.cancelQueries({ queryKey: key });
+        queryClient.setQueryData<StoryMetadata[]>(key, (stories) =>
+          patchOwnerStory(stories, updated),
+        );
+      }
       queryClient.invalidateQueries({
         queryKey: queryKeys.workspace.all(userId!),
       });
@@ -206,10 +166,14 @@ export function useUpdateStoryCover(userId: string | undefined) {
       imageFile: File | null;
       previewUrl: string | null;
     }) => updateStoryCover(storyId, imageFile, previewUrl),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.user.stories(userId!),
-      });
+    onSuccess: async (updated) => {
+      if (userId) {
+        const key = queryKeys.user.stories(userId);
+        await queryClient.cancelQueries({ queryKey: key });
+        queryClient.setQueryData<StoryMetadata[]>(key, (stories) =>
+          patchOwnerStory(stories, updated),
+        );
+      }
       queryClient.invalidateQueries({
         queryKey: queryKeys.workspace.all(userId!),
       });

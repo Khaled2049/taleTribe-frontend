@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { disconnectWalletIfConnected } from "@/blockchain/disconnectWallet";
 import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
+import { prefetchUserStories } from "@/routes/Story/prefetchUserStories";
 
 import {
   User,
@@ -104,18 +105,21 @@ const UserDropdown = ({
       label: "My Shelf",
       to: "/user-stories",
       onClick: onClose,
+      prefetch: () => prefetchUserStories(user.uid),
     },
     {
       icon: Shield,
       label: "Privacy Policy",
       to: "/privacy-policy",
       onClick: onClose,
+      prefetch: undefined,
     },
     {
       icon: HelpCircle,
       label: "Help & Support",
       to: "/help",
       onClick: onClose,
+      prefetch: undefined,
     },
   ];
 
@@ -166,6 +170,9 @@ const UserDropdown = ({
               key={item.to}
               to={item.to}
               onClick={item.onClick}
+              onMouseEnter={item.prefetch}
+              onFocus={item.prefetch}
+              onTouchStart={item.prefetch}
               className="group relative flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-ns-surface transition-colors"
             >
               {/* accent bar slides in on hover */}
