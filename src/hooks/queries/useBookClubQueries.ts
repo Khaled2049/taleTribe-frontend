@@ -1,32 +1,49 @@
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
 import { bookClubRepo } from "@/routes/BookClub/bookClubRepo";
 import { IClub, IReadingProgress } from "@/types/IClub";
 
+// Other members' changes arrive only by refetch — story-data has no realtime
+// channel — so this stays short-lived and refreshes on focus. The viewer's own
+// writes do not wait for that: see useBookClubCache.
 export function useBookClub(clubId: string | undefined) {
+  return useQuery<IClub | null>({
+    queryKey: queryKeys.bookClubs.detail(clubId!),
+    queryFn: async () => (await bookClubRepo.getBookClub(clubId!)) ?? null,
+    enabled: !!clubId,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * Writes the outcome of a confirmed mutation into the cached club, in place of
+ * refetching it. Pass the club the server returned, or a function that applies
+ * the change when the server returned only the new entity or nothing.
+ */
+export function useBookClubCache(clubId: string) {
   const queryClient = useQueryClient();
-  const queryKey = queryKeys.bookClubs.detail(clubId!);
-  useEffect(() => {
-    const refresh = () => {
-      void queryClient.invalidateQueries({ queryKey });
+  return useCallback(
+    async (next: IClub | ((club: IClub) => IClub)) => {
+      const queryKey = queryKeys.bookClubs.detail(clubId);
+      // `exact` keeps this off the progress query, which shares the prefix.
+      // A club read that started before the write would otherwise land after
+      // this and put the old club back.
+      await queryClient.cancelQueries({ queryKey, exact: true });
+      queryClient.setQueryData<IClub | null>(queryKey, (club) => {
+        if (typeof next !== "function") return next;
+        return club ? next(club) : club;
+      });
       // The list is not on screen here, so it is only marked stale and
       // refetches when the reader goes back to it.
       void queryClient.invalidateQueries({
         queryKey: queryKeys.bookClubs.list(),
         refetchType: "none",
       });
-    };
-    window.addEventListener("book-club-changed", refresh);
-    return () => window.removeEventListener("book-club-changed", refresh);
-  }, [queryClient, queryKey]);
-  return useQuery<IClub | null>({
-    queryKey,
-    queryFn: async () => (await bookClubRepo.getBookClub(clubId!)) ?? null,
-    enabled: !!clubId,
-    staleTime: 15_000,
-    refetchOnWindowFocus: true,
-  });
+    },
+    [queryClient, clubId],
+  );
 }
 
 // Member progress is polled rather than pushed — story-data has no realtime

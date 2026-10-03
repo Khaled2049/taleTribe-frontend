@@ -53,20 +53,18 @@ export const clubInput = (club: IClub): ClubInput => ({
 });
 
 class BookClubRepo {
-  private async request<T>(
+  private request<T>(
     method: string,
     path: string,
     body?: unknown,
     required = false,
   ): Promise<T> {
-    const result = await request<T>(path, {
+    return request<T>(path, {
       method,
       body,
       auth: required ? "required" : "optional",
       label: "Book club request",
     });
-    if (method !== "GET") window.dispatchEvent(new Event("book-club-changed"));
-    return result;
   }
 
   createBookClub(club: IClub): Promise<IClub> {
@@ -140,7 +138,7 @@ class BookClubRepo {
       `/v1/book-clubs/${id}/prompts`,
       prompt,
       true,
-    ).then((x) => x.id);
+    );
   }
   addPromptResponse(
     id: string,
@@ -152,7 +150,7 @@ class BookClubRepo {
       `/v1/book-clubs/${id}/prompts/${promptId}/responses`,
       response,
       true,
-    ).then((x) => x.id);
+    );
   }
   createPoll(id: string, poll: PollInput) {
     return this.request<IPoll>(
@@ -160,7 +158,7 @@ class BookClubRepo {
       `/v1/book-clubs/${id}/polls`,
       poll,
       true,
-    ).then((x) => x.id);
+    );
   }
   voteOnPoll(id: string, pollId: string, _userId: string, optionIndex: number) {
     return this.request<void>(

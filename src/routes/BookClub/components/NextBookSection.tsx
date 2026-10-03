@@ -18,6 +18,8 @@ import {
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { BookPicker } from "@/components/common/BookPicker";
 import { RATE_LIMITS } from "@/config/rateLimits";
+import { useBookClubCache } from "@/hooks/queries/useBookClubQueries";
+import { withPoll, withPollClosed, withVote } from "@/lib/bookClubDetail";
 
 interface NextBookSectionProps {
   club: IClub;
@@ -33,6 +35,7 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
   isCreator,
 }) => {
   const { user } = useAuthContext();
+  const updateClubCache = useBookClubCache(club.id);
   const polls = club.polls || [];
   const activePolls = polls.filter((p) => p.isActive);
   const pastPolls = polls.filter((p) => !p.isActive);
@@ -109,12 +112,13 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
 
     setIsSaving(true);
     try {
-      await bookClubRepo.createPoll(club.id, {
+      const created = await bookClubRepo.createPoll(club.id, {
         type: "book-selection",
         question: newPoll.question.trim(),
         options: newPoll.options,
         ...(newPoll.endDate ? { endDate: newPoll.endDate } : {}),
       });
+      await updateClubCache((cached) => withPoll(cached, created));
 
       setIsCreatingPoll(false);
       setNewPoll({
@@ -139,6 +143,9 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
 
     try {
       await bookClubRepo.voteOnPoll(club.id, pollId, user.uid, optionIndex);
+      await updateClubCache((cached) =>
+        withVote(cached, pollId, user.uid, optionIndex),
+      );
     } catch (err) {
       console.error("Error voting:", err);
       setOptimisticVotes((prev) => {
@@ -157,8 +164,12 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
     if (!adoptTarget) return;
     setIsAdopting(true);
     try {
-      await bookClubRepo.updateBookOfTheMonth(club.id, adoptTarget.book);
-      await bookClubRepo.closePoll(club.id, adoptTarget.poll.id);
+      const pollId = adoptTarget.poll.id;
+      await updateClubCache(
+        await bookClubRepo.updateBookOfTheMonth(club.id, adoptTarget.book),
+      );
+      await bookClubRepo.closePoll(club.id, pollId);
+      await updateClubCache((cached) => withPollClosed(cached, pollId));
       setAdoptTarget(null);
     } catch (err) {
       console.error("Error adopting winner:", err);

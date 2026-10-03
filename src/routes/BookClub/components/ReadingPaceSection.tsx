@@ -10,6 +10,7 @@ import { bookClubRepo } from "../bookClubRepo";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/queries/queryKeys";
+import { useBookClubCache } from "@/hooks/queries/useBookClubQueries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,6 +91,7 @@ const ReadingPaceSection: React.FC<ReadingPaceSectionProps> = ({
   membersById,
 }) => {
   const { user } = useAuthContext();
+  const updateClubCache = useBookClubCache(club.id);
   const queryClient = useQueryClient();
   const schedule = club.readingSchedule;
 
@@ -211,11 +213,11 @@ const ReadingPaceSection: React.FC<ReadingPaceSectionProps> = ({
         totalChapters: editTotalChapters,
       };
 
-      if (schedule) {
-        await bookClubRepo.updateReadingSchedule(club.id, newSchedule);
-      } else {
-        await bookClubRepo.createReadingSchedule(club.id, newSchedule);
-      }
+      await updateClubCache(
+        schedule
+          ? await bookClubRepo.updateReadingSchedule(club.id, newSchedule)
+          : await bookClubRepo.createReadingSchedule(club.id, newSchedule),
+      );
 
       setIsEditing(false);
     } catch (err) {

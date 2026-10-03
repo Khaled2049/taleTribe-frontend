@@ -16,6 +16,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { RATE_LIMITS } from "@/config/rateLimits";
+import { useBookClubCache } from "@/hooks/queries/useBookClubQueries";
+import { withPrompt, withPromptResponse } from "@/lib/bookClubDetail";
 
 interface DiscussionSectionProps {
   club: IClub;
@@ -34,6 +36,7 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
   userCurrentChapter = 0,
 }) => {
   const { user } = useAuthContext();
+  const updateClubCache = useBookClubCache(club.id);
   const prompts = club.discussionPrompts || [];
 
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
@@ -94,11 +97,12 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
 
     setIsSaving(true);
     try {
-      await bookClubRepo.createDiscussionPrompt(club.id, {
+      const created = await bookClubRepo.createDiscussionPrompt(club.id, {
         chapterNumber: newPrompt.chapterNumber,
         question: newPrompt.question.trim(),
         description: newPrompt.description.trim(),
       });
+      await updateClubCache((cached) => withPrompt(cached, created));
 
       setIsCreatingPrompt(false);
       setNewPrompt({ chapterNumber: 1, question: "", description: "" });
@@ -139,9 +143,12 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
 
     setIsSaving(true);
     try {
-      await bookClubRepo.addPromptResponse(club.id, promptId, {
+      const saved = await bookClubRepo.addPromptResponse(club.id, promptId, {
         content: newResponse.trim(),
       });
+      await updateClubCache((cached) =>
+        withPromptResponse(cached, promptId, saved),
+      );
 
       setNewResponse("");
       setComposerFor(null);
