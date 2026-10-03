@@ -52,10 +52,31 @@ async function readUserDoc(uid: string) {
   return getDoc(doc(firestore, "users", uid));
 }
 
+async function refreshFollowFeeds(viewerId: string) {
+  const filters = {
+    predicate: (query: { queryKey: readonly unknown[] }) => {
+      const [domain, scope, filter, viewer] = query.queryKey;
+      return (
+        domain === "guestbook" &&
+        scope === "wall" &&
+        (filter === "all" || filter === "following") &&
+        viewer === viewerId
+      );
+    },
+  };
+  // Discard reads started with the old relationship, including initial loads.
+  // Active feeds refresh now; inactive filters refresh on their next visit.
+  await appQueryClient.cancelQueries(filters);
+  await appQueryClient.invalidateQueries(filters);
+}
+
+let hydrateRun = 0;
+
 export const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
   loading: true,
   hydrateUser: async (firebaseUser) => {
+    const run = ++hydrateRun;
     if (!firebaseUser) {
       set({ user: null, loading: false });
       return;
@@ -97,74 +118,105 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         };
 
         let hydratedUser = newUser;
-        const profileUsername = seedUsername;
-        if (profileUsername) {
+        // Neither relationship lookup nor the personal feed needs the public
+        // profile. Start both reads together; self-healing remains conditional
+        // on a confirmed missing profile and an available username.
+        const [profileResult, followsResult] = await Promise.allSettled([
+          profileRepo.getMe(),
+          profileRepo.getMyFollows(),
+        ]);
+        if (run !== hydrateRun) return;
+
+        let profile =
+          profileResult.status === "fulfilled" ? profileResult.value : null;
+        if (profileResult.status === "rejected") {
+          console.warn(
+            "Error loading public profile during hydration:",
+            profileResult.reason,
+          );
+        }
+        if (!profile && profileResult.status === "fulfilled" && seedUsername) {
           try {
-            let profile = await profileRepo.getMe();
-            if (!profile) {
-              // Self-heal for a Firestore doc with no story-data profile yet.
-              // Also carries firstName/lastName/writingInterests forward from
-              // any pre-migration Firestore doc that still has them.
-              profile = await profileRepo.createMe({
-                username: profileUsername,
-                photoURL: firebaseUser.photoURL || "",
-                firstName:
-                  typeof userData.firstName === "string"
-                    ? userData.firstName
-                    : "",
-                lastName:
-                  typeof userData.lastName === "string"
-                    ? userData.lastName
-                    : "",
-                bio: typeof userData.bio === "string" ? userData.bio : "",
-                occupation:
-                  typeof userData.occupation === "string"
-                    ? userData.occupation
-                    : "",
-                location:
-                  typeof userData.location === "string"
-                    ? userData.location
-                    : "",
-                writingInterests:
-                  typeof userData.writingInterests === "string"
-                    ? userData.writingInterests
-                    : "",
-                walletAddress:
-                  typeof userData.walletAddress === "string"
-                    ? userData.walletAddress
-                    : "",
-              });
-            }
-            const follows = await profileRepo.getMyFollows();
-            hydratedUser = {
-              ...newUser,
-              username: profile.username,
-              photoURL: profile.photoURL || firebaseUser.photoURL,
-              firstName: profile.firstName || undefined,
-              lastName: profile.lastName || undefined,
-              bio: profile.bio ?? "",
-              occupation: profile.occupation ?? "",
-              location: profile.location ?? "",
-              writingInterests: profile.writingInterests,
-              walletAddress: profile.walletAddress,
-              following: follows.following,
-              followers: follows.followers,
-            };
-          } catch (publicProfileError) {
+            // A legacy Firestore user may not have a story-data profile yet.
+            profile = await profileRepo.createMe({
+              username: seedUsername,
+              photoURL: firebaseUser.photoURL || "",
+              firstName:
+                typeof userData.firstName === "string"
+                  ? userData.firstName
+                  : "",
+              lastName:
+                typeof userData.lastName === "string" ? userData.lastName : "",
+              bio: typeof userData.bio === "string" ? userData.bio : "",
+              occupation:
+                typeof userData.occupation === "string"
+                  ? userData.occupation
+                  : "",
+              location:
+                typeof userData.location === "string" ? userData.location : "",
+              writingInterests:
+                typeof userData.writingInterests === "string"
+                  ? userData.writingInterests
+                  : "",
+              walletAddress:
+                typeof userData.walletAddress === "string"
+                  ? userData.walletAddress
+                  : "",
+            });
+          } catch (error) {
             console.warn(
-              "Error syncing public profile during hydration:",
-              publicProfileError,
+              "Error creating public profile during hydration:",
+              error,
             );
           }
         }
-        set({ user: hydratedUser, loading: false });
+        if (run !== hydrateRun) return;
+
+        if (profile) {
+          hydratedUser = {
+            ...hydratedUser,
+            username: profile.username,
+            photoURL: profile.photoURL || firebaseUser.photoURL,
+            firstName: profile.firstName || undefined,
+            lastName: profile.lastName || undefined,
+            bio: profile.bio ?? "",
+            occupation: profile.occupation ?? "",
+            location: profile.location ?? "",
+            writingInterests: profile.writingInterests,
+            walletAddress: profile.walletAddress,
+          };
+          // getMe returns the same public profile shape. Reuse it for the
+          // policy/card queries instead of requesting our profile again.
+          await appQueryClient.cancelQueries({
+            queryKey: queryKeys.user.publicProfile(firebaseUser.uid),
+          });
+          if (run !== hydrateRun) return;
+          appQueryClient.setQueryData(
+            queryKeys.user.publicProfile(firebaseUser.uid),
+            profile,
+          );
+        }
+        if (followsResult.status === "fulfilled") {
+          hydratedUser = {
+            ...hydratedUser,
+            following: followsResult.value.following,
+            followers: followsResult.value.followers,
+          };
+        } else {
+          console.warn(
+            "Error loading relationships during hydration:",
+            followsResult.reason,
+          );
+        }
+        if (run === hydrateRun) set({ user: hydratedUser, loading: false });
         return;
       }
 
-      set({ user: getFallbackUser(firebaseUser), loading: false });
+      if (run === hydrateRun)
+        set({ user: getFallbackUser(firebaseUser), loading: false });
     } catch (error) {
       console.error("Error hydrating authenticated user:", error);
-      set({ user: null, loading: false });
+      if (run === hydrateRun) set({ user: null, loading: false });
       throw error;
     }
   },
@@ -180,11 +232,16 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     try {
       await profileRepo.setFollow(uid, true);
 
+      if (get().user?.uid !== currentUser.uid) return;
       set((state) => ({
         user: state.user
-          ? { ...state.user, following: [...(state.user.following ?? []), uid] }
+          ? {
+              ...state.user,
+              following: [...new Set([...(state.user.following ?? []), uid])],
+            }
           : null,
       }));
+      await refreshFollowFeeds(currentUser.uid);
     } catch (error) {
       console.error("Error following user:", error);
       throw new Error("Failed to follow user");
@@ -200,6 +257,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     try {
       await profileRepo.setFollow(uid, false);
 
+      if (get().user?.uid !== currentUser.uid) return;
       set((state) => ({
         user: state.user
           ? {
@@ -210,6 +268,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
             }
           : null,
       }));
+      await refreshFollowFeeds(currentUser.uid);
     } catch (error) {
       console.error("Error unfollowing user:", error);
       throw new Error("Failed to unfollow user");

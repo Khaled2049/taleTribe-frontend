@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { useGuestbookMutations } from "@/hooks/queries/useGuestbookMutations";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Send, ChevronUp } from "lucide-react";
 import { IGuestbookReply } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
@@ -13,7 +14,6 @@ interface GuestbookRepliesProps {
   entryId: string;
   entryAuthorId: string;
   currentUser: IUser | null;
-  onReplyCountChange?: (count: number) => void;
   onHide?: () => void;
 }
 
@@ -22,9 +22,9 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
   entryId,
   entryAuthorId,
   currentUser,
-  onReplyCountChange,
   onHide,
 }) => {
+  const mutations = useGuestbookMutations(currentUser?.uid ?? null);
   const [replies, setReplies] = useState<IGuestbookReply[]>([]);
   const [newReply, setNewReply] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -33,27 +33,38 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [isDeletingReply, setIsDeletingReply] = useState(false);
   const { canPost } = useGuestbookPolicy();
+  const latestRead = useRef({ version: 0, active: false });
 
   const loadReplies = useCallback(async () => {
+    if (!latestRead.current.active) return;
+    const read = ++latestRead.current.version;
     try {
       setIsLoadingReplies(true);
       const fetched = await guestbookRepo.listReplies(ownerId, entryId);
+      if (read !== latestRead.current.version) return;
       setReplies(fetched);
-      onReplyCountChange?.(fetched.length);
+      mutations.replyCount(ownerId, entryId, fetched.length);
     } catch (error) {
       console.error("Error loading replies:", error);
     } finally {
-      setIsLoadingReplies(false);
+      if (read === latestRead.current.version) setIsLoadingReplies(false);
     }
-  }, [ownerId, entryId, onReplyCountChange]);
+  }, [ownerId, entryId, mutations]);
 
   useEffect(() => {
+    const requestState = latestRead.current;
+    requestState.active = true;
     loadReplies();
+    return () => {
+      requestState.active = false;
+      requestState.version++;
+    };
   }, [loadReplies]);
 
   const addReply = async (content: string, parentId: string | null) => {
     if (!currentUser) return;
     await guestbookRepo.createReply(ownerId, entryId, content, parentId);
+    await mutations.repliesChanged(ownerId);
     await loadReplies();
   };
 
@@ -92,6 +103,7 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
     setIsDeletingReply(true);
     try {
       await guestbookRepo.deleteReply(ownerId, entryId, pendingDeleteId);
+      await mutations.repliesChanged(ownerId);
       await loadReplies();
       setPendingDeleteId(null);
     } catch (error) {

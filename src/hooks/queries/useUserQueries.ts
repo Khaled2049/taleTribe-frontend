@@ -10,11 +10,15 @@ import { profileRepo, type PublicProfile } from "@novelsync/story-data-client";
  * — separate keys meant three identical GETs and three copies that drifted,
  * since only one of them was ever invalidated after an edit.
  */
-const profileQuery = (userId: string | null | undefined) => ({
-  queryKey: queryKeys.user.publicProfile(userId!),
-  queryFn: () => profileRepo.get(userId!),
-  enabled: !!userId,
+export const publicProfileQuery = (userId: string) => ({
+  queryKey: queryKeys.user.publicProfile(userId),
+  queryFn: () => profileRepo.get(userId),
   staleTime: 1000 * 60 * 5,
+});
+
+const profileQuery = (userId: string | null | undefined) => ({
+  ...publicProfileQuery(userId ?? ""),
+  enabled: !!userId,
 });
 
 export function useWalletAddressQuery(userId: string | null | undefined) {

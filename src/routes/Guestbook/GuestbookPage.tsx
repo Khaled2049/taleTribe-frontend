@@ -1,7 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { UserX } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { getCurrentUid, useAuthIdentity } from "@novelsync/platform-auth";
+import { guestbookEntriesQuery } from "@/hooks/queries/useGuestbookQueries";
 import {
   useGuestbookPolicy,
   usePublicProfile,
@@ -18,17 +21,27 @@ import { normalizePolicy } from "@/lib/guestbookPolicy";
 
 const GuestbookPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
-  const { user, loading: authLoading } = useAuthContext();
-  const isSelf = !!user && user.uid === userId;
+  const { user: hydratedUser, loading: authLoading } = useAuthContext();
+  const identity = useAuthIdentity();
+  const identityReady = !identity.loading && identity.uid === getCurrentUid();
+  const user =
+    identityReady && hydratedUser?.uid === identity.uid ? hydratedUser : null;
+  const isSelf = !!identity.uid && identity.uid === userId;
   const [entryCount, setEntryCount] = useState<number | undefined>(undefined);
+  const queryClient = useQueryClient();
 
-  // usePublicProfile no-ops while signed out; the sign-in prompt below covers it.
-  // Called unconditionally regardless of isSelf, which only becomes known
-  // after auth resolves — a hook can't sit behind that check.
+  // Profile and first entries start in parallel. An unresolved identity must
+  // not cache an anonymous page that immediately needs an authenticated reread.
   const { data: profile, isLoading: profileLoading } = usePublicProfile(userId);
   const { data: guestbookPolicy } = useGuestbookPolicy(userId);
+  useEffect(() => {
+    if (!userId || isSelf || !identityReady) return;
+    void queryClient.prefetchInfiniteQuery(
+      guestbookEntriesQuery(userId, identity.uid),
+    );
+  }, [queryClient, userId, isSelf, identityReady, identity.uid]);
 
-  if (authLoading) {
+  if (!identityReady || (authLoading && !identity.uid)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-ns-bg">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ns-accent"></div>
@@ -115,6 +128,7 @@ const GuestbookPage: React.FC = () => {
           <div className="min-w-0">
             <Guestbook
               ownerId={userId}
+              viewerId={identity.uid}
               currentUser={user}
               guestbookPolicy={normalizePolicy(guestbookPolicy)}
               ownerUsername={username}
@@ -124,7 +138,7 @@ const GuestbookPage: React.FC = () => {
 
           <div className="hidden lg:flex lg:sticky lg:top-6 flex-col gap-5">
             <AboutOwner owner={profile} />
-            <GuestbookSigners ownerId={userId} viewerId={user?.uid ?? null} />
+            <GuestbookSigners ownerId={userId} viewerId={identity.uid} />
           </div>
         </div>
       </div>
