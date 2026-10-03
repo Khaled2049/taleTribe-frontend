@@ -34,7 +34,7 @@ export type {
   StoryMetadata,
 } from "./types/IStory";
 
-export { guestbookRepo } from "./repos/GuestbookRepo";
+export { guestbookRepo, type GuestbookReplyPage } from "./repos/GuestbookRepo";
 export {
   assistantThreadRepo,
   AssistantThreadRepo,

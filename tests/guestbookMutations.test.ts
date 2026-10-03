@@ -3,14 +3,22 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import {
   guestbookRepo,
   type IGuestbookEntry,
+  type IGuestbookReply,
 } from "@novelsync/story-data-client";
 import { guestbookMutations, type EntryPages } from "@/lib/guestbookMutations";
+import { guestbookRepliesKey, type ReplyThread } from "@/lib/guestbookReplies";
 
-vi.mock("@novelsync/story-data-client", () => ({
+vi.mock("@novelsync/story-data-client", async (original) => ({
+  ...(await original<typeof import("@novelsync/story-data-client")>()),
   guestbookRepo: {
     createEntry: vi.fn(),
     deleteEntry: vi.fn(),
     voteEntry: vi.fn(),
+    createReply: vi.fn(),
+    updateReply: vi.fn(),
+    deleteReply: vi.fn(),
+    voteReply: vi.fn(),
+    listReplyPage: vi.fn(),
   },
 }));
 
@@ -46,6 +54,29 @@ const pages = (
   pages: [{ entries, totalCount, nextCursor: "older" }],
   pageParams: [undefined],
 });
+const reply = (overrides: Partial<IGuestbookReply> = {}): IGuestbookReply => ({
+  id: "r1",
+  entryId: "post",
+  content: "hi",
+  authorId: "me",
+  authorUsername: "Me",
+  parentId: null,
+  createdAt: new Date("2026-10-03T12:05:00Z"),
+  updatedAt: new Date("2026-10-03T12:05:00Z"),
+  upvoteCount: 0,
+  downvoteCount: 0,
+  userVote: null,
+  ...overrides,
+});
+const thread = (viewer: string | null = "me") =>
+  guestbookRepliesKey("me", "post", viewer);
+const cached = (viewer: string | null = "me") =>
+  client.getQueryData<ReplyThread>(thread(viewer));
+const replies = (viewer: string | null = "me") => cached(viewer)?.replies;
+const loaded = (
+  rows: IGuestbookReply[],
+  extra: Partial<ReplyThread> = {},
+): ReplyThread => ({ replies: rows, totalCount: rows.length, ...extra });
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
   let reject!: (error: Error) => void;
@@ -72,6 +103,8 @@ beforeEach(() => {
   mutations = guestbookMutations(client, "me", () => current);
   vi.mocked(guestbookRepo.deleteEntry).mockResolvedValue(undefined);
   vi.mocked(guestbookRepo.voteEntry).mockResolvedValue(undefined);
+  vi.mocked(guestbookRepo.deleteReply).mockResolvedValue(undefined);
+  vi.mocked(guestbookRepo.voteReply).mockResolvedValue(undefined);
 });
 afterEach(() => {
   subscriptions.splice(0).forEach((off) => off());
@@ -339,19 +372,216 @@ describe("Guestbook mutations across cached views", () => {
     );
   });
 
-  it("reconciles reply counts even when the subsequent thread reload fails", async () => {
+  it("adds a created reply to the cached thread and counts it everywhere", async () => {
+    client.setQueryData(thread(), loaded([reply()]));
+    client.setQueryData(wall("all"), pages([entry({ commentCount: 1 })]));
+    client.setQueryData(owner(), pages([entry({ commentCount: 1 })], 1));
+    const created = reply({ id: "r2", parentId: "r1" });
+    vi.mocked(guestbookRepo.createReply).mockResolvedValue(created);
+    const read = vi.fn(async () => pages([entry()]));
+    const observer = new QueryObserver(client, {
+      queryKey: wall("all"),
+      queryFn: read,
+      staleTime: 120_000,
+    });
+    subscriptions.push(observer.subscribe(() => {}));
+
+    await mutations.createReply("me", "post", "hi", "r1");
+
+    expect(replies()!.map((r) => r.id)).toEqual(["r2", "r1"]);
+    expect(rows(wall("all"))[0].commentCount).toBe(2);
+    expect(rows(owner())[0].commentCount).toBe(2);
+    // The count is exact, so the mounted feed is not downloaded again.
+    expect(read).not.toHaveBeenCalled();
+    expect(client.getQueryState(thread())?.isInvalidated).toBe(false);
+  });
+
+  it("removes a deleted reply's descendants and their share of the count", async () => {
+    client.setQueryData(
+      thread(),
+      loaded([
+        reply({ id: "grandchild", parentId: "child" }),
+        reply({ id: "child", parentId: "r1" }),
+        reply({ id: "other" }),
+        reply(),
+      ]),
+    );
+    client.setQueryData(wall("all"), pages([entry({ commentCount: 4 })]));
+
+    await mutations.deleteReply("me", "post", "r1");
+
+    expect(replies()!.map((r) => r.id)).toEqual(["other"]);
+    expect(rows(wall("all"))[0].commentCount).toBe(1);
+  });
+
+  it("replaces an edited reply without touching the count", async () => {
+    client.setQueryData(thread(), loaded([reply({ id: "r2" }), reply()]));
+    client.setQueryData(wall("all"), pages([entry({ commentCount: 2 })]));
+    vi.mocked(guestbookRepo.updateReply).mockResolvedValue(
+      reply({ content: "edited" }),
+    );
+
+    await mutations.editReply("me", "post", "r1", "edited");
+
+    expect(replies()!.map((r) => r.content)).toEqual(["hi", "edited"]);
+    expect(rows(wall("all"))[0].commentCount).toBe(2);
+  });
+
+  it("leaves the thread alone when a reply write fails", async () => {
+    client.setQueryData(thread(), loaded([reply()]));
+    client.setQueryData(wall("all"), pages([entry({ commentCount: 1 })]));
+    vi.mocked(guestbookRepo.createReply).mockRejectedValue(new Error("no"));
+
+    await expect(
+      mutations.createReply("me", "post", "hi", null),
+    ).rejects.toThrow("no");
+
+    expect(replies()).toEqual([reply()]);
+    expect(rows(wall("all"))[0].commentCount).toBe(1);
+  });
+
+  it("discards a thread read that started before the reply was written", async () => {
+    const stale = deferred<ReplyThread>();
+    const created = reply({ id: "r2" });
+    const read = vi
+      .fn<() => Promise<ReplyThread>>()
+      .mockReturnValueOnce(stale.promise)
+      .mockResolvedValue(loaded([created, reply()]));
+    const observer = new QueryObserver(client, {
+      queryKey: thread(),
+      queryFn: read,
+    });
+    subscriptions.push(observer.subscribe(() => {}));
+    vi.mocked(guestbookRepo.createReply).mockResolvedValue(created);
+
+    await mutations.createReply("me", "post", "hi", null);
+    stale.resolve(loaded([reply()]));
+
+    await vi.waitFor(() =>
+      expect(replies()!.map((r) => r.id)).toEqual(["r2", "r1"]),
+    );
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks the server for the count when the thread was never cached", async () => {
     client.setQueryData(wall("all"), pages([entry()]));
     client.setQueryData(owner(), pages([entry()], 1));
+    vi.mocked(guestbookRepo.createReply).mockResolvedValue(reply());
     const observer = new QueryObserver(client, {
       queryKey: wall("all"),
       queryFn: async () => pages([entry({ commentCount: 3 })]),
     });
     subscriptions.push(observer.subscribe(() => {}));
-    await mutations.repliesChanged("me");
+
+    await mutations.createReply("me", "post", "hi", null);
+
     await vi.waitFor(() => expect(rows(wall("all"))[0].commentCount).toBe(3));
     expect(client.getQueryState(owner())?.isInvalidated).toBe(true);
+    expect(replies()).toBeUndefined();
     // A successful full-thread read additionally patches every cached copy.
     mutations.replyCount("me", "post", 3);
     expect(rows(owner())[0].commentCount).toBe(3);
+  });
+
+  it("keeps a reply vote in the cached thread and rolls back only the vote", async () => {
+    client.setQueryData(thread(), loaded([reply({ upvoteCount: 2 })]));
+    await mutations.voteReply("me", reply({ upvoteCount: 2 }));
+    expect(replies()![0]).toMatchObject({ userVote: "up", upvoteCount: 3 });
+    expect(guestbookRepo.voteReply).toHaveBeenCalledWith(
+      "me",
+      "post",
+      "r1",
+      "up",
+    );
+
+    const failed = deferred<void>();
+    vi.mocked(guestbookRepo.voteReply).mockReturnValue(failed.promise);
+    const current = replies()![0];
+    const vote = mutations.voteReply("me", current);
+    await vi.waitFor(() => expect(replies()![0].userVote).toBeNull());
+    client.setQueryData(
+      thread(),
+      loaded([{ ...replies()![0], content: "edited" }]),
+    );
+    failed.reject(new Error("no"));
+    await expect(vote).rejects.toThrow("no");
+    expect(replies()![0]).toMatchObject({
+      userVote: "up",
+      upvoteCount: 3,
+      content: "edited",
+    });
+  });
+
+  it("does not write another account's thread after the viewer changes", async () => {
+    client.setQueryData(thread(), loaded([reply()]));
+    client.setQueryData(wall("all"), pages([entry({ commentCount: 1 })]));
+    const pending = deferred<IGuestbookReply>();
+    vi.mocked(guestbookRepo.createReply).mockReturnValue(pending.promise);
+
+    const write = mutations.createReply("me", "post", "hi", null);
+    current = false;
+    pending.resolve(reply({ id: "r2" }));
+    await write;
+
+    expect(replies()).toEqual([reply()]);
+    expect(rows(wall("all"))[0].commentCount).toBe(1);
+  });
+
+  it("counts replies on pages that are not loaded when a reply is added or removed", async () => {
+    client.setQueryData(
+      thread(),
+      loaded([reply({ id: "child", parentId: "r1" }), reply()], {
+        totalCount: 40,
+        nextCursor: "older",
+      }),
+    );
+    client.setQueryData(wall("all"), pages([entry({ commentCount: 40 })]));
+    vi.mocked(guestbookRepo.createReply).mockResolvedValue(reply({ id: "r2" }));
+
+    await mutations.createReply("me", "post", "hi", null);
+    expect(rows(wall("all"))[0].commentCount).toBe(41);
+
+    await mutations.deleteReply("me", "post", "r1");
+    expect(replies()!.map((r) => r.id)).toEqual(["r2"]);
+    expect(rows(wall("all"))[0].commentCount).toBe(39);
+    expect(cached()!.nextCursor).toBe("older");
+  });
+
+  it("appends an older page and drops one that arrives after the thread moved on", async () => {
+    client.setQueryData(
+      thread(),
+      loaded([reply()], { totalCount: 3, nextCursor: "c1" }),
+    );
+    client.setQueryData(wall("all"), pages([entry({ commentCount: 3 })]));
+    vi.mocked(guestbookRepo.listReplyPage).mockResolvedValue({
+      replies: [reply({ id: "old" }), reply()],
+      nextCursor: "c2",
+      totalCount: 4,
+    });
+
+    await mutations.loadMoreReplies("me", "post");
+    expect(guestbookRepo.listReplyPage).toHaveBeenCalledWith(
+      "me",
+      "post",
+      "c1",
+    );
+    expect(replies()!.map((r) => r.id)).toEqual(["r1", "old"]);
+    expect(cached()).toMatchObject({ nextCursor: "c2", totalCount: 4 });
+    expect(rows(wall("all"))[0].commentCount).toBe(4);
+
+    const late = deferred<ReplyThread>();
+    vi.mocked(guestbookRepo.listReplyPage).mockReturnValue(late.promise);
+    const more = mutations.loadMoreReplies("me", "post");
+    // A refresh replaced the thread with its first page meanwhile.
+    client.setQueryData(thread(), loaded([reply()], { nextCursor: "c1" }));
+    late.resolve({ replies: [reply({ id: "older" })], totalCount: 9 });
+    await more;
+    expect(replies()!.map((r) => r.id)).toEqual(["r1"]);
+
+    // Nothing more to load is not a request.
+    client.setQueryData(thread(), loaded([reply()]));
+    vi.mocked(guestbookRepo.listReplyPage).mockClear();
+    await mutations.loadMoreReplies("me", "post");
+    expect(guestbookRepo.listReplyPage).not.toHaveBeenCalled();
   });
 });

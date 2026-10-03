@@ -2,7 +2,17 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import {
   guestbookRepo,
   type IGuestbookEntry,
+  type IGuestbookReply,
 } from "@novelsync/story-data-client";
+import {
+  addReply,
+  appendReplyPage,
+  guestbookRepliesKey,
+  removeReplySubtree,
+  replaceReply,
+  toggleReplyUpvote,
+  type ReplyThread,
+} from "@/lib/guestbookReplies";
 
 export type EntryPages = {
   pages: {
@@ -49,8 +59,8 @@ export function guestbookMutations(
   function refresh(ownerId: string, refetchActive = false) {
     if (!isCurrentViewer()) return;
     // Known copies are already patched. Mark lists stale for the next visit
-    // without re-downloading all loaded pages after every click. Reply writes
-    // request reconciliation because a cascade's count may not be known yet.
+    // without re-downloading all loaded pages after every click. A reply
+    // write with no cached thread cannot know the count, so it reconciles.
     void client.invalidateQueries({
       ...filters(ownerId),
       refetchType: refetchActive ? "active" : "none",
@@ -138,6 +148,38 @@ export function guestbookMutations(
         ),
       };
     });
+  }
+
+  // A cancelled first read leaves a mounted thread with nothing to show.
+  function restartEmptyThread(key: QueryKey) {
+    if (!isCurrentViewer()) return;
+    if (client.getQueryData(key) === undefined) {
+      void client.invalidateQueries({ queryKey: key, exact: true });
+    }
+  }
+
+  async function settleThread(
+    ownerId: string,
+    entryId: string,
+    transform: (thread: ReplyThread) => ReplyThread,
+  ) {
+    const key = guestbookRepliesKey(ownerId, entryId, viewerId);
+    // A read that began before the write would overwrite the patch.
+    await client.cancelQueries({ queryKey: key, exact: true });
+    if (!isCurrentViewer()) return;
+    const cached = client.getQueryData<ReplyThread>(key);
+    if (cached) {
+      const next = transform(cached);
+      client.setQueryData(key, next);
+      await cancel(ownerId);
+      patch(ownerId, entryId, { commentCount: next.totalCount });
+      refresh(ownerId);
+      return;
+    }
+    // Without the thread the new count is unknown, so ask the server.
+    restartEmptyThread(key);
+    await cancel(ownerId);
+    refresh(ownerId, true);
   }
 
   return {
@@ -246,11 +288,99 @@ export function guestbookMutations(
       refresh(ownerId);
     },
 
-    // Reply writes still use the existing full-thread read. Invalidate entry
-    // counts even if that read fails or the thread unmounts before it finishes.
-    async repliesChanged(ownerId: string) {
-      await cancel(ownerId);
-      refresh(ownerId, true);
+    async createReply(
+      ownerId: string,
+      entryId: string,
+      content: string,
+      parentId: string | null,
+    ) {
+      const reply = await guestbookRepo.createReply(
+        ownerId,
+        entryId,
+        content,
+        parentId,
+      );
+      await settleThread(ownerId, entryId, (rows) => addReply(rows, reply));
+      return reply;
+    },
+
+    async editReply(
+      ownerId: string,
+      entryId: string,
+      replyId: string,
+      content: string,
+    ) {
+      const reply = await guestbookRepo.updateReply(
+        ownerId,
+        entryId,
+        replyId,
+        content,
+      );
+      await settleThread(ownerId, entryId, (rows) => replaceReply(rows, reply));
+      return reply;
+    },
+
+    async deleteReply(ownerId: string, entryId: string, replyId: string) {
+      await guestbookRepo.deleteReply(ownerId, entryId, replyId);
+      await settleThread(ownerId, entryId, (rows) =>
+        removeReplySubtree(rows, replyId),
+      );
+    },
+
+    /** Appends the next page of older threads to the cached one. */
+    async loadMoreReplies(ownerId: string, entryId: string) {
+      const key = guestbookRepliesKey(ownerId, entryId, viewerId);
+      const cursor = client.getQueryData<ReplyThread>(key)?.nextCursor;
+      if (!cursor) return;
+      const page = await guestbookRepo.listReplyPage(ownerId, entryId, cursor);
+      if (!isCurrentViewer()) return;
+      const current = client.getQueryData<ReplyThread>(key);
+      // A refetch or a second click moved the thread on while this was in
+      // flight; appending now would duplicate or misplace the page.
+      if (current?.nextCursor !== cursor) return;
+      client.setQueryData(key, appendReplyPage(current, page));
+      patch(ownerId, entryId, { commentCount: page.totalCount });
+    },
+
+    async voteReply(ownerId: string, reply: IGuestbookReply) {
+      const key = guestbookRepliesKey(ownerId, reply.entryId, viewerId);
+      const setVote = (source: IGuestbookReply) => {
+        if (!isCurrentViewer()) return;
+        client.setQueryData<ReplyThread>(
+          key,
+          (thread) =>
+            thread && {
+              ...thread,
+              replies: thread.replies.map((row) =>
+                row.id === reply.id
+                  ? {
+                      ...row,
+                      userVote: source.userVote,
+                      upvoteCount: source.upvoteCount,
+                      downvoteCount: source.downvoteCount,
+                    }
+                  : row,
+              ),
+            },
+        );
+      };
+      await client.cancelQueries({ queryKey: key, exact: true });
+      const voted = toggleReplyUpvote(reply);
+      setVote(voted);
+      try {
+        await guestbookRepo.voteReply(
+          ownerId,
+          reply.entryId,
+          reply.id,
+          voted.userVote ?? null,
+        );
+      } catch (error) {
+        // Restore the vote fields only; an edit may have landed meanwhile.
+        setVote(reply);
+        throw error;
+      } finally {
+        restartEmptyThread(key);
+      }
     },
   };
 }
