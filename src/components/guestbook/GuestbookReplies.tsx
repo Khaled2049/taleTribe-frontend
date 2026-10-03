@@ -1,9 +1,9 @@
 import { useGuestbookMutations } from "@/hooks/queries/useGuestbookMutations";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useGuestbookReplies } from "@/hooks/queries/useGuestbookReplies";
+import React, { useState } from "react";
 import { Send, ChevronUp } from "lucide-react";
 import { IGuestbookReply } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
-import { guestbookRepo } from "@novelsync/story-data-client";
 import { rateLimitMessage } from "@/lib/rateLimitError";
 import { GuestbookReply } from "./GuestbookReply";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
@@ -17,6 +17,8 @@ interface GuestbookRepliesProps {
   onHide?: () => void;
 }
 
+const NO_REPLIES: IGuestbookReply[] = [];
+
 const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
   ownerId,
   entryId,
@@ -24,48 +26,20 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
   currentUser,
   onHide,
 }) => {
-  const mutations = useGuestbookMutations(currentUser?.uid ?? null);
-  const [replies, setReplies] = useState<IGuestbookReply[]>([]);
+  const viewerId = currentUser?.uid ?? null;
+  const mutations = useGuestbookMutations(viewerId);
+  const thread = useGuestbookReplies(ownerId, entryId, viewerId);
+  const replies = thread.data ?? NO_REPLIES;
   const [newReply, setNewReply] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingReplies, setIsLoadingReplies] = useState(true);
   const [replyError, setReplyError] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [isDeletingReply, setIsDeletingReply] = useState(false);
   const { canPost } = useGuestbookPolicy();
-  const latestRead = useRef({ version: 0, active: false });
-
-  const loadReplies = useCallback(async () => {
-    if (!latestRead.current.active) return;
-    const read = ++latestRead.current.version;
-    try {
-      setIsLoadingReplies(true);
-      const fetched = await guestbookRepo.listReplies(ownerId, entryId);
-      if (read !== latestRead.current.version) return;
-      setReplies(fetched);
-      mutations.replyCount(ownerId, entryId, fetched.length);
-    } catch (error) {
-      console.error("Error loading replies:", error);
-    } finally {
-      if (read === latestRead.current.version) setIsLoadingReplies(false);
-    }
-  }, [ownerId, entryId, mutations]);
-
-  useEffect(() => {
-    const requestState = latestRead.current;
-    requestState.active = true;
-    loadReplies();
-    return () => {
-      requestState.active = false;
-      requestState.version++;
-    };
-  }, [loadReplies]);
 
   const addReply = async (content: string, parentId: string | null) => {
     if (!currentUser) return;
-    await guestbookRepo.createReply(ownerId, entryId, content, parentId);
-    await mutations.repliesChanged(ownerId);
-    await loadReplies();
+    await mutations.createReply(ownerId, entryId, content, parentId);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -102,9 +76,7 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
     if (!pendingDeleteId) return;
     setIsDeletingReply(true);
     try {
-      await guestbookRepo.deleteReply(ownerId, entryId, pendingDeleteId);
-      await mutations.repliesChanged(ownerId);
-      await loadReplies();
+      await mutations.deleteReply(ownerId, entryId, pendingDeleteId);
       setPendingDeleteId(null);
     } catch (error) {
       console.error("Error deleting reply:", error);
@@ -114,9 +86,11 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
   };
 
   const handleEdit = async (replyId: string, content: string) => {
-    await guestbookRepo.updateReply(ownerId, entryId, replyId, content);
-    await loadReplies();
+    await mutations.editReply(ownerId, entryId, replyId, content);
   };
+
+  const handleVote = (reply: IGuestbookReply) =>
+    mutations.voteReply(ownerId, reply);
 
   const topLevelReplies = replies.filter((r) => !r.parentId);
 
@@ -167,9 +141,21 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
         </form>
       )}
 
-      {isLoadingReplies ? (
+      {thread.isPending ? (
         <p className="font-ui text-[13px] text-ns-ink-muted">
           Loading replies…
+        </p>
+      ) : thread.isError && !thread.data ? (
+        <p className="font-ui text-[13px] text-ns-ink-muted text-center py-2">
+          Couldn't load replies.{" "}
+          <button
+            type="button"
+            onClick={() => thread.refetch()}
+            disabled={thread.isFetching}
+            className="text-ns-accent hover:text-ns-accent-hover underline disabled:opacity-50"
+          >
+            Try again
+          </button>
         </p>
       ) : topLevelReplies.length > 0 ? (
         <div className="space-y-1">
@@ -184,6 +170,7 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
               onReply={handleNestedReply}
               onDelete={async (replyId) => setPendingDeleteId(replyId)}
               onEdit={handleEdit}
+              onVote={handleVote}
               depth={0}
             />
           ))}

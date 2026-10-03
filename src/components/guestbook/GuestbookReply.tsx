@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { IGuestbookReply } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
-import { guestbookRepo } from "@novelsync/story-data-client";
 import { rateLimitMessage } from "@/lib/rateLimitError";
 import { useGuestbookPolicy } from "./guestbookPolicyContext";
 import { formatRelativeTime } from "@/lib/relativeTime";
@@ -24,6 +23,7 @@ interface GuestbookReplyProps {
   onReply: (parentId: string, content: string) => Promise<void>;
   onDelete: (replyId: string) => Promise<void>;
   onEdit: (replyId: string, content: string) => Promise<void>;
+  onVote: (reply: IGuestbookReply) => Promise<void>;
   depth: number;
 }
 
@@ -39,6 +39,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
     onReply,
     onDelete,
     onEdit,
+    onVote,
     depth,
   }) => {
     const [isEditing, setIsEditing] = useState(false);
@@ -48,8 +49,8 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
     const [replyContent, setReplyContent] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [upvoteCount, setUpvoteCount] = useState(reply.upvoteCount || 0);
-    const [hasUpvoted, setHasUpvoted] = useState(reply.userVote === "up");
+    const upvoteCount = reply.upvoteCount || 0;
+    const hasUpvoted = reply.userVote === "up";
     const [isVoting, setIsVoting] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -93,24 +94,11 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
 
     const handleUpvote = async () => {
       if (!currentUser || isVoting) return;
-
-      const wasUpvoted = hasUpvoted;
-      const previousCount = upvoteCount;
-      setHasUpvoted(!wasUpvoted);
-      setUpvoteCount(wasUpvoted ? previousCount - 1 : previousCount + 1);
       setIsVoting(true);
-
       try {
-        await guestbookRepo.voteReply(
-          ownerId,
-          reply.entryId,
-          reply.id,
-          wasUpvoted ? null : "up",
-        );
+        await onVote(reply);
       } catch (error) {
         console.error("Error voting on reply:", error);
-        setHasUpvoted(wasUpvoted);
-        setUpvoteCount(previousCount);
       } finally {
         setIsVoting(false);
       }
@@ -330,6 +318,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                     onReply={onReply}
                     onDelete={onDelete}
                     onEdit={onEdit}
+                    onVote={onVote}
                     depth={depth + 1}
                   />
                 ))}
