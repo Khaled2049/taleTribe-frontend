@@ -41,24 +41,46 @@ interface RecommendationCollectionProps {
   quietError?: boolean;
 }
 
-function ShelfSkeleton({ variant }: { variant: CollectionVariant }) {
+function ShelfSkeleton({
+  variant,
+  unavailable = false,
+}: {
+  variant: CollectionVariant;
+  unavailable?: boolean;
+}) {
   return (
-    <div className={CARD_GRID[variant]} aria-hidden="true">
+    <div
+      className={`relative ${CARD_GRID[variant]}`}
+      aria-hidden={unavailable ? undefined : true}
+    >
       {Array.from({ length: SKELETON_COUNT[variant] }, (_, item) => (
         <div key={item}>
           <div className="mx-auto max-w-[130px]">
-            <div className="mb-2 aspect-[2/3] animate-pulse rounded-ns border border-ns-border bg-ns-surface" />
+            <div
+              className={`mb-2 aspect-[2/3] rounded-ns border border-ns-border bg-ns-surface ${unavailable ? "opacity-40" : "animate-pulse"}`}
+            />
           </div>
           <div className="space-y-0.5">
             <div className="flex h-5 items-center">
-              <div className="h-3.5 w-3/4 animate-pulse rounded bg-ns-surface" />
+              <div
+                className={`h-3.5 w-3/4 rounded bg-ns-surface ${unavailable ? "opacity-40" : "animate-pulse"}`}
+              />
             </div>
             <div className="flex h-4 items-center">
-              <div className="h-3 w-1/2 animate-pulse rounded bg-ns-surface" />
+              <div
+                className={`h-3 w-1/2 rounded bg-ns-surface ${unavailable ? "opacity-40" : "animate-pulse"}`}
+              />
             </div>
           </div>
         </div>
       ))}
+      {unavailable && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-center">
+          <p className="rounded-ns bg-ns-elevated/95 px-3 py-2 font-ui text-xs text-ns-ink-secondary shadow-ns-sm">
+            Recommendations are unavailable right now.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -75,13 +97,13 @@ export default function RecommendationCollection({
   onDismiss,
   quietError = false,
 }: RecommendationCollectionProps) {
-  if (error && quietError) return null;
-
   const seedItemIds = data?.resolved_books?.map((book) => book.id) ?? [];
 
   const cards = loading ? (
     <ShelfSkeleton variant={variant} />
-  ) : error ? (
+  ) : error && quietError && !data ? (
+    <ShelfSkeleton variant={variant} unavailable />
+  ) : error && !data ? (
     <div className="rounded-ns border border-ns-destructive/20 bg-ns-elevated px-4 py-5 font-ui text-sm text-ns-ink-secondary">
       {getApiErrorMessage(
         error,

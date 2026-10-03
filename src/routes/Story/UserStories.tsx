@@ -7,13 +7,15 @@ import { StoryRow } from "./components/StoryRow";
 import { StoryEditModal } from "./components/StoryEditModal";
 import StoryMetadataModal from "./StoryMetadataModal";
 import {
-  type StoryWithEarnings,
-  useUserStoriesWithEarnings,
   useDeleteStory,
   useTogglePublishStory,
   useUpdateStoryMetadata,
   useUpdateStoryCover,
 } from "@/hooks/queries/useStoryQueries";
+import {
+  type StoryWithEarnings,
+  useUserStoriesWithEarnings,
+} from "@/hooks/queries/useUserStoriesWithEarnings";
 import {
   useRecentlyRead,
   useClearReadingHistory,

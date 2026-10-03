@@ -213,23 +213,28 @@ const AllStories: React.FC = () => {
   // A single row at the head of the story list, above the grid, on every
   // viewport. It stands down whenever search or AI discovery takes over the
   // column, so only one shelf is ever competing for that slot.
+  const forYouUnavailable = forYou.isError && !forYou.data;
   const forYouShelf =
     RECOMMENDATIONS_ENABLED &&
     signedIn &&
     searchInput.trim() === "" &&
     !discoveryActive &&
-    (forYou.isLoading || forYou.data) ? (
+    (forYou.isLoading || forYou.data || forYouUnavailable) ? (
       <RecommendationCollection
         variant="row"
         eyebrow={
-          forYou.data?.mode === "behavioral"
-            ? "Chosen from your reading"
-            : "A good place to begin"
+          forYouUnavailable
+            ? "Your shelf"
+            : forYou.data?.mode === "behavioral"
+              ? "Chosen from your reading"
+              : "A good place to begin"
         }
         title={
-          forYou.data?.mode === "behavioral"
-            ? "For you"
-            : "Popular on TheTaleTribe"
+          forYouUnavailable
+            ? "Recommendations"
+            : forYou.data?.mode === "behavioral"
+              ? "For you"
+              : "Popular on TheTaleTribe"
         }
         data={forYou.data}
         loading={forYou.isLoading}

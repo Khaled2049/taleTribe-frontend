@@ -4,7 +4,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useUserWalletAddress } from "@/hooks/useUserWalletAddress";
 import { useEarnings } from "@/hooks/useEarnings";
-import { useUserStoriesWithEarnings } from "@/hooks/queries/useStoryQueries";
+import { useUserStoriesWithEarnings } from "@/hooks/queries/useUserStoriesWithEarnings";
 import { useMcpAccess } from "@/hooks/useMcpAccess";
 import {
   useAiCreditsQuery,
