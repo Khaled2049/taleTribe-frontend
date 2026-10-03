@@ -1,26 +1,70 @@
 import { describe, expect, it } from "vitest";
-import type { IClub } from "@/types/IClub";
+import type { IClub, IClubSummary } from "@/types/IClub";
 import {
   clubListView,
   filterClubs,
+  isJoined,
+  toClubSummary,
   withClubFirst,
+  withMemberCountChange,
   withMembership,
   withoutClub,
 } from "@/lib/bookClubList";
 
-const club = (id: string, overrides: Partial<IClub> = {}): IClub => ({
+const club = (
+  id: string,
+  overrides: Partial<IClubSummary> = {},
+): IClubSummary => ({
   id,
   name: id,
   description: "",
   image: "",
-  members: [],
   category: "",
   activity: "",
   creatorId: "owner",
+  memberCount: 1,
   ...overrides,
 });
 
-const ids = (clubs: IClub[]) => clubs.map((c) => c.id);
+const ids = (clubs: IClubSummary[]) => clubs.map((c) => c.id);
+
+describe("toClubSummary", () => {
+  const full: IClub = {
+    id: "c1",
+    name: "Club",
+    description: "d",
+    image: "",
+    members: ["owner", "u1", "u2"],
+    category: "Mystery",
+    activity: "Weekly",
+    creatorId: "owner",
+    meetUp: "Thursdays",
+    discussionPrompts: [],
+    polls: [],
+  };
+
+  it("counts the members of a full club and drops everything nested", () => {
+    expect(toClubSummary(full)).toEqual({
+      id: "c1",
+      name: "Club",
+      description: "d",
+      image: "",
+      category: "Mystery",
+      activity: "Weekly",
+      creatorId: "owner",
+      memberCount: 3,
+      meetUp: "Thursdays",
+    });
+  });
+
+  it("keeps the count a summary row already carries", () => {
+    expect(toClubSummary(club("a", { memberCount: 7 })).memberCount).toBe(7);
+  });
+
+  it("omits an empty meetup rather than carrying a blank", () => {
+    expect("meetUp" in toClubSummary({ ...full, meetUp: "" })).toBe(false);
+  });
+});
 
 describe("filterClubs", () => {
   const clubs = [
@@ -94,21 +138,45 @@ describe("withoutClub", () => {
   });
 });
 
+describe("withMemberCountChange", () => {
+  const clubs = [club("a", { memberCount: 2 }), club("b", { memberCount: 0 })];
+
+  it("changes the named club's count only", () => {
+    const next = withMemberCountChange(clubs, "a", 1);
+    expect(next[0].memberCount).toBe(3);
+    expect(next[1]).toBe(clubs[1]);
+  });
+
+  it("does not go below zero", () => {
+    expect(withMemberCountChange(clubs, "b", -1)[1].memberCount).toBe(0);
+  });
+});
+
 describe("withMembership", () => {
-  const clubs = [club("a", { members: ["u1"] }), club("b")];
-
-  it("adds the member to the named club only", () => {
-    const next = withMembership(clubs, "b", "u2", true);
-    expect(next[1].members).toEqual(["u2"]);
-    expect(next[0]).toBe(clubs[0]);
+  it("adds a club the viewer joined", () => {
+    expect(withMembership(["a"], "b", true)).toEqual(["a", "b"]);
   });
 
-  it("removes the member", () => {
-    expect(withMembership(clubs, "a", "u1", false)[0].members).toEqual([]);
+  it("does not list a club twice", () => {
+    expect(withMembership(["a", "b"], "a", true)).toEqual(["b", "a"]);
   });
 
-  it("leaves the club untouched when membership already matches", () => {
-    expect(withMembership(clubs, "a", "u1", true)[0]).toBe(clubs[0]);
-    expect(withMembership(clubs, "b", "u1", false)[1]).toBe(clubs[1]);
+  it("removes a club the viewer left", () => {
+    expect(withMembership(["a", "b"], "a", false)).toEqual(["b"]);
+  });
+});
+
+describe("isJoined", () => {
+  it("is false for a signed-out visitor without waiting for anything", () => {
+    expect(isJoined(null, undefined, "a")).toBe(false);
+  });
+
+  it("is unknown while a signed-in viewer's clubs are loading", () => {
+    expect(isJoined("u1", undefined, "a")).toBeUndefined();
+  });
+
+  it("answers from the viewer's club ids once they arrive", () => {
+    expect(isJoined("u1", ["a"], "a")).toBe(true);
+    expect(isJoined("u1", ["a"], "b")).toBe(false);
   });
 });

@@ -1,11 +1,12 @@
 import { useNavigate } from "react-router-dom";
-import { IClub } from "@/types/IClub";
+import { IClubSummary } from "@/types/IClub";
 import { Edit, Trash2, ArrowUpRight } from "lucide-react";
 import { prefetchBookClub, preloadBookClubCode } from "./prefetchBookClub";
 
 interface BookClubCardProps {
-  club: IClub;
-  joined: boolean;
+  club: IClubSummary;
+  /** `undefined` while the viewer's memberships are still loading. */
+  joined: boolean | undefined;
   isCreator: boolean;
   index: number;
   onEdit: () => void;
@@ -75,8 +76,7 @@ const BookClubCard = ({
         {/* Metadata */}
         <div className="hidden lg:flex items-center gap-2 shrink-0 text-[11px] font-ui text-neutral-400 dark:text-neutral-600">
           <span>
-            {club.members.length}{" "}
-            {club.members.length === 1 ? "member" : "members"}
+            {club.memberCount} {club.memberCount === 1 ? "member" : "members"}
           </span>
           <span className="w-[3px] h-[3px] rounded-full bg-neutral-300 dark:bg-neutral-700" />
           <span>{club.activity}</span>
@@ -102,7 +102,16 @@ const BookClubCard = ({
               </button>
             </div>
           )}
-          {!joined ? (
+          {joined === undefined ? (
+            // Holds the button's box so the row does not shift, without
+            // offering "Join" to someone who may already be a member.
+            <span
+              aria-hidden="true"
+              className="text-[10px] font-ui font-semibold tracking-[0.12em] uppercase text-transparent border border-neutral-200 dark:border-neutral-800 px-3 py-1.5 select-none"
+            >
+              Join
+            </span>
+          ) : !joined ? (
             <button
               onClick={(e) => handleButtonClick(e, () => onJoin(club.id))}
               className="text-[10px] font-ui font-semibold tracking-[0.12em] uppercase text-neutral-900 dark:text-white border border-neutral-900 dark:border-white px-3 py-1.5 hover:bg-neutral-900 hover:text-white dark:hover:bg-white dark:hover:text-neutral-900 transition-colors duration-200"

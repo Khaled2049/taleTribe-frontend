@@ -2,6 +2,7 @@ import { isNotFound, request } from "@novelsync/story-data-client";
 import {
   IBookOfTheMonth,
   IClub,
+  IClubSummary,
   IDiscussionPrompt,
   IPoll,
   IPollOption,
@@ -9,6 +10,7 @@ import {
   IReadingSchedule,
   IPromptResponse,
 } from "@/types/IClub";
+import { toClubSummary } from "@/lib/bookClubList";
 
 /**
  * The write body the API accepts for create and update. The server rejects
@@ -43,7 +45,9 @@ export interface PollInput {
   endDate?: string;
 }
 
-export const clubInput = (club: IClub): ClubInput => ({
+export const clubInput = (
+  club: Omit<ClubInput, "meetUp"> & { meetUp?: string },
+): ClubInput => ({
   name: club.name,
   description: club.description,
   image: club.image,
@@ -70,8 +74,17 @@ class BookClubRepo {
   createBookClub(club: IClub): Promise<IClub> {
     return this.request<IClub>("POST", "/v1/book-clubs", clubInput(club), true);
   }
-  getBookClubs(): Promise<IClub[]> {
-    return this.request<IClub[]>("GET", "/v1/book-clubs");
+  // Sent without a token: the summary is the same for every caller, and a GET
+  // with no Authorization header is a CORS-simple request with no preflight.
+  async getBookClubs(): Promise<IClubSummary[]> {
+    const rows = await request<(IClub | IClubSummary)[]>(
+      "/v1/book-clubs?view=summary",
+      { auth: "none", label: "Book club request" },
+    );
+    return rows.map(toClubSummary);
+  }
+  getMyBookClubIds(): Promise<string[]> {
+    return this.request<string[]>("GET", "/v1/me/book-clubs", undefined, true);
   }
   getBookClub(id: string): Promise<IClub | undefined> {
     return this.request<IClub>("GET", `/v1/book-clubs/${id}`).catch((e) => {
@@ -79,7 +92,7 @@ class BookClubRepo {
       throw e;
     });
   }
-  updateBookClub(id: string, club: IClub) {
+  updateBookClub(id: string, club: IClub | IClubSummary) {
     return this.request<IClub>(
       "PATCH",
       `/v1/book-clubs/${id}`,

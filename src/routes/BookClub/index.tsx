@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ArrowUpRight, Search } from "lucide-react";
 import BookClubCard from "./BookClubCard";
-import { IClub } from "../../types/IClub";
+import { IClub, IClubSummary } from "../../types/IClub";
 import CreateBookClub from "./CreateBookClub";
 import UpdateBookClub from "./UpdateBookClub";
 
@@ -11,19 +11,23 @@ import { bookClubRepo } from "./bookClubRepo";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { APP_NAME } from "@/config/seo";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { useAuthIdentity } from "@novelsync/platform-auth";
 import {
   useBookClubListCache,
   useBookClubs,
+  useMyBookClubIds,
 } from "@/hooks/queries/useBookClubQueries";
 import {
   clubListView,
   filterClubs,
+  isJoined,
+  toClubSummary,
   withClubFirst,
-  withMembership,
+  withMemberCountChange,
   withoutClub,
 } from "@/lib/bookClubList";
 
-const NO_CLUBS: IClub[] = [];
+const NO_CLUBS: IClubSummary[] = [];
 
 const SKELETON_NAME_WIDTHS = ["w-2/5", "w-3/5", "w-1/3", "w-1/2", "w-2/3"];
 
@@ -46,20 +50,24 @@ const ClubRowsSkeleton = () => (
 );
 
 const BookClubs = () => {
+  // Membership and ownership need only the uid, which is known before the
+  // profile behind `user` has loaded; the create form is what needs `user`.
+  const { uid } = useAuthIdentity();
   const { user } = useAuthContext();
 
   const clubsQuery = useBookClubs();
+  const { data: myClubIds } = useMyBookClubIds(uid);
   const bookClubs = clubsQuery.data ?? NO_CLUBS;
   const patchClubs = useBookClubListCache();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showUpdateForm, setShowUpdateForm] = useState(false);
-  const [selectedClub, setSelectedClub] = useState<IClub | null>(null);
-  const [clubToDelete, setClubToDelete] = useState<IClub | null>(null);
+  const [selectedClub, setSelectedClub] = useState<IClubSummary | null>(null);
+  const [clubToDelete, setClubToDelete] = useState<IClubSummary | null>(null);
   const [notCreatorDeleteAttempt, setNotCreatorDeleteAttempt] =
-    useState<IClub | null>(null);
+    useState<IClubSummary | null>(null);
   const [notCreatorUpdateAttempt, setNotCreatorUpdateAttempt] =
-    useState<IClub | null>(null);
+    useState<IClubSummary | null>(null);
   const [loginRequiredForJoin, setLoginRequiredForJoin] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -79,8 +87,13 @@ const BookClubs = () => {
 
   const handleCreateClub = async (newClub: IClub) => {
     try {
-      const created = await bookClubRepo.createBookClub(newClub);
-      await patchClubs(created.id, (clubs) => withClubFirst(clubs, created));
+      const created = toClubSummary(await bookClubRepo.createBookClub(newClub));
+      // The founder is the club's first member.
+      await patchClubs(
+        created.id,
+        (clubs) => withClubFirst(clubs, created),
+        true,
+      );
       setShowCreateForm(false);
     } catch (error) {
       console.error("Failed to create club:", error);
@@ -96,11 +109,10 @@ const BookClubs = () => {
     setShowCreateForm(false);
   };
 
-  const handleUpdateClub = async (updatedClub: IClub) => {
+  const handleUpdateClub = async (updatedClub: IClubSummary) => {
     try {
-      const saved = await bookClubRepo.updateBookClub(
-        updatedClub.id,
-        updatedClub,
+      const saved = toClubSummary(
+        await bookClubRepo.updateBookClub(updatedClub.id, updatedClub),
       );
       await patchClubs(saved.id, (clubs) => withClubFirst(clubs, saved));
       setShowUpdateForm(false);
@@ -111,8 +123,8 @@ const BookClubs = () => {
     }
   };
 
-  const handleShowUpdateForm = (club: IClub) => {
-    if (club.creatorId === user?.uid) {
+  const handleShowUpdateForm = (club: IClubSummary) => {
+    if (club.creatorId === uid) {
       setSelectedClub(club);
       setShowUpdateForm(true);
     } else {
@@ -121,11 +133,13 @@ const BookClubs = () => {
   };
 
   const handleJoinClub = async (clubId: string) => {
-    if (user) {
+    if (uid) {
       try {
-        await bookClubRepo.joinBookClub(clubId, user.uid);
-        await patchClubs(clubId, (clubs) =>
-          withMembership(clubs, clubId, user.uid, true),
+        await bookClubRepo.joinBookClub(clubId, uid);
+        await patchClubs(
+          clubId,
+          (clubs) => withMemberCountChange(clubs, clubId, 1),
+          true,
         );
       } catch (error) {
         console.error("Failed to join club:", error);
@@ -135,8 +149,8 @@ const BookClubs = () => {
     }
   };
 
-  const handleDeleteClub = (club: IClub) => {
-    if (club.creatorId === user?.uid) {
+  const handleDeleteClub = (club: IClubSummary) => {
+    if (club.creatorId === uid) {
       setClubToDelete(club);
     } else {
       setNotCreatorDeleteAttempt(club);
@@ -149,7 +163,7 @@ const BookClubs = () => {
     setClubToDelete(null);
     try {
       await bookClubRepo.deleteBookClub(id);
-      await patchClubs(id, (clubs) => withoutClub(clubs, id));
+      await patchClubs(id, (clubs) => withoutClub(clubs, id), false);
     } catch (error) {
       console.error("Failed to delete club:", error);
       toast.error("We couldn't delete the club. Please try again.");
@@ -157,11 +171,13 @@ const BookClubs = () => {
   };
 
   const handleLeaveClub = async (clubId: string) => {
-    if (user) {
+    if (uid) {
       try {
-        await bookClubRepo.leaveBookClub(clubId, user.uid);
-        await patchClubs(clubId, (clubs) =>
-          withMembership(clubs, clubId, user.uid, false),
+        await bookClubRepo.leaveBookClub(clubId, uid);
+        await patchClubs(
+          clubId,
+          (clubs) => withMemberCountChange(clubs, clubId, -1),
+          false,
         );
       } catch (error) {
         console.error("Failed to leave club:", error);
@@ -321,12 +337,12 @@ const BookClubs = () => {
           </div>
         ) : listView === "rows" ? (
           <div>
-            {filteredClubs.map((club: IClub, index) => (
+            {filteredClubs.map((club: IClubSummary, index) => (
               <BookClubCard
                 key={club.id}
                 index={index}
-                joined={user ? club.members.includes(user.uid) : false}
-                isCreator={user ? club.creatorId === user.uid : false}
+                joined={isJoined(uid, myClubIds, club.id)}
+                isCreator={club.creatorId === uid}
                 club={club}
                 onEdit={() => handleShowUpdateForm(club)}
                 onDelete={() => handleDeleteClub(club)}

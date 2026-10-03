@@ -2,7 +2,8 @@ import { useCallback } from "react";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
 import { bookClubRepo } from "@/routes/BookClub/bookClubRepo";
-import { IClub, IReadingProgress } from "@/types/IClub";
+import { IClub, IClubSummary, IReadingProgress } from "@/types/IClub";
+import { withMembership } from "@/lib/bookClubList";
 
 // Other members' changes arrive only by refetch — story-data has no realtime
 // channel — so this stays short-lived and refreshes on focus. The viewer's own
@@ -40,12 +41,17 @@ export function useBookClubCache(clubId: string) {
         if (typeof next !== "function") return next;
         return club ? next(club) : club;
       });
-      // The list is not on screen here, so it is only marked stale and
-      // refetches when the reader goes back to it.
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.bookClubs.list(),
-        refetchType: "none",
-      });
+      // The list and the viewer's memberships are not on screen here, so they
+      // are only marked stale and refetch when the reader goes back to them.
+      for (const stale of [
+        queryKeys.bookClubs.list(),
+        queryKeys.bookClubs.mine(),
+      ]) {
+        void queryClient.invalidateQueries({
+          queryKey: stale,
+          refetchType: "none",
+        });
+      }
     },
     [queryClient, clubId],
   );
@@ -64,27 +70,52 @@ export function useClubProgress(clubId: string | undefined, enabled = true) {
 }
 
 export function useBookClubs() {
-  return useQuery<IClub[]>({
+  return useQuery<IClubSummary[]>({
     queryKey: queryKeys.bookClubs.list(),
     queryFn: () => bookClubRepo.getBookClubs(),
   });
 }
 
 /**
+ * The ids of the clubs the viewer belongs to. The list itself is the same for
+ * every caller, so membership is read separately. The cache is cleared when
+ * the signed-in user changes, which is why the key carries no uid.
+ */
+export function useMyBookClubIds(uid: string | null) {
+  return useQuery<string[]>({
+    queryKey: queryKeys.bookClubs.mine(),
+    queryFn: () => bookClubRepo.getMyBookClubIds(),
+    enabled: !!uid,
+  });
+}
+
+/**
  * Applies the result of a write the list page just made to the cached list,
  * and marks that club's cached detail stale so it is not shown as it was.
+ * `joined` also records the viewer joining or leaving that club.
  */
 export function useBookClubListCache() {
   const queryClient = useQueryClient();
   return useCallback(
-    async (clubId: string, update: (clubs: IClub[]) => IClub[]) => {
+    async (
+      clubId: string,
+      update: (clubs: IClubSummary[]) => IClubSummary[],
+      joined?: boolean,
+    ) => {
       const queryKey = queryKeys.bookClubs.list();
       if (queryClient.getQueryData(queryKey) !== undefined) {
         // A list read that started before the write would land after this
         // patch and put the old rows back.
         await queryClient.cancelQueries({ queryKey });
-        queryClient.setQueryData<IClub[]>(queryKey, (clubs) =>
+        queryClient.setQueryData<IClubSummary[]>(queryKey, (clubs) =>
           clubs ? update(clubs) : clubs,
+        );
+      }
+      if (joined !== undefined) {
+        const mine = queryKeys.bookClubs.mine();
+        await queryClient.cancelQueries({ queryKey: mine });
+        queryClient.setQueryData<string[]>(mine, (ids) =>
+          ids ? withMembership(ids, clubId, joined) : ids,
         );
       }
       void queryClient.invalidateQueries({

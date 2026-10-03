@@ -43,6 +43,7 @@ export const queryKeys = {
     // A leaf of its own: under the bare prefix, invalidating the list would
     // take every cached detail and progress query with it.
     list: () => ["bookClubs", "list"] as const,
+    mine: () => ["bookClubs", "mine"] as const,
     detail: (clubId: string) => ["bookClubs", clubId] as const,
     progress: (clubId: string) => ["bookClubs", clubId, "progress"] as const,
   },

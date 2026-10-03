@@ -1,8 +1,29 @@
-import type { IClub } from "@/types/IClub";
+import type { IClub, IClubSummary } from "@/types/IClub";
 
-type ClubList = readonly IClub[];
+type ClubList = readonly IClubSummary[];
 
-export function filterClubs(clubs: ClubList, search: string): IClub[] {
+/**
+ * Reduces a full club to its list row. Create and edit answer with the full
+ * club, and a story-data that predates `?view=summary` ignores the parameter
+ * and lists full clubs too, so either shape may arrive here.
+ */
+export function toClubSummary(club: IClub | IClubSummary): IClubSummary {
+  const memberCount =
+    "memberCount" in club ? club.memberCount : club.members.length;
+  return {
+    id: club.id,
+    name: club.name,
+    description: club.description,
+    image: club.image,
+    category: club.category,
+    activity: club.activity,
+    creatorId: club.creatorId,
+    memberCount,
+    ...(club.meetUp ? { meetUp: club.meetUp } : {}),
+  };
+}
+
+export function filterClubs(clubs: ClubList, search: string): IClubSummary[] {
   const q = search.trim().toLowerCase();
   if (!q) return [...clubs];
   return clubs.filter((club) =>
@@ -32,29 +53,48 @@ export function clubListView(
 
 // The list is served most-recently-updated first, so a created or edited club
 // belongs at the head; anywhere else and the next refetch reorders the page.
-export function withClubFirst(clubs: ClubList, club: IClub): IClub[] {
+export function withClubFirst(
+  clubs: ClubList,
+  club: IClubSummary,
+): IClubSummary[] {
   return [club, ...clubs.filter((c) => c.id !== club.id)];
 }
 
-export function withoutClub(clubs: ClubList, clubId: string): IClub[] {
+export function withoutClub(clubs: ClubList, clubId: string): IClubSummary[] {
   return clubs.filter((c) => c.id !== clubId);
 }
 
-export function withMembership(
+export function withMemberCountChange(
   clubs: ClubList,
   clubId: string,
-  uid: string,
+  delta: 1 | -1,
+): IClubSummary[] {
+  return clubs.map((club) =>
+    club.id === clubId
+      ? { ...club, memberCount: Math.max(0, club.memberCount + delta) }
+      : club,
+  );
+}
+
+/** The viewer's club ids after joining or leaving one. */
+export function withMembership(
+  clubIds: readonly string[],
+  clubId: string,
   joined: boolean,
-): IClub[] {
-  return clubs.map((club) => {
-    if (club.id !== clubId || club.members.includes(uid) === joined) {
-      return club;
-    }
-    return {
-      ...club,
-      members: joined
-        ? [...club.members, uid]
-        : club.members.filter((id) => id !== uid),
-    };
-  });
+): string[] {
+  const rest = clubIds.filter((id) => id !== clubId);
+  return joined ? [...rest, clubId] : rest;
+}
+
+/**
+ * `undefined` means not known yet: the viewer is signed in but their club ids
+ * have not arrived, so the row must not claim "Join" and then correct itself.
+ */
+export function isJoined(
+  uid: string | null,
+  myClubIds: readonly string[] | undefined,
+  clubId: string,
+): boolean | undefined {
+  if (!uid) return false;
+  return myClubIds?.includes(clubId);
 }
