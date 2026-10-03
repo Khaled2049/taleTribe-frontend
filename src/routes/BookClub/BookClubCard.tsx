@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { IClub } from "@/types/IClub";
 import { Edit, Trash2, ArrowUpRight } from "lucide-react";
+import { prefetchBookClub, preloadBookClubCode } from "./prefetchBookClub";
 
 interface BookClubCardProps {
   club: IClub;
@@ -29,6 +30,14 @@ const BookClubCard = ({
     navigate(`/book-clubs/${club.id}`);
   };
 
+  // Hovering down the list warms only the page code. The club itself is read
+  // on press, so a sweep of the pointer does not fetch every club it crosses,
+  // and a press on Join or Edit does not fetch one at all.
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if ((e.target as Element).closest("button")) return;
+    void prefetchBookClub(club.id);
+  };
+
   const handleButtonClick = (e: React.MouseEvent, action: () => void) => {
     e.stopPropagation();
     action();
@@ -37,6 +46,8 @@ const BookClubCard = ({
   return (
     <article
       onClick={handleCardClick}
+      onMouseEnter={preloadBookClubCode}
+      onPointerDown={handlePointerDown}
       className="group relative cursor-pointer border-b border-neutral-200 dark:border-neutral-800 py-3 sm:py-3.5 transition-colors duration-200 hover:border-dark-green dark:hover:border-light-green"
     >
       {/* Left accent bar */}

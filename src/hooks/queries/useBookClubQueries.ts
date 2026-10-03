@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
 import { bookClubRepo } from "@/routes/BookClub/bookClubRepo";
 import { IClub, IReadingProgress } from "@/types/IClub";
@@ -7,12 +7,17 @@ import { IClub, IReadingProgress } from "@/types/IClub";
 // Other members' changes arrive only by refetch — story-data has no realtime
 // channel — so this stays short-lived and refreshes on focus. The viewer's own
 // writes do not wait for that: see useBookClubCache.
-export function useBookClub(clubId: string | undefined) {
-  return useQuery<IClub | null>({
-    queryKey: queryKeys.bookClubs.detail(clubId!),
-    queryFn: async () => (await bookClubRepo.getBookClub(clubId!)) ?? null,
-    enabled: !!clubId,
+export const bookClubQuery = (clubId: string) =>
+  queryOptions<IClub | null>({
+    queryKey: queryKeys.bookClubs.detail(clubId),
+    queryFn: async () => (await bookClubRepo.getBookClub(clubId)) ?? null,
     staleTime: 15_000,
+  });
+
+export function useBookClub(clubId: string | undefined) {
+  return useQuery({
+    ...bookClubQuery(clubId ?? ""),
+    enabled: !!clubId,
     refetchOnWindowFocus: true,
   });
 }

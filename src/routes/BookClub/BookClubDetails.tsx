@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { ChevronDown, ChevronUp, Crown } from "lucide-react";
 import { bookClubRepo } from "./bookClubRepo";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthIdentity } from "@novelsync/platform-auth";
 import ReadingPaceSection from "./components/ReadingPaceSection";
 import DiscussionSection from "./components/DiscussionSection";
 import NextBookSection from "./components/NextBookSection";
@@ -68,7 +69,11 @@ const Section = ({
 
 const BookClubDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { user, loading } = useAuthContext();
+  // RequireAuth lets this render on the Firebase identity alone, so `uid` is
+  // set from the first render and `user` — the hydrated profile — follows.
+  // Only chat needs the profile.
+  const { uid } = useAuthIdentity();
+  const { user } = useAuthContext();
   const { data: clubData, isPending: isLoading } = useBookClub(id);
   const club = clubData ?? undefined;
   const updateClubCache = useBookClubCache(id ?? "");
@@ -89,29 +94,27 @@ const BookClubDetails: React.FC = () => {
   }));
 
   // The progress endpoint is members-only, so it is not queried while signed out.
-  const { data: progress } = useClubProgress(id, !!user);
+  const { data: progress } = useClubProgress(id, !!uid);
   const progressList = progress ?? [];
 
-  const userCurrentChapter = user
-    ? (progressList.find((p) => p.userId === user.uid)?.currentChapter ?? 0)
+  const userCurrentChapter = uid
+    ? (progressList.find((p) => p.userId === uid)?.currentChapter ?? 0)
     : 0;
 
-  const isCreator = user ? club?.creatorId === user.uid : false;
-  const isMember = user ? (club?.members?.includes(user.uid) ?? false) : false;
+  const isCreator = uid ? club?.creatorId === uid : false;
+  const isMember = uid ? (club?.members?.includes(uid) ?? false) : false;
   const membersById = new Map(members.map((m) => [m.id, m.username]));
 
   const handleMembershipToggle = async () => {
-    if (!club || !user || isUpdatingMembership) return;
+    if (!club || !uid || isUpdatingMembership) return;
     setIsUpdatingMembership(true);
     try {
       if (isMember) {
-        await bookClubRepo.leaveBookClub(club.id, user.uid);
+        await bookClubRepo.leaveBookClub(club.id, uid);
       } else {
-        await bookClubRepo.joinBookClub(club.id, user.uid);
+        await bookClubRepo.joinBookClub(club.id, uid);
       }
-      await updateClubCache((cached) =>
-        withMember(cached, user.uid, !isMember),
-      );
+      await updateClubCache((cached) => withMember(cached, uid, !isMember));
       // Progress is members-only and lists members only, so both what the
       // viewer may read and what it contains just changed.
       void queryClient.invalidateQueries({
@@ -124,7 +127,7 @@ const BookClubDetails: React.FC = () => {
     }
   };
 
-  if (loading || isLoading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-ns-bg">
         <div className="text-center">
@@ -213,7 +216,7 @@ const BookClubDetails: React.FC = () => {
                 </span>
               </button>
 
-              {user && !isCreator && (
+              {uid && !isCreator && (
                 <button
                   type="button"
                   onClick={handleMembershipToggle}

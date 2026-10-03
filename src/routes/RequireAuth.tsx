@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthIdentity } from "@novelsync/platform-auth";
 
 interface RequireAuthProps {
   children: ReactNode;
@@ -10,12 +10,17 @@ interface RequireAuthProps {
 /**
  * Gates member-only sections without losing the visitor's destination. The
  * sign-in page validates and consumes this relative redirect after login.
+ *
+ * Gates on the Firebase identity rather than the hydrated profile in
+ * authStore: that store reports `user: null` until the profile and follow
+ * graph load, which would hold the page back behind reads it does not need.
+ * Children must therefore not assume `useAuthContext().user` is set yet.
  */
 const RequireAuth = ({ children }: RequireAuthProps) => {
-  const { user, loading } = useAuthContext();
+  const identity = useAuthIdentity();
   const location = useLocation();
 
-  if (loading) {
+  if (identity.loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center bg-ns-bg">
         <Loader2
@@ -26,7 +31,7 @@ const RequireAuth = ({ children }: RequireAuthProps) => {
     );
   }
 
-  if (!user) {
+  if (!identity.isSignedIn) {
     const returnTo = `${location.pathname}${location.search}${location.hash}`;
     return (
       <Navigate

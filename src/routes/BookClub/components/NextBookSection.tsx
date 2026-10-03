@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Check, X } from "lucide-react";
 import { IBookOfTheMonth, IClub, IPoll } from "@/types/IClub";
 import { bookClubRepo } from "../bookClubRepo";
-import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthIdentity } from "@novelsync/platform-auth";
 import { Button } from "@/components/ui/button";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,7 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
   club,
   isCreator,
 }) => {
-  const { user } = useAuthContext();
+  const { uid } = useAuthIdentity();
   const updateClubCache = useBookClubCache(club.id);
   const polls = club.polls || [];
   const activePolls = polls.filter((p) => p.isActive);
@@ -135,16 +135,16 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
   };
 
   const handleVote = async (pollId: string, optionIndex: number) => {
-    if (!user) return;
+    if (!uid) return;
 
     const poll = polls.find((p) => p.id === pollId);
-    const currentVote = poll?.votes[user.uid];
+    const currentVote = poll?.votes[uid];
     setOptimisticVotes((prev) => ({ ...prev, [pollId]: optionIndex }));
 
     try {
-      await bookClubRepo.voteOnPoll(club.id, pollId, user.uid, optionIndex);
+      await bookClubRepo.voteOnPoll(club.id, pollId, uid, optionIndex);
       await updateClubCache((cached) =>
-        withVote(cached, pollId, user.uid, optionIndex),
+        withVote(cached, pollId, uid, optionIndex),
       );
     } catch (err) {
       console.error("Error voting:", err);
@@ -179,11 +179,11 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
   };
 
   const getUserVote = (poll: IPoll): number | null => {
-    if (!user) return null;
+    if (!uid) return null;
     if (optimisticVotes[poll.id] !== undefined) {
       return optimisticVotes[poll.id];
     }
-    return poll.votes[user.uid] !== undefined ? poll.votes[user.uid] : null;
+    return poll.votes[uid] !== undefined ? poll.votes[uid] : null;
   };
 
   const getVoteCounts = (poll: IPoll): number[] => {
@@ -193,12 +193,12 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
         counts[optionIndex]++;
       }
     });
-    if (user && optimisticVotes[poll.id] !== undefined) {
+    if (uid && optimisticVotes[poll.id] !== undefined) {
       const optimisticVote = optimisticVotes[poll.id];
       if (
         optimisticVote >= 0 &&
         optimisticVote < poll.options.length &&
-        poll.votes[user.uid] === undefined
+        poll.votes[uid] === undefined
       ) {
         counts[optimisticVote]++;
       }
@@ -271,7 +271,7 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
                       key={index}
                       type="button"
                       onClick={() => handleVote(poll.id, index)}
-                      disabled={!user}
+                      disabled={!uid}
                       className="w-full text-left py-3 border-t border-ns-border first:border-t-0 group disabled:cursor-default"
                     >
                       <div className="flex items-center gap-3">
