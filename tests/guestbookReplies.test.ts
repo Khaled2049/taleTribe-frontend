@@ -3,6 +3,7 @@ import type { IGuestbookReply } from "@novelsync/story-data-client";
 import {
   addReply,
   guestbookRepliesKey,
+  indexReplies,
   removeReplySubtree,
   replaceReply,
   toggleReplyUpvote,
@@ -68,5 +69,22 @@ describe("guestbook reply thread helpers", () => {
     expect(
       toggleReplyUpvote(reply({ userVote: "down", downvoteCount: 1 })),
     ).toMatchObject({ userVote: "up", upvoteCount: 1, downvoteCount: 0 });
+  });
+
+  it("indexes a thread once, keeping the server's order within each level", () => {
+    const { roots, childrenOf } = indexReplies([
+      reply({ id: "c2", parentId: "a" }),
+      reply({ id: "b" }),
+      reply({ id: "g", parentId: "c1" }),
+      reply({ id: "c1", parentId: "a" }),
+      reply(),
+      reply({ id: "orphan", parentId: "gone" }),
+    ]);
+    expect(ids(roots)).toEqual(["b", "a"]);
+    expect(ids([...childrenOf("a")])).toEqual(["c2", "c1"]);
+    expect(ids([...childrenOf("c1")])).toEqual(["g"]);
+    expect(childrenOf("b")).toHaveLength(0);
+    // The same empty list each time, so a leaf's memoized render can bail out.
+    expect(childrenOf("b")).toBe(childrenOf("g"));
   });
 });

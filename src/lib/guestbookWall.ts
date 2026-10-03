@@ -36,11 +36,10 @@ const isSameDay = (a: Date, b: Date) =>
   a.getDate() === b.getDate();
 
 /** "Today" / "Yesterday" / an absolute date, for the feed's day dividers. */
-export function dayLabel(value: GuestbookDate): string {
+export function dayLabel(value: GuestbookDate, now = new Date()): string {
   const date = toDate(value);
   if (!date) return "";
 
-  const now = new Date();
   if (isSameDay(date, now)) return "Today";
 
   const yesterday = new Date(now);
@@ -53,16 +52,19 @@ export function dayLabel(value: GuestbookDate): string {
 /** Groups already-sorted (created_at DESC) entries into day-divider rows. */
 export function groupByDay<T extends { createdAt: GuestbookDate }>(
   entries: T[],
+  now = new Date(),
 ): Array<{ isDivider: true; label: string } | { isDivider: false; entry: T }> {
   const rows: Array<
     { isDivider: true; label: string } | { isDivider: false; entry: T }
   > = [];
-  let lastLabel: string | null = null;
+  let lastDay: string | null = null;
   for (const entry of entries) {
-    const label = dayLabel(entry.createdAt);
-    if (label !== lastLabel) {
-      rows.push({ isDivider: true, label });
-      lastLabel = label;
+    // Locale formatting is the expensive part, so label a day once rather
+    // than once per entry in it.
+    const day = toDate(entry.createdAt)?.toDateString() ?? "";
+    if (day !== lastDay) {
+      rows.push({ isDivider: true, label: dayLabel(entry.createdAt, now) });
+      lastDay = day;
     }
     rows.push({ isDivider: false, entry });
   }

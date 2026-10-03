@@ -44,6 +44,33 @@ export function removeReplySubtree(
   return replies.filter((row) => !removed.has(row.id));
 }
 
+const NO_CHILDREN: readonly IGuestbookReply[] = [];
+
+/**
+ * One pass over the thread instead of a scan per rendered reply. A reply whose
+ * parent is missing from the list is unreachable, exactly as it was when each
+ * reply filtered the list for its own children.
+ */
+export function indexReplies(replies: readonly IGuestbookReply[]) {
+  const roots: IGuestbookReply[] = [];
+  const children = new Map<string, IGuestbookReply[]>();
+  for (const reply of replies) {
+    if (!reply.parentId) {
+      roots.push(reply);
+      continue;
+    }
+    const siblings = children.get(reply.parentId);
+    if (siblings) siblings.push(reply);
+    else children.set(reply.parentId, [reply]);
+  }
+  return {
+    roots,
+    childrenOf: (replyId: string) => children.get(replyId) ?? NO_CHILDREN,
+  };
+}
+
+export type ReplyIndex = ReturnType<typeof indexReplies>;
+
 export function toggleReplyUpvote(reply: IGuestbookReply): IGuestbookReply {
   const vote = reply.userVote === "up" ? null : "up";
   return {

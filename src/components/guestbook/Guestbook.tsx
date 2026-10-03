@@ -1,5 +1,5 @@
 import { useGuestbookMutations } from "@/hooks/queries/useGuestbookMutations";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Loader } from "lucide-react";
 import { useInView } from "react-intersection-observer";
 import { IGuestbookEntry } from "@novelsync/story-data-client";
@@ -62,7 +62,16 @@ const Guestbook: React.FC<GuestbookProps> = ({
 
   const mutations = useGuestbookMutations(viewerId);
 
-  const entries = data?.pages.flatMap((p) => p.entries) ?? [];
+  const entries = useMemo(
+    () => data?.pages.flatMap((p) => p.entries) ?? [],
+    [data],
+  );
+  // A fresh object every render would re-render each context reader, memoized
+  // or not.
+  const policyContext = useMemo(
+    () => ({ canPost, policy, closedReason }),
+    [canPost, policy, closedReason],
+  );
   const totalCount = data?.pages[0]?.totalCount;
 
   const { ref: loadMoreRef, inView } = useInView({
@@ -117,7 +126,7 @@ const Guestbook: React.FC<GuestbookProps> = ({
   };
 
   return (
-    <GuestbookPolicyContext.Provider value={{ canPost, policy, closedReason }}>
+    <GuestbookPolicyContext.Provider value={policyContext}>
       <section>
         {currentUser && canPost && (
           <SignGuestbookForm

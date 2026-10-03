@@ -1,5 +1,5 @@
 import { useGuestbookMutations } from "@/hooks/queries/useGuestbookMutations";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Loader, User } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -59,7 +59,16 @@ const WallPage: React.FC = () => {
 
   const mutations = useGuestbookMutations(user?.uid ?? null);
 
-  const entries = data?.pages.flatMap((p) => p.entries) ?? [];
+  const entries = useMemo(
+    () => data?.pages.flatMap((p) => p.entries) ?? [],
+    [data],
+  );
+  // "Today" and "Yesterday" go stale at midnight, so the day is a dependency.
+  const today = new Date().toDateString();
+  const rows = useMemo(
+    () => groupByDay(entries, new Date(today)),
+    [entries, today],
+  );
   const handlePost = async (content: string) => {
     if (!user) return;
     setIsPosting(true);
@@ -118,8 +127,6 @@ const WallPage: React.FC = () => {
       </div>
     );
   }
-
-  const rows = groupByDay(entries);
 
   return (
     <div className="min-h-screen bg-ns-bg">

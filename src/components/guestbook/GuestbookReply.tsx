@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronUp,
@@ -12,13 +12,14 @@ import { IGuestbookReply } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
 import { rateLimitMessage } from "@/lib/rateLimitError";
 import { useGuestbookPolicy } from "./guestbookPolicyContext";
+import type { ReplyIndex } from "@/lib/guestbookReplies";
 import { formatRelativeTime } from "@/lib/relativeTime";
 
 interface GuestbookReplyProps {
   ownerId: string;
   entryAuthorId: string;
   reply: IGuestbookReply;
-  allReplies: IGuestbookReply[];
+  childrenOf: ReplyIndex["childrenOf"];
   currentUser: IUser | null;
   onReply: (parentId: string, content: string) => Promise<void>;
   onDelete: (replyId: string) => Promise<void>;
@@ -34,7 +35,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
     ownerId,
     entryAuthorId,
     reply,
-    allReplies,
+    childrenOf,
     currentUser,
     onReply,
     onDelete,
@@ -54,10 +55,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
     const [isVoting, setIsVoting] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
 
-    const children = useMemo(
-      () => allReplies.filter((r) => r.parentId === reply.id),
-      [allReplies, reply.id],
-    );
+    const children = childrenOf(reply.id);
 
     // Live-resolve the author's current username (falls back to the stored copy
     // while the profile loads) so username changes show up here too.
@@ -313,7 +311,7 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
                     ownerId={ownerId}
                     entryAuthorId={entryAuthorId}
                     reply={child}
-                    allReplies={allReplies}
+                    childrenOf={childrenOf}
                     currentUser={currentUser}
                     onReply={onReply}
                     onDelete={onDelete}

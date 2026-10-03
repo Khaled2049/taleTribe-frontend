@@ -1,6 +1,6 @@
 import { useGuestbookMutations } from "@/hooks/queries/useGuestbookMutations";
 import { useGuestbookReplies } from "@/hooks/queries/useGuestbookReplies";
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { Send, ChevronUp } from "lucide-react";
 import { IGuestbookReply } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
@@ -8,6 +8,7 @@ import { rateLimitMessage } from "@/lib/rateLimitError";
 import { GuestbookReply } from "./GuestbookReply";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useGuestbookPolicy } from "./guestbookPolicyContext";
+import { indexReplies } from "@/lib/guestbookReplies";
 
 interface GuestbookRepliesProps {
   ownerId: string;
@@ -37,10 +38,39 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
   const [isDeletingReply, setIsDeletingReply] = useState(false);
   const { canPost } = useGuestbookPolicy();
 
-  const addReply = async (content: string, parentId: string | null) => {
-    if (!currentUser) return;
-    await mutations.createReply(ownerId, entryId, content, parentId);
-  };
+  const signedIn = !!currentUser;
+
+  // Stable handlers and index, so typing in the box below does not re-render
+  // every memoized reply in the thread.
+  const addReply = useCallback(
+    async (content: string, parentId: string | null) => {
+      if (!signedIn) return;
+      await mutations.createReply(ownerId, entryId, content, parentId);
+    },
+    [signedIn, mutations, ownerId, entryId],
+  );
+  const handleNestedReply = useCallback(
+    (parentId: string, content: string) => addReply(content, parentId),
+    [addReply],
+  );
+  const handleEdit = useCallback(
+    async (replyId: string, content: string) => {
+      await mutations.editReply(ownerId, entryId, replyId, content);
+    },
+    [mutations, ownerId, entryId],
+  );
+  const handleVote = useCallback(
+    (reply: IGuestbookReply) => mutations.voteReply(ownerId, reply),
+    [mutations, ownerId],
+  );
+  const requestDelete = useCallback(
+    async (replyId: string) => setPendingDeleteId(replyId),
+    [],
+  );
+  const { roots: topLevelReplies, childrenOf } = useMemo(
+    () => indexReplies(replies),
+    [replies],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,10 +98,6 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
     }
   };
 
-  const handleNestedReply = async (parentId: string, content: string) => {
-    await addReply(content, parentId);
-  };
-
   const confirmDelete = async () => {
     if (!pendingDeleteId) return;
     setIsDeletingReply(true);
@@ -84,15 +110,6 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
       setIsDeletingReply(false);
     }
   };
-
-  const handleEdit = async (replyId: string, content: string) => {
-    await mutations.editReply(ownerId, entryId, replyId, content);
-  };
-
-  const handleVote = (reply: IGuestbookReply) =>
-    mutations.voteReply(ownerId, reply);
-
-  const topLevelReplies = replies.filter((r) => !r.parentId);
 
   return (
     <div className="mt-3 pt-3 border-t border-ns-border">
@@ -165,10 +182,10 @@ const GuestbookReplies: React.FC<GuestbookRepliesProps> = ({
               ownerId={ownerId}
               entryAuthorId={entryAuthorId}
               reply={reply}
-              allReplies={replies}
+              childrenOf={childrenOf}
               currentUser={currentUser}
               onReply={handleNestedReply}
-              onDelete={async (replyId) => setPendingDeleteId(replyId)}
+              onDelete={requestDelete}
               onEdit={handleEdit}
               onVote={handleVote}
               depth={0}
