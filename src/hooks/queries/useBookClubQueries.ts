@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
 import { bookClubRepo } from "@/routes/BookClub/bookClubRepo";
@@ -10,6 +10,12 @@ export function useBookClub(clubId: string | undefined) {
   useEffect(() => {
     const refresh = () => {
       void queryClient.invalidateQueries({ queryKey });
+      // The list is not on screen here, so it is only marked stale and
+      // refetches when the reader goes back to it.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.bookClubs.list(),
+        refetchType: "none",
+      });
     };
     window.addEventListener("book-club-changed", refresh);
     return () => window.removeEventListener("book-club-changed", refresh);
@@ -35,14 +41,34 @@ export function useClubProgress(clubId: string | undefined, enabled = true) {
   });
 }
 
-export function useBookClubs(enabled = true) {
+export function useBookClubs() {
   return useQuery<IClub[]>({
-    queryKey: queryKeys.bookClubs.all(),
-    queryFn: async () => {
-      const clubs = await bookClubRepo.getBookClubs();
-      return clubs ?? [];
-    },
-    enabled,
-    staleTime: 1000 * 60 * 2,
+    queryKey: queryKeys.bookClubs.list(),
+    queryFn: () => bookClubRepo.getBookClubs(),
   });
+}
+
+/**
+ * Applies the result of a write the list page just made to the cached list,
+ * and marks that club's cached detail stale so it is not shown as it was.
+ */
+export function useBookClubListCache() {
+  const queryClient = useQueryClient();
+  return useCallback(
+    async (clubId: string, update: (clubs: IClub[]) => IClub[]) => {
+      const queryKey = queryKeys.bookClubs.list();
+      if (queryClient.getQueryData(queryKey) !== undefined) {
+        // A list read that started before the write would land after this
+        // patch and put the old rows back.
+        await queryClient.cancelQueries({ queryKey });
+        queryClient.setQueryData<IClub[]>(queryKey, (clubs) =>
+          clubs ? update(clubs) : clubs,
+        );
+      }
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.bookClubs.detail(clubId),
+      });
+    },
+    [queryClient],
+  );
 }

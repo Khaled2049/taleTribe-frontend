@@ -84,13 +84,8 @@ class BookClubRepo {
     return result;
   }
 
-  createBookClub(club: IClub): Promise<string> {
-    return this.request<IClub>(
-      "POST",
-      "/v1/book-clubs",
-      clubInput(club),
-      true,
-    ).then((x) => x.id);
+  createBookClub(club: IClub): Promise<IClub> {
+    return this.request<IClub>("POST", "/v1/book-clubs", clubInput(club), true);
   }
   getBookClubs(): Promise<IClub[]> {
     return this.request<IClub[]>("GET", "/v1/book-clubs");

@@ -40,7 +40,9 @@ export const queryKeys = {
     byStory: (storyId: string) => ["comments", storyId] as const,
   },
   bookClubs: {
-    all: () => ["bookClubs"] as const,
+    // A leaf of its own: under the bare prefix, invalidating the list would
+    // take every cached detail and progress query with it.
+    list: () => ["bookClubs", "list"] as const,
     detail: (clubId: string) => ["bookClubs", clubId] as const,
     progress: (clubId: string) => ["bookClubs", clubId, "progress"] as const,
   },

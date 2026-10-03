@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { ArrowUpRight, Search } from "lucide-react";
 import BookClubCard from "./BookClubCard";
 import { IClub } from "../../types/IClub";
@@ -10,21 +11,24 @@ import { bookClubRepo } from "./bookClubRepo";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { APP_NAME } from "@/config/seo";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import {
+  useBookClubListCache,
+  useBookClubs,
+} from "@/hooks/queries/useBookClubQueries";
+import {
+  filterClubs,
+  withClubFirst,
+  withMembership,
+  withoutClub,
+} from "@/lib/bookClubList";
+
+const NO_CLUBS: IClub[] = [];
 
 const BookClubs = () => {
   const { user } = useAuthContext();
 
-  const [bookClubs, setBookClubs] = useState<IClub[]>([]);
-
-  useEffect(() => {
-    const fetchBookClubs = async () => {
-      const clubs = await bookClubRepo.getBookClubs();
-      if (clubs) {
-        setBookClubs(clubs);
-      }
-    };
-    fetchBookClubs();
-  }, []);
+  const { data: bookClubs = NO_CLUBS } = useBookClubs();
+  const patchClubs = useBookClubListCache();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showUpdateForm, setShowUpdateForm] = useState(false);
@@ -37,24 +41,20 @@ const BookClubs = () => {
   const [loginRequiredForJoin, setLoginRequiredForJoin] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredClubs = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return bookClubs;
-    return bookClubs.filter((club) =>
-      [club.name, club.description, club.category].some((field) =>
-        field?.toLowerCase().includes(q),
-      ),
-    );
-  }, [bookClubs, searchQuery]);
+  const filteredClubs = useMemo(
+    () => filterClubs(bookClubs, searchQuery),
+    [bookClubs, searchQuery],
+  );
 
   const handleCreateClub = async (newClub: IClub) => {
-    if (user) {
-      newClub.creatorId = user.uid;
+    try {
+      const created = await bookClubRepo.createBookClub(newClub);
+      await patchClubs(created.id, (clubs) => withClubFirst(clubs, created));
+      setShowCreateForm(false);
+    } catch (error) {
+      console.error("Failed to create club:", error);
+      toast.error("We couldn't create the club. Please try again.");
     }
-    const id = await bookClubRepo.createBookClub(newClub);
-    // Use the Firestore-generated ID so card navigation hits the right document
-    setBookClubs((prevClubs) => [...prevClubs, { ...newClub, id }]);
-    setShowCreateForm(false);
   };
 
   const handleShowCreateForm = () => {
@@ -65,10 +65,19 @@ const BookClubs = () => {
     setShowCreateForm(false);
   };
 
-  const handleUpdateClub = (updatedClub: IClub) => {
-    bookClubRepo.updateBookClub(updatedClub.id, updatedClub);
-    setShowUpdateForm(false);
-    setSelectedClub(null);
+  const handleUpdateClub = async (updatedClub: IClub) => {
+    try {
+      const saved = await bookClubRepo.updateBookClub(
+        updatedClub.id,
+        updatedClub,
+      );
+      await patchClubs(saved.id, (clubs) => withClubFirst(clubs, saved));
+      setShowUpdateForm(false);
+      setSelectedClub(null);
+    } catch (error) {
+      console.error("Failed to update club:", error);
+      toast.error("We couldn't save the club. Please try again.");
+    }
   };
 
   const handleShowUpdateForm = (club: IClub) => {
@@ -84,12 +93,8 @@ const BookClubs = () => {
     if (user) {
       try {
         await bookClubRepo.joinBookClub(clubId, user.uid);
-        setBookClubs((prevClubs) =>
-          prevClubs.map((club) =>
-            club.id === clubId && !club.members.includes(user.uid)
-              ? { ...club, members: [...club.members, user.uid] }
-              : club,
-          ),
+        await patchClubs(clubId, (clubs) =>
+          withMembership(clubs, clubId, user.uid, true),
         );
       } catch (error) {
         console.error("Failed to join club:", error);
@@ -107,13 +112,16 @@ const BookClubs = () => {
     }
   };
 
-  const confirmDeleteClub = () => {
-    if (clubToDelete) {
-      bookClubRepo.deleteBookClub(clubToDelete.id);
-      setBookClubs((prevClubs) =>
-        prevClubs.filter((c) => c.id !== clubToDelete.id),
-      );
-      setClubToDelete(null);
+  const confirmDeleteClub = async () => {
+    if (!clubToDelete) return;
+    const { id } = clubToDelete;
+    setClubToDelete(null);
+    try {
+      await bookClubRepo.deleteBookClub(id);
+      await patchClubs(id, (clubs) => withoutClub(clubs, id));
+    } catch (error) {
+      console.error("Failed to delete club:", error);
+      toast.error("We couldn't delete the club. Please try again.");
     }
   };
 
@@ -121,15 +129,8 @@ const BookClubs = () => {
     if (user) {
       try {
         await bookClubRepo.leaveBookClub(clubId, user.uid);
-        setBookClubs((prevClubs) =>
-          prevClubs.map((club) =>
-            club.id === clubId
-              ? {
-                  ...club,
-                  members: club.members.filter((id) => id !== user.uid),
-                }
-              : club,
-          ),
+        await patchClubs(clubId, (clubs) =>
+          withMembership(clubs, clubId, user.uid, false),
         );
       } catch (error) {
         console.error("Failed to leave club:", error);
