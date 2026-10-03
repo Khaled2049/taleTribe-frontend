@@ -1,9 +1,11 @@
 import { lazy, Suspense, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Eye, BookOpen, PenLine } from "lucide-react";
+import { toast } from "sonner";
 
 import { useAuthIdentity } from "@novelsync/platform-auth";
-import type { StoryMetadata } from "@novelsync/story-data-client";
+import type { Story } from "@novelsync/story-data-client";
 import { StoryRow } from "./components/StoryRow";
 import { useOwnerStoryPages } from "@/hooks/queries/ownerStories";
 import { useStoryEarnings } from "@/hooks/queries/useStoryEarnings";
@@ -20,22 +22,24 @@ import {
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import { prefetchWorkspace } from "@/routes/Story/prefetchWorkspace";
 import { UserStoryRowSkeleton } from "./UserStoriesSkeleton";
+import { workspaceStoryQuery } from "@/hooks/queries/workspaceStory";
 
-const StoryEditModal = lazy(() =>
+const loadStoryEditModal = () =>
   import("./components/StoryEditModal").then((module) => ({
     default: module.StoryEditModal,
-  })),
-);
+  }));
+const StoryEditModal = lazy(loadStoryEditModal);
 const StoryMetadataModal = lazy(() => import("./StoryMetadataModal"));
 
 const UserStories = () => {
   const identity = useAuthIdentity();
   const uid = identity.uid ?? undefined;
   const [operationLoading, setOperationLoading] = useState<string | null>(null);
-  const [editingStory, setEditingStory] = useState<StoryMetadata | null>(null);
+  const [editingStory, setEditingStory] = useState<Story | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [activeTab, setActiveTab] = useState<"writing" | "reading">("writing");
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const {
     data: storyPages,
@@ -118,6 +122,23 @@ const UserStories = () => {
 
   const handleClearReadingHistory = () => {
     clearHistory.mutate();
+  };
+
+  const handleEditDetails = async (storyId: string) => {
+    if (!uid) return;
+    setOperationLoading(storyId);
+    try {
+      const [story] = await Promise.all([
+        queryClient.fetchQuery(workspaceStoryQuery(uid, storyId)),
+        loadStoryEditModal(),
+      ]);
+      if (!story) throw new Error("Story not found");
+      setEditingStory(story);
+    } catch {
+      toast.error("Could not open story details. Please try again.");
+    } finally {
+      setOperationLoading(null);
+    }
   };
 
   const publishedCount = summary?.publishedCount ?? 0;
@@ -322,11 +343,7 @@ const UserStories = () => {
                         onDelete={handleDeleteStory}
                         onPublish={handleTogglePublishStory}
                         onUnpublish={handleTogglePublishStory}
-                        onEditDetails={(id) =>
-                          setEditingStory(
-                            stories.find((s) => s.id === id) ?? null,
-                          )
-                        }
+                        onEditDetails={(id) => void handleEditDetails(id)}
                         onImageUpdate={handleImageUpdate}
                         isLoading={operationLoading === story.id}
                       />
@@ -408,6 +425,8 @@ const UserStories = () => {
                               <img
                                 src={item.thumbnailUrl || item.coverImageUrl}
                                 alt={item.storyTitle}
+                                width={56}
+                                height={80}
                                 loading="lazy"
                                 decoding="async"
                                 className="w-full h-full object-cover"

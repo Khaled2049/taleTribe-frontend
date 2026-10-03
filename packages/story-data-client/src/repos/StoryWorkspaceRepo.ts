@@ -26,7 +26,12 @@ interface ApiStory {
  * They are derived per request, so only `GET /v1/stories` carries them — a
  * story from get/create/update has none of these fields.
  */
-interface ApiStoryListItem extends ApiStory {
+interface ApiStoryListItem extends Omit<ApiStory, "targetAudience" | "language" | "copyright" | "tags" | "revision"> {
+    targetAudience?: string;
+    language?: string;
+    copyright?: string;
+    tags?: string[];
+    revision?: number;
     chapterCount: number;
     wordCount: number;
     views: number;
@@ -67,7 +72,7 @@ export class StoryWorkspaceRepo {
         });
     }
 
-    private story(api: ApiStory): Story {
+    private story(api: ApiStory | ApiStoryListItem): Story {
         return {
             id: api.id,
             userId: api.ownerId,

@@ -1,6 +1,6 @@
 import { useQueries } from "@tanstack/react-query";
-import { usePublicClient } from "wagmi";
-import { formatEther, formatUnits } from "viem";
+import { createPublicClient, formatEther, formatUnits, http } from "viem";
+import { activeChain } from "@/blockchain/chains";
 import {
   tippingPlatformConfig,
   ZERO_ADDRESS,
@@ -13,6 +13,13 @@ export interface StoryEarnings {
   usdc: string;
 }
 
+// Story earnings are read from the configured contract chain. A wallet is not
+// needed to read them, so My Shelf can render without mounting WagmiProvider.
+const publicClient = createPublicClient({
+  chain: activeChain,
+  transport: http(activeChain.rpcUrls.default.http[0]),
+});
+
 function expectBigInt(value: unknown): bigint {
   if (typeof value !== "bigint")
     throw new Error("Unexpected earnings response");
@@ -22,15 +29,12 @@ function expectBigInt(value: unknown): bigint {
 /** Each story has its own chain-scoped cache entry, so loading another page
  * does not repeat earnings reads for stories already on screen. */
 export function useStoryEarnings(uid: string | undefined, storyIds: string[]) {
-  const publicClient = usePublicClient();
-  const chainId = publicClient?.chain?.id ?? 0;
   const ids = [...new Set(storyIds)].sort();
 
   const results = useQueries({
     queries: ids.map((id) => ({
-      queryKey: queryKeys.earnings.story(id, chainId),
+      queryKey: queryKeys.earnings.story(id, activeChain.id),
       queryFn: async (): Promise<StoryEarnings> => {
-        if (!publicClient) throw new Error("Chain client unavailable");
         const [ethRaw, usdcRaw] = await Promise.all([
           publicClient.readContract({
             ...tippingPlatformConfig,
@@ -48,7 +52,7 @@ export function useStoryEarnings(uid: string | undefined, storyIds: string[]) {
           usdc: formatUnits(expectBigInt(usdcRaw), 6),
         };
       },
-      enabled: !!uid && !!publicClient,
+      enabled: !!uid,
       staleTime: 1000 * 60 * 5,
     })),
   });

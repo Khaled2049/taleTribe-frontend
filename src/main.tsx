@@ -408,9 +408,7 @@ const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <Suspense fallback={<UserStoriesSkeleton />}>
-              <Web3Boundary>
-                <UserStories />
-              </Web3Boundary>
+              <UserStories />
             </Suspense>
           </RequireAuth>
         ),

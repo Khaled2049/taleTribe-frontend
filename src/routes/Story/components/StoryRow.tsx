@@ -203,6 +203,8 @@ export const StoryRow = ({
             <img
               src={story.thumbnailUrl || story.coverImageUrl}
               alt={story.title}
+              width={48}
+              height={68}
               loading="lazy"
               decoding="async"
               onClick={() =>
