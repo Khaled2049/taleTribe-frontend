@@ -3,6 +3,9 @@ import type { IGuestbookEntry } from "../types/IGuestbookEntry";
 import type { IGuestbookReply } from "../types/IGuestbookReply";
 
 type Vote = "up" | "down" | null;
+type WireReply = IGuestbookReply & { createdAt: string; updatedAt: string };
+export type GuestbookReplyPage = { replies: IGuestbookReply[]; nextCursor?: string; totalCount: number };
+const REPLY_THREADS_PER_PAGE = 20;
 type EntryPage = { entries: IGuestbookEntry[]; nextCursor?: string; totalCount?: number };
 
 class GuestbookRepo {
@@ -14,6 +17,18 @@ class GuestbookRepo {
     async listEntries(ownerId: string, cursor?: string): Promise<{ entries: IGuestbookEntry[]; nextCursor?: string; totalCount?: number }> { const params = new URLSearchParams({ limit: "10" }); if (cursor) params.set("cursor", cursor); const page = await this.request<EntryPage>("GET", `/v1/public/guestbooks/${ownerId}/entries?${params}`); return { entries: page.entries.map((x) => this.entry(x as never)), nextCursor: page.nextCursor, totalCount: page.totalCount }; }
     async listWall(filter: "all" | "following" | "mine", cursor?: string): Promise<{ entries: IGuestbookEntry[]; nextCursor?: string }> { const params = new URLSearchParams({ limit: "10", filter }); if (cursor) params.set("cursor", cursor); const page = await this.request<EntryPage>("GET", `/v1/me/wall?${params}`, undefined, true); return { entries: page.entries.map((x) => this.entry(x as never)), nextCursor: page.nextCursor }; }
     async listReplies(ownerId: string, entryId: string): Promise<IGuestbookReply[]> { const x = await this.request<(IGuestbookReply & { createdAt: string; updatedAt: string })[]>("GET", `/v1/public/guestbooks/${ownerId}/entries/${entryId}/replies`); return x.map((r) => this.reply(r)); }
+    /**
+     * A page of top-level replies with all of their descendants. A story-data
+     * that predates paging ignores `limit` and answers with the whole thread
+     * as a bare array, which is a complete, final page.
+     */
+    async listReplyPage(ownerId: string, entryId: string, cursor?: string): Promise<GuestbookReplyPage> {
+        const params = new URLSearchParams({ limit: String(REPLY_THREADS_PER_PAGE) });
+        if (cursor) params.set("cursor", cursor);
+        const x = await this.request<WireReply[] | { replies: WireReply[]; nextCursor?: string; totalCount: number }>("GET", `/v1/public/guestbooks/${ownerId}/entries/${entryId}/replies?${params}`);
+        if (Array.isArray(x)) return { replies: x.map((r) => this.reply(r)), totalCount: x.length };
+        return { replies: x.replies.map((r) => this.reply(r)), nextCursor: x.nextCursor || undefined, totalCount: x.totalCount };
+    }
     createEntry(ownerId: string, content: string) { return this.request<IGuestbookEntry & { createdAt: string }>("POST", `/v1/guestbooks/${ownerId}/entries`, { content }, true).then((x) => this.entry(x)); }
     deleteEntry(ownerId: string, entryId: string) { return this.request<void>("DELETE", `/v1/guestbooks/${ownerId}/entries/${entryId}`, undefined, true); }
     createReply(ownerId: string, entryId: string, content: string, parentId: string | null) { return this.request<IGuestbookReply & { createdAt: string; updatedAt: string }>("POST", `/v1/guestbooks/${ownerId}/entries/${entryId}/replies`, { content, parentId: parentId || "" }, true).then((x) => this.reply(x)); }

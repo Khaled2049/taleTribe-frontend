@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { IGuestbookReply } from "@novelsync/story-data-client";
+import {
+  StoryDataError,
+  type IGuestbookReply,
+} from "@novelsync/story-data-client";
 import {
   addReply,
+  appendReplyPage,
+  isWallClosedError,
+  replyErrorMessage,
+  type ReplyThread,
   guestbookRepliesKey,
   indexReplies,
   removeReplySubtree,
@@ -24,6 +31,10 @@ const reply = (overrides: Partial<IGuestbookReply> = {}): IGuestbookReply => ({
   ...overrides,
 });
 const ids = (rows: IGuestbookReply[]) => rows.map((row) => row.id);
+const loaded = (
+  rows: IGuestbookReply[],
+  extra: Partial<ReplyThread> = {},
+): ReplyThread => ({ replies: rows, totalCount: rows.length, ...extra });
 
 describe("guestbook reply thread helpers", () => {
   it("scopes a thread to its viewer and stays clear of the feed key shapes", () => {
@@ -33,29 +44,70 @@ describe("guestbook reply thread helpers", () => {
     expect([3, 4]).not.toContain(key.length);
   });
 
-  it("puts a new reply first and ignores one already present", () => {
-    const rows = [reply()];
-    expect(ids(addReply(rows, reply({ id: "b" })))).toEqual(["b", "a"]);
-    expect(addReply(rows, reply())).toBe(rows);
+  it("puts a new reply first, counts it, and ignores one already present", () => {
+    const thread = loaded([reply()], { totalCount: 7, nextCursor: "older" });
+    const next = addReply(thread, reply({ id: "b" }));
+    expect(ids(next.replies)).toEqual(["b", "a"]);
+    expect(next).toMatchObject({ totalCount: 8, nextCursor: "older" });
+    expect(addReply(thread, reply())).toBe(thread);
   });
 
-  it("replaces an edited reply in place", () => {
-    const rows = [reply({ id: "b" }), reply()];
-    const next = replaceReply(rows, reply({ content: "edited" }));
-    expect(next.map((row) => row.content)).toEqual(["hi", "edited"]);
+  it("replaces an edited reply in place without recounting", () => {
+    const thread = loaded([reply({ id: "b" }), reply()], { totalCount: 9 });
+    const next = replaceReply(thread, reply({ content: "edited" }));
+    expect(next.replies.map((row) => row.content)).toEqual(["hi", "edited"]);
+    expect(next.totalCount).toBe(9);
   });
 
   it("removes a whole subtree whichever order the rows arrive in", () => {
-    const rows = [
-      reply({ id: "leaf", parentId: "mid" }),
-      reply({ id: "sibling" }),
-      reply({ id: "mid", parentId: "a" }),
-      reply(),
-      reply({ id: "late", parentId: "leaf" }),
-    ];
-    expect(ids(removeReplySubtree(rows, "a"))).toEqual(["sibling"]);
-    expect(ids(removeReplySubtree(rows, "mid"))).toEqual(["sibling", "a"]);
-    expect(removeReplySubtree(rows, "missing")).toHaveLength(5);
+    const thread = loaded(
+      [
+        reply({ id: "leaf", parentId: "mid" }),
+        reply({ id: "sibling" }),
+        reply({ id: "mid", parentId: "a" }),
+        reply(),
+        reply({ id: "late", parentId: "leaf" }),
+      ],
+      { totalCount: 12 },
+    );
+    const withoutA = removeReplySubtree(thread, "a");
+    expect(ids(withoutA.replies)).toEqual(["sibling"]);
+    // Four left the loaded page; the seven on unloaded pages still count.
+    expect(withoutA.totalCount).toBe(8);
+    expect(ids(removeReplySubtree(thread, "mid").replies)).toEqual([
+      "sibling",
+      "a",
+    ]);
+    expect(removeReplySubtree(thread, "missing")).toMatchObject({
+      totalCount: 12,
+    });
+  });
+
+  it("appends an older page after the loaded threads, without duplicates", () => {
+    const thread = loaded([reply({ id: "new" }), reply()], {
+      totalCount: 5,
+      nextCursor: "c1",
+    });
+    const next = appendReplyPage(thread, {
+      replies: [reply(), reply({ id: "old" })],
+      totalCount: 6,
+    });
+    expect(ids(next.replies)).toEqual(["new", "a", "old"]);
+    expect(next.totalCount).toBe(6);
+    expect(next.nextCursor).toBeUndefined();
+  });
+
+  it("explains a refused or rate-limited reply, and nothing else", () => {
+    const closed = new StoryDataError(403, "forbidden");
+    expect(isWallClosedError(closed)).toBe(true);
+    expect(isWallClosedError(new StoryDataError(500, "boom"))).toBe(false);
+    expect(replyErrorMessage(closed, "fallback")).toMatch(/isn't accepting/);
+    expect(
+      replyErrorMessage(new StoryDataError(429, "rate limit exceeded"), "x"),
+    ).toMatch(/limit/);
+    expect(replyErrorMessage(new Error("offline"), "fallback")).toBe(
+      "fallback",
+    );
   });
 
   it("toggles an upvote, clearing a previous downvote", () => {
