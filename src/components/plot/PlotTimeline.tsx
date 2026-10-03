@@ -179,12 +179,15 @@ const PlotTimeline: React.FC = () => {
 
   const deleteEvent = (plotLineId: string, eventId: string) => {
     if (!storyId) return;
-    deleteEventMutation.mutate({ plotLineId, eventId });
+    const siblings = plotLines.find((line) => line.id === plotLineId)?.events;
+    const revision = siblings?.find((event) => event.id === eventId)?.revision;
+    deleteEventMutation.mutate({ plotLineId, eventId, revision, siblings });
   };
 
   const removePlotline = (plotLineId: string) => {
     if (!storyId) return;
-    deletePlotLineMutation.mutate(plotLineId);
+    const revision = plotLines.find((line) => line.id === plotLineId)?.revision;
+    deletePlotLineMutation.mutate({ id: plotLineId, revision });
   };
 
   const handleSavePlotLineModal = async () => {
