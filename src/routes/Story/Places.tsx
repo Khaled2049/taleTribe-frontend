@@ -142,11 +142,15 @@ const Places: React.FC = () => {
   };
 
   const handleDeletePlace = (placeId: string) => {
-    deletePlace.mutate(placeId, {
-      onSuccess: () => {
-        if (selectedPlaceId === placeId) selectPlace(null);
+    const revision = places.find((p) => p.id === placeId)?.revision;
+    deletePlace.mutate(
+      { id: placeId, revision },
+      {
+        onSuccess: () => {
+          if (selectedPlaceId === placeId) selectPlace(null);
+        },
       },
-    });
+    );
   };
 
   const startEditing = () => {
