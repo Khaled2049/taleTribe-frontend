@@ -5,6 +5,7 @@ import { auth, getAuthContext, getCurrentUid } from "@novelsync/platform-auth";
 import { appQueryClient } from "@/lib/queryClient";
 import { useAuthStore } from "@/stores";
 import { prefetchGuestbookRoute } from "@/routes/Guestbook/prefetchGuestbook";
+import { prefetchUserStories } from "@/routes/Story/prefetchUserStories";
 
 // Runs at module load, not in an effect: a repo call can be issued by a route
 // loader before any component mounts, and an unconfigured client throws.
@@ -36,6 +37,9 @@ export const AuthBootstrap = () => {
       // Identity is known before profile/follow hydration. Request the first
       // feed page while those reads and the lazy route chunk are in flight.
       void prefetchGuestbookRoute(window.location.pathname, nextUid);
+      if (window.location.pathname === "/user-stories") {
+        prefetchUserStories(nextUid);
+      }
 
       try {
         await useAuthStore.getState().hydrateUser(firebaseUser);

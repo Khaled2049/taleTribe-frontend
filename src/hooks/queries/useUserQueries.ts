@@ -98,11 +98,15 @@ export function useProfileNames(
   return data ?? new Map();
 }
 
-export function useRecentlyRead(userId: string | undefined, limit = 5) {
+export function useRecentlyRead(
+  userId: string | undefined,
+  limit = 5,
+  active = true,
+) {
   return useQuery({
     queryKey: queryKeys.user.recentlyRead(userId!),
     queryFn: () => readingHistoryRepo.getRecentlyRead(limit),
-    enabled: !!userId,
+    enabled: !!userId && active,
     staleTime: 1000 * 60 * 2,
   });
 }

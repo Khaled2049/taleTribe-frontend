@@ -1,14 +1,15 @@
-import { useState, useMemo } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Eye, BookOpen, PenLine } from "lucide-react";
+import { toast } from "sonner";
 
-import { useAuthContext } from "../../contexts/AuthContext";
+import { useAuthIdentity } from "@novelsync/platform-auth";
+import type { Story } from "@novelsync/story-data-client";
 import { StoryRow } from "./components/StoryRow";
-import { StoryEditModal } from "./components/StoryEditModal";
-import StoryMetadataModal from "./StoryMetadataModal";
+import { useOwnerStoryPages } from "@/hooks/queries/ownerStories";
+import { useStoryEarnings } from "@/hooks/queries/useStoryEarnings";
 import {
-  type StoryWithEarnings,
-  useUserStoriesWithEarnings,
   useDeleteStory,
   useTogglePublishStory,
   useUpdateStoryMetadata,
@@ -20,66 +21,61 @@ import {
 } from "@/hooks/queries/useUserQueries";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import { prefetchWorkspace } from "@/routes/Story/prefetchWorkspace";
+import { UserStoryRowSkeleton } from "./UserStoriesSkeleton";
+import { workspaceStoryQuery } from "@/hooks/queries/workspaceStory";
 
-const RowSkeleton = () => (
-  <div className="flex gap-4 py-6 border-b border-ns-border animate-pulse">
-    <div className="ml-4 w-12 h-[68px] bg-ns-surface rounded flex-shrink-0" />
-    <div className="flex-1 min-w-0">
-      <div className="flex items-start justify-between gap-4">
-        <div className="h-5 w-52 bg-ns-surface rounded" />
-        <div className="h-6 w-28 bg-ns-surface rounded flex-shrink-0" />
-      </div>
-      <div className="h-3 w-40 bg-ns-surface rounded mt-2" />
-      <div className="h-3 w-full bg-ns-surface rounded mt-3" />
-      <div className="flex gap-3 mt-3">
-        <div className="h-3 w-12 bg-ns-surface rounded" />
-        <div className="h-3 w-12 bg-ns-surface rounded" />
-      </div>
-    </div>
-  </div>
-);
+const loadStoryEditModal = () =>
+  import("./components/StoryEditModal").then((module) => ({
+    default: module.StoryEditModal,
+  }));
+const StoryEditModal = lazy(loadStoryEditModal);
+const StoryMetadataModal = lazy(() => import("./StoryMetadataModal"));
 
 const UserStories = () => {
-  const { user, loading: authLoading } = useAuthContext();
+  const identity = useAuthIdentity();
+  const uid = identity.uid ?? undefined;
+  const [operationLoading, setOperationLoading] = useState<string | null>(null);
+  const [editingStory, setEditingStory] = useState<Story | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState<"writing" | "reading">("writing");
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const {
-    data: stories = [],
+    data: storyPages,
     isPending: storiesPending,
     isError: storiesError,
     error: storiesErrorValue,
-  } = useUserStoriesWithEarnings(user?.uid);
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useOwnerStoryPages(uid);
+  const stories = storyPages?.pages.flatMap((page) => page.stories) ?? [];
+  const summary = storyPages?.pages[0]?.summary;
+  const earnings = useStoryEarnings(
+    uid,
+    stories.map((story) => story.id),
+  );
 
   const {
     data: recentlyRead = [],
     isPending: recentlyReadPending,
     isError: recentlyReadError,
     error: recentlyReadErrorValue,
-  } = useRecentlyRead(user?.uid, 5);
+  } = useRecentlyRead(uid, 5, activeTab === "reading");
 
-  // Both queries are disabled until auth resolves a uid, and a disabled query
-  // reports isLoading === false with data undefined — which would render the
-  // "No stories yet" empty state for a beat before the real list arrives.
-  // Gate on auth plus isPending so the skeleton covers the whole wait.
-  const loading = authLoading || (!!user && storiesPending);
-  const recentlyReadLoading = authLoading || (!!user && recentlyReadPending);
+  const loading = identity.loading || (!!uid && storiesPending);
+  const recentlyReadLoading = activeTab === "reading" && recentlyReadPending;
 
-  const deleteStory = useDeleteStory(user?.uid);
-  const togglePublish = useTogglePublishStory(user?.uid);
-  const updateMetadata = useUpdateStoryMetadata(user?.uid);
-  const updateCover = useUpdateStoryCover(user?.uid);
-  const clearHistory = useClearReadingHistory(user?.uid);
-
-  const [operationLoading, setOperationLoading] = useState<string | null>(null);
-  const [editingStory, setEditingStory] = useState<StoryWithEarnings | null>(
-    null,
-  );
-  const [isCreating, setIsCreating] = useState(false);
-  const [activeTab, setActiveTab] = useState<"writing" | "reading">("writing");
-  const navigate = useNavigate();
+  const deleteStory = useDeleteStory(uid);
+  const togglePublish = useTogglePublishStory(uid);
+  const updateMetadata = useUpdateStoryMetadata(uid);
+  const updateCover = useUpdateStoryCover(uid);
+  const clearHistory = useClearReadingHistory(uid);
 
   const editStory = (storyId: string) => navigate(`/create/${storyId}`);
   const prefetchEditor = (storyId: string) =>
-    prefetchWorkspace(user?.uid ?? null, storyId);
+    prefetchWorkspace(uid ?? null, storyId);
 
   const handleDeleteStory = (storyId: string) => {
     setOperationLoading(storyId);
@@ -128,22 +124,32 @@ const UserStories = () => {
     clearHistory.mutate();
   };
 
-  const sortedStories = useMemo(() => {
-    return [...stories].sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    );
-  }, [stories]);
+  const handleEditDetails = async (storyId: string) => {
+    if (!uid) return;
+    setOperationLoading(storyId);
+    try {
+      const [story] = await Promise.all([
+        queryClient.fetchQuery(workspaceStoryQuery(uid, storyId)),
+        loadStoryEditModal(),
+      ]);
+      if (!story) throw new Error("Story not found");
+      setEditingStory(story);
+    } catch {
+      toast.error("Could not open story details. Please try again.");
+    } finally {
+      setOperationLoading(null);
+    }
+  };
 
-  const publishedCount = stories.filter((s) => s.isPublished).length;
-  const draftCount = stories.filter((s) => !s.isPublished).length;
-  const totalViews = stories.reduce((sum, s) => sum + (s.views || 0), 0);
+  const publishedCount = summary?.publishedCount ?? 0;
+  const draftCount = (summary?.totalStories ?? 0) - publishedCount;
+  const totalViews = summary?.totalViews ?? 0;
   const totalEthEarnings = stories.reduce(
-    (sum, s) => sum + parseFloat(s.earnings?.eth || "0"),
+    (sum, s) => sum + parseFloat(earnings.data?.[s.id]?.eth || "0"),
     0,
   );
   const totalUsdcEarnings = stories.reduce(
-    (sum, s) => sum + parseFloat(s.earnings?.usdc || "0"),
+    (sum, s) => sum + parseFloat(earnings.data?.[s.id]?.usdc || "0"),
     0,
   );
   const hasEarnings = totalEthEarnings > 0 || totalUsdcEarnings > 0;
@@ -173,7 +179,10 @@ const UserStories = () => {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-8 text-xs sm:text-sm font-ui text-ns-ink-secondary">
               <span className="flex items-center gap-1.5">
                 <PenLine className="w-3.5 h-3.5 text-ns-ink-muted" />
-                {stories.length} {stories.length === 1 ? "story" : "stories"}
+                {summary?.totalStories ?? stories.length}{" "}
+                {(summary?.totalStories ?? stories.length) === 1
+                  ? "story"
+                  : "stories"}
               </span>
               {!recentlyReadLoading && recentlyRead.length > 0 && (
                 <span className="flex items-center gap-1.5">
@@ -195,7 +204,7 @@ const UserStories = () => {
             </div>
           )}
 
-          {(storiesError || recentlyReadError) && (
+          {(storiesError || (activeTab === "reading" && recentlyReadError)) && (
             <div className="mb-6 px-4 py-3 rounded-ns border border-ns-destructive/20 bg-ns-accent-subtle text-ns-destructive font-ui text-sm">
               {storiesError
                 ? storiesErrorValue instanceof Error
@@ -205,6 +214,13 @@ const UserStories = () => {
                   ? recentlyReadErrorValue.message
                   : "Failed to load your recently read stories."}
             </div>
+          )}
+
+          {activeTab === "writing" && earnings.isError && (
+            <p className="mb-6 font-ui text-sm text-ns-ink-muted">
+              Earnings are unavailable right now. Your stories are still up to
+              date.
+            </p>
           )}
 
           {/* Tabs */}
@@ -220,9 +236,9 @@ const UserStories = () => {
               <span className="font-heading italic text-2xl sm:text-3xl">
                 My Writing
               </span>
-              {!loading && stories.length > 0 && (
+              {!loading && (summary?.totalStories ?? stories.length) > 0 && (
                 <span className="font-ui text-xs text-ns-ink-muted">
-                  {stories.length}
+                  {summary?.totalStories ?? stories.length}
                 </span>
               )}
               {activeTab === "writing" && (
@@ -259,7 +275,7 @@ const UserStories = () => {
               {!loading && hasEarnings && (
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 mb-8 bg-ns-surface border border-ns-border rounded-ns-lg">
                   <span className="text-xs font-ui font-semibold uppercase tracking-widest text-ns-ink-muted">
-                    Earnings
+                    {hasNextPage ? "Earnings from loaded stories" : "Earnings"}
                   </span>
                   {totalEthEarnings > 0 && (
                     <span className="text-sm font-ui font-medium text-emerald-600 dark:text-emerald-400">
@@ -284,13 +300,13 @@ const UserStories = () => {
               {loading && (
                 <div className="divide-y divide-ns-border">
                   {[...Array(4)].map((_, i) => (
-                    <RowSkeleton key={i} />
+                    <UserStoryRowSkeleton key={i} />
                   ))}
                 </div>
               )}
 
               {/* Empty state */}
-              {!loading && stories.length === 0 && (
+              {!loading && !storiesError && stories.length === 0 && (
                 <div className="py-24 text-center">
                   <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-ns-surface border border-ns-border flex items-center justify-center">
                     <BookOpen className="w-7 h-7 text-ns-ink-muted" />
@@ -312,27 +328,40 @@ const UserStories = () => {
               )}
 
               {/* Story list */}
-              {!loading && sortedStories.length > 0 && (
-                <div className="divide-y divide-ns-border">
-                  {sortedStories.map((story) => (
-                    <StoryRow
-                      key={story.id}
-                      story={story}
-                      onEdit={editStory}
-                      onEditIntent={prefetchEditor}
-                      onDelete={handleDeleteStory}
-                      onPublish={handleTogglePublishStory}
-                      onUnpublish={handleTogglePublishStory}
-                      onEditDetails={(id) =>
-                        setEditingStory(
-                          stories.find((s) => s.id === id) ?? null,
-                        )
-                      }
-                      onImageUpdate={handleImageUpdate}
-                      isLoading={operationLoading === story.id}
-                    />
-                  ))}
-                </div>
+              {!loading && stories.length > 0 && (
+                <>
+                  <div className="divide-y divide-ns-border">
+                    {stories.map((story) => (
+                      <StoryRow
+                        key={story.id}
+                        story={{
+                          ...story,
+                          earnings: earnings.data?.[story.id],
+                        }}
+                        onEdit={editStory}
+                        onEditIntent={prefetchEditor}
+                        onDelete={handleDeleteStory}
+                        onPublish={handleTogglePublishStory}
+                        onUnpublish={handleTogglePublishStory}
+                        onEditDetails={(id) => void handleEditDetails(id)}
+                        onImageUpdate={handleImageUpdate}
+                        isLoading={operationLoading === story.id}
+                      />
+                    ))}
+                  </div>
+                  {hasNextPage && (
+                    <button
+                      type="button"
+                      onClick={() => void fetchNextPage()}
+                      disabled={isFetchingNextPage}
+                      className="mt-8 w-full rounded-ns border border-ns-border bg-ns-surface px-4 py-3 font-ui text-sm text-ns-ink hover:bg-ns-surface-hover disabled:opacity-50"
+                    >
+                      {isFetchingNextPage
+                        ? "Loading more…"
+                        : "Load more stories"}
+                    </button>
+                  )}
+                </>
               )}
             </>
           )}
@@ -346,7 +375,7 @@ const UserStories = () => {
                     Loading…
                   </span>
                 </div>
-              ) : recentlyRead.length === 0 ? (
+              ) : recentlyReadError ? null : recentlyRead.length === 0 ? (
                 <div className="py-24 text-center">
                   <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-ns-surface border border-ns-border flex items-center justify-center">
                     <BookOpen className="w-7 h-7 text-ns-ink-muted" />
@@ -396,6 +425,8 @@ const UserStories = () => {
                               <img
                                 src={item.thumbnailUrl || item.coverImageUrl}
                                 alt={item.storyTitle}
+                                width={56}
+                                height={80}
                                 loading="lazy"
                                 decoding="async"
                                 className="w-full h-full object-cover"
@@ -462,19 +493,23 @@ const UserStories = () => {
       </div>
 
       {editingStory && (
-        <StoryEditModal
-          story={editingStory}
-          onSave={handleSaveMetadata}
-          onClose={() => setEditingStory(null)}
-        />
+        <Suspense fallback={null}>
+          <StoryEditModal
+            story={editingStory}
+            onSave={handleSaveMetadata}
+            onClose={() => setEditingStory(null)}
+          />
+        </Suspense>
       )}
 
-      {user && (
-        <StoryMetadataModal
-          isOpen={isCreating}
-          onClose={() => setIsCreating(false)}
-          userId={user.uid}
-        />
+      {uid && isCreating && (
+        <Suspense fallback={null}>
+          <StoryMetadataModal
+            isOpen={isCreating}
+            onClose={() => setIsCreating(false)}
+            userId={uid}
+          />
+        </Suspense>
       )}
     </>
   );

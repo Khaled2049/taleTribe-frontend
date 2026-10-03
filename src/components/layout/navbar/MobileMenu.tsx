@@ -21,6 +21,7 @@ import { disconnectWalletIfConnected } from "@/blockchain/disconnectWallet";
 import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
 import { APP_NAME } from "@/config/seo";
+import { prefetchUserStories } from "@/routes/Story/prefetchUserStories";
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -195,11 +196,17 @@ const MobileMenu = ({ isOpen, onClose }: MobileMenuProps) => {
                     {accountItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = pathname.startsWith(item.to);
+                      const prefetch =
+                        item.to === "/user-stories"
+                          ? () => prefetchUserStories(user?.uid ?? null)
+                          : undefined;
                       return (
                         <Link
                           key={item.to}
                           to={item.to}
                           onClick={onClose}
+                          onTouchStart={prefetch}
+                          onFocus={prefetch}
                           className={navLinkClass(isActive)}
                           aria-current={isActive ? "page" : undefined}
                         >

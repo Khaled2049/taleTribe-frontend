@@ -59,6 +59,7 @@ export const queryKeys = {
   },
   user: {
     stories: (userId: string) => ["user", userId, "stories"] as const,
+    storyPages: (userId: string) => ["user", userId, "storyPages"] as const,
     // The one entry for a user's public profile. Wallet address and guestbook
     // policy are fields of it, read via `select` — never separate queries.
     publicProfile: (userId: string) =>

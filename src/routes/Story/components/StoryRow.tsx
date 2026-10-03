@@ -15,15 +15,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { StoryMetadata } from "@novelsync/story-data-client";
-import { generateCover } from "@/cloudFunctions/images";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
-import {
-  fetchCoverAsset,
-  buildEpub,
-  toEpubFilename,
-  downloadBlob,
-} from "@/utils/epubExport";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 
 interface StoryRowProps {
@@ -140,6 +133,8 @@ export const StoryRow = ({
   const handleExportEpub = async () => {
     setIsExporting(true);
     try {
+      const { fetchCoverAsset, buildEpub, toEpubFilename, downloadBlob } =
+        await import("@/utils/epubExport");
       const chapters = await storyWorkspaceRepo.getChaptersByStoryId(
         story.id,
         story.userId,
@@ -167,6 +162,7 @@ export const StoryRow = ({
     setIsGenerating(true);
     setGenerationError(null);
     try {
+      const { generateCover } = await import("@/cloudFunctions/images");
       const result = await generateCover(aiPrompt);
       if (onImageUpdate) {
         onImageUpdate(story.id, result.file, result.imageUrl);
@@ -207,6 +203,8 @@ export const StoryRow = ({
             <img
               src={story.thumbnailUrl || story.coverImageUrl}
               alt={story.title}
+              width={48}
+              height={68}
               loading="lazy"
               decoding="async"
               onClick={() =>
