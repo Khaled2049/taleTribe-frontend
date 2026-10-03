@@ -5,6 +5,7 @@ import { storageService } from "@/services/StorageService";
 import { useParams } from "react-router-dom";
 import { SlideOverPanel } from "@/components/common";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useSelectionParam } from "@/hooks/useSelectionParam";
 import { toast } from "sonner";
 import { validateImageFile } from "@/utils/imageUpload";
 import {
@@ -84,6 +85,7 @@ const Characters: React.FC = () => {
   const {
     data: characters = [],
     isPending: charactersLoading,
+    isFetching: charactersFetching,
     isError: charactersError,
     error: charactersErrorValue,
   } = useCharacters(storyId);
@@ -91,9 +93,9 @@ const Characters: React.FC = () => {
   const deleteCharacter = useDeleteCharacter(storyId);
   const updateCharacter = useUpdateCharacter(storyId);
 
-  const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(
-    null,
-  );
+  const [selectedCharacterId, selectCharacter] = useSelectionParam("character");
+  const selectedCharacter =
+    characters.find((item) => item.id === selectedCharacterId) ?? null;
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Edit state
@@ -101,6 +103,14 @@ const Characters: React.FC = () => {
   const [draft, setDraft] = useState<Character | null>(null);
   const [artPreview, setArtPreview] = useState<string | null>(null);
   const [artFile, setArtFile] = useState<File | null>(null);
+  const [editingFor, setEditingFor] = useState(selectedCharacterId);
+  if (editingFor !== selectedCharacterId) {
+    setEditingFor(selectedCharacterId);
+    setEditing(false);
+    setDraft(null);
+    setArtPreview(null);
+    setArtFile(null);
+  }
   const saving = updateCharacter.isPending;
   const artInputRef = useRef<HTMLInputElement>(null);
 
@@ -113,7 +123,7 @@ const Characters: React.FC = () => {
   const [isRosterOpen, setIsRosterOpen] = useState(false);
 
   const handleCharacterClick = (character: Character) => {
-    setSelectedCharacter(character);
+    selectCharacter(character.id);
     if (!isLgUp) {
       setIsRosterOpen(false);
     }
@@ -128,6 +138,16 @@ const Characters: React.FC = () => {
       setIsRosterOpen(false);
     }
   }, [isLgUp]);
+
+  const selectionMissing =
+    !!selectedCharacterId &&
+    !selectedCharacter &&
+    !charactersLoading &&
+    !charactersFetching &&
+    !charactersError;
+  useEffect(() => {
+    if (selectionMissing) selectCharacter(null);
+  }, [selectionMissing, selectCharacter]);
 
   const handleAddCharacter = async (
     characterData: Omit<Character, "id">,
@@ -145,13 +165,13 @@ const Characters: React.FC = () => {
       newCharacter = withArt;
     }
     setIsAddModalOpen(false);
-    setSelectedCharacter(newCharacter);
+    selectCharacter(newCharacter.id);
   };
 
   const handleDeleteCharacter = (characterId: string) => {
     deleteCharacter.mutate(characterId, {
       onSuccess: () => {
-        if (selectedCharacter?.id === characterId) setSelectedCharacter(null);
+        if (selectedCharacterId === characterId) selectCharacter(null);
       },
     });
   };
@@ -206,7 +226,6 @@ const Characters: React.FC = () => {
       }
 
       await updateCharacter.mutateAsync(updatedDraft);
-      setSelectedCharacter(updatedDraft);
       setEditing(false);
       setDraft(null);
       setArtPreview(null);
