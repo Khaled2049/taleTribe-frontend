@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthIdentity } from "@novelsync/platform-auth";
 import { Button } from "@/components/ui/button";
+import { EditorWorkspaceSkeleton } from "@/components/editor/EditorWorkspaceSkeleton";
 import {
   workspaceChapterIndexQuery,
   workspaceStoryQuery,
@@ -35,13 +36,7 @@ const PrivateRoute = () => {
 
   const access = workspaceAccess(identity, storyId, story);
 
-  if (access === "checking") {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-ns-bg">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ns-accent" />
-      </div>
-    );
-  }
+  if (access === "checking") return <EditorWorkspaceSkeleton />;
 
   if (access === "error") {
     return (

@@ -56,6 +56,7 @@ import { useAuthIdentity } from "@novelsync/platform-auth";
 // Import components
 import { SidebarPanel } from "@/components/layout/SidebarPanel";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
+import { EditorCanvasSkeleton } from "@/components/editor/EditorWorkspaceSkeleton";
 import {
   ConfirmDialog,
   SlideOverPanel,
@@ -1367,13 +1368,7 @@ export function SimpleEditor() {
           )}
         </div>
       ) : state.isLoading ? (
-        /* ── Loading State ── */
-        <div className="flex flex-col items-center justify-center w-full h-full gap-4 animate-ns-fade-in">
-          <Loader className="w-8 h-8 text-ns-accent animate-spin" />
-          <p className="font-heading italic text-lg text-ns-ink-muted">
-            Opening your story…
-          </p>
-        </div>
+        <EditorCanvasSkeleton />
       ) : (
         <>
           {/* ── Left Sidebar ── */}
