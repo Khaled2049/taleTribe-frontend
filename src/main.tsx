@@ -23,6 +23,7 @@ import {
   prefetchReaderChapter,
   prefetchStoryDetail,
 } from "./routes/Story/prefetchStoryDetail";
+import { prefetchBookClub } from "./routes/BookClub/prefetchBookClub";
 import { getCurrentUid, useAuthIdentity } from "@novelsync/platform-auth";
 import { prefetchGuestbookRoute } from "./routes/Guestbook/prefetchGuestbook";
 import { StoriesPageSkeleton } from "./routes/Story/StoriesPageSkeleton";
@@ -212,6 +213,11 @@ const router = createBrowserRouter([
       },
       {
         path: "/book-clubs/:id",
+        loader: ({ params }) => {
+          if (params.id) void prefetchBookClub(params.id);
+          return null;
+        },
+        hydrateFallbackElement: <LoadingFallback />,
         element: (
           <RequireAuth>
             <Suspense fallback={<LoadingFallback />}>

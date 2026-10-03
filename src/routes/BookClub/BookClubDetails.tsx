@@ -1,18 +1,22 @@
-import React, { useState } from "react";
+import React, { lazy, Suspense, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ChevronDown, ChevronUp, Crown } from "lucide-react";
 import { bookClubRepo } from "./bookClubRepo";
 import { useAuthContext } from "@/contexts/AuthContext";
-import BookClubChat from "./BookClubChat";
+import { useAuthIdentity } from "@novelsync/platform-auth";
 import ReadingPaceSection from "./components/ReadingPaceSection";
 import DiscussionSection from "./components/DiscussionSection";
 import NextBookSection from "./components/NextBookSection";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { getAbsoluteUrl, APP_NAME } from "@/config/seo";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useBookClub,
+  useBookClubCache,
   useClubProgress,
 } from "@/hooks/queries/useBookClubQueries";
+import { queryKeys } from "@/hooks/queries/queryKeys";
+import { withMember } from "@/lib/bookClubDetail";
 import { useProfileNames } from "@/hooks/queries/useUserQueries";
 import { BookPickerDialog } from "@/components/common/BookPicker";
 import { hasBook } from "@/utils/bookMapping";
@@ -25,6 +29,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+// Chat is the only part of this page that needs the Firestore SDK, and it
+// starts collapsed.
+const BookClubChat = lazy(() => import("./BookClubChat"));
 
 interface MemberInfo {
   id: string;
@@ -61,9 +69,15 @@ const Section = ({
 
 const BookClubDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { user, loading } = useAuthContext();
+  // RequireAuth lets this render on the Firebase identity alone, so `uid` is
+  // set from the first render and `user` — the hydrated profile — follows.
+  // Only chat needs the profile.
+  const { uid } = useAuthIdentity();
+  const { user } = useAuthContext();
   const { data: clubData, isPending: isLoading } = useBookClub(id);
   const club = clubData ?? undefined;
+  const updateClubCache = useBookClubCache(id ?? "");
+  const queryClient = useQueryClient();
 
   const [isMembersOpen, setIsMembersOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -80,26 +94,32 @@ const BookClubDetails: React.FC = () => {
   }));
 
   // The progress endpoint is members-only, so it is not queried while signed out.
-  const { data: progress } = useClubProgress(id, !!user);
+  const { data: progress } = useClubProgress(id, !!uid);
   const progressList = progress ?? [];
 
-  const userCurrentChapter = user
-    ? (progressList.find((p) => p.userId === user.uid)?.currentChapter ?? 0)
+  const userCurrentChapter = uid
+    ? (progressList.find((p) => p.userId === uid)?.currentChapter ?? 0)
     : 0;
 
-  const isCreator = user ? club?.creatorId === user.uid : false;
-  const isMember = user ? (club?.members?.includes(user.uid) ?? false) : false;
+  const isCreator = uid ? club?.creatorId === uid : false;
+  const isMember = uid ? (club?.members?.includes(uid) ?? false) : false;
   const membersById = new Map(members.map((m) => [m.id, m.username]));
 
   const handleMembershipToggle = async () => {
-    if (!club || !user || isUpdatingMembership) return;
+    if (!club || !uid || isUpdatingMembership) return;
     setIsUpdatingMembership(true);
     try {
       if (isMember) {
-        await bookClubRepo.leaveBookClub(club.id, user.uid);
+        await bookClubRepo.leaveBookClub(club.id, uid);
       } else {
-        await bookClubRepo.joinBookClub(club.id, user.uid);
+        await bookClubRepo.joinBookClub(club.id, uid);
       }
+      await updateClubCache((cached) => withMember(cached, uid, !isMember));
+      // Progress is members-only and lists members only, so both what the
+      // viewer may read and what it contains just changed.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.bookClubs.progress(club.id),
+      });
     } catch (error) {
       console.error("Failed to update membership:", error);
     } finally {
@@ -107,7 +127,7 @@ const BookClubDetails: React.FC = () => {
     }
   };
 
-  if (loading || isLoading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-ns-bg">
         <div className="text-center">
@@ -196,7 +216,7 @@ const BookClubDetails: React.FC = () => {
                 </span>
               </button>
 
-              {user && !isCreator && (
+              {uid && !isCreator && (
                 <button
                   type="button"
                   onClick={handleMembershipToggle}
@@ -346,9 +366,11 @@ const BookClubDetails: React.FC = () => {
                     onClick={async () => {
                       setIsSavingMeetup(true);
                       try {
-                        await bookClubRepo.updateMeetUp(
-                          club.id,
-                          meetupDraft.trim(),
+                        await updateClubCache(
+                          await bookClubRepo.updateMeetUp(
+                            club.id,
+                            meetupDraft.trim(),
+                          ),
                         );
                         setIsEditingMeetup(false);
                       } catch (e) {
@@ -429,11 +451,21 @@ const BookClubDetails: React.FC = () => {
               </button>
               {isChatOpen && (
                 <div className="pb-10">
-                  <BookClubChat
-                    clubId={club.id}
-                    user={user}
-                    userCurrentChapter={userCurrentChapter}
-                  />
+                  <Suspense
+                    fallback={
+                      <div
+                        role="status"
+                        aria-label="Loading chat"
+                        className="h-96 rounded-ns-lg border border-ns-border bg-ns-bg animate-pulse"
+                      />
+                    }
+                  >
+                    <BookClubChat
+                      clubId={club.id}
+                      user={user}
+                      userCurrentChapter={userCurrentChapter}
+                    />
+                  </Suspense>
                 </div>
               )}
             </section>
@@ -488,7 +520,9 @@ const BookClubDetails: React.FC = () => {
         onOpenChange={setIsChangingBook}
         title={book ? "Change the club's book" : "Choose the club's book"}
         onConfirm={async (newBook) => {
-          await bookClubRepo.updateBookOfTheMonth(club.id, newBook);
+          await updateClubCache(
+            await bookClubRepo.updateBookOfTheMonth(club.id, newBook),
+          );
         }}
       />
     </>

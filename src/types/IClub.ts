@@ -15,6 +15,23 @@ export interface IClub {
   polls?: IPoll[];
 }
 
+/**
+ * One row of the club directory, as `GET /v1/book-clubs?view=summary` serves
+ * it. `meetUp` is carried for the edit form, which must send the current value
+ * back because PATCH replaces every field.
+ */
+export interface IClubSummary {
+  id: string;
+  name: string;
+  description: string;
+  image: string;
+  category: string;
+  activity: string;
+  creatorId: string;
+  memberCount: number;
+  meetUp?: string;
+}
+
 export interface IReadingSchedule {
   startDate: string; // ISO date string
   pacing: {
