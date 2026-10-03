@@ -12,13 +12,15 @@ export function useGuestbookReplies(
   return useQuery({
     queryKey: guestbookRepliesKey(ownerId, entryId, viewerId),
     queryFn: async ({ signal }) => {
-      const replies = await guestbookRepo.listReplies(ownerId, entryId);
+      // Always the first page: a refresh drops any older pages the reader had
+      // opened rather than refetching an unbounded number of them.
+      const thread = await guestbookRepo.listReplyPage(ownerId, entryId);
       // Correct every cached copy of the post once per read, not per mount.
       // A read cancelled by a reply write predates it and must not count.
       if (!signal.aborted) {
-        mutations.replyCount(ownerId, entryId, replies.length);
+        mutations.replyCount(ownerId, entryId, thread.totalCount);
       }
-      return replies;
+      return thread;
     },
     staleTime: 1000 * 60 * 2,
   });

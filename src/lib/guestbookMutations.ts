@@ -6,10 +6,12 @@ import {
 } from "@novelsync/story-data-client";
 import {
   addReply,
+  appendReplyPage,
   guestbookRepliesKey,
   removeReplySubtree,
   replaceReply,
   toggleReplyUpvote,
+  type ReplyThread,
 } from "@/lib/guestbookReplies";
 
 export type EntryPages = {
@@ -159,18 +161,18 @@ export function guestbookMutations(
   async function settleThread(
     ownerId: string,
     entryId: string,
-    transform: (replies: IGuestbookReply[]) => IGuestbookReply[],
+    transform: (thread: ReplyThread) => ReplyThread,
   ) {
     const key = guestbookRepliesKey(ownerId, entryId, viewerId);
     // A read that began before the write would overwrite the patch.
     await client.cancelQueries({ queryKey: key, exact: true });
     if (!isCurrentViewer()) return;
-    const cached = client.getQueryData<IGuestbookReply[]>(key);
+    const cached = client.getQueryData<ReplyThread>(key);
     if (cached) {
       const next = transform(cached);
       client.setQueryData(key, next);
       await cancel(ownerId);
-      patch(ownerId, entryId, { commentCount: next.length });
+      patch(ownerId, entryId, { commentCount: next.totalCount });
       refresh(ownerId);
       return;
     }
@@ -325,21 +327,41 @@ export function guestbookMutations(
       );
     },
 
+    /** Appends the next page of older threads to the cached one. */
+    async loadMoreReplies(ownerId: string, entryId: string) {
+      const key = guestbookRepliesKey(ownerId, entryId, viewerId);
+      const cursor = client.getQueryData<ReplyThread>(key)?.nextCursor;
+      if (!cursor) return;
+      const page = await guestbookRepo.listReplyPage(ownerId, entryId, cursor);
+      if (!isCurrentViewer()) return;
+      const current = client.getQueryData<ReplyThread>(key);
+      // A refetch or a second click moved the thread on while this was in
+      // flight; appending now would duplicate or misplace the page.
+      if (current?.nextCursor !== cursor) return;
+      client.setQueryData(key, appendReplyPage(current, page));
+      patch(ownerId, entryId, { commentCount: page.totalCount });
+    },
+
     async voteReply(ownerId: string, reply: IGuestbookReply) {
       const key = guestbookRepliesKey(ownerId, reply.entryId, viewerId);
       const setVote = (source: IGuestbookReply) => {
         if (!isCurrentViewer()) return;
-        client.setQueryData<IGuestbookReply[]>(key, (rows) =>
-          rows?.map((row) =>
-            row.id === reply.id
-              ? {
-                  ...row,
-                  userVote: source.userVote,
-                  upvoteCount: source.upvoteCount,
-                  downvoteCount: source.downvoteCount,
-                }
-              : row,
-          ),
+        client.setQueryData<ReplyThread>(
+          key,
+          (thread) =>
+            thread && {
+              ...thread,
+              replies: thread.replies.map((row) =>
+                row.id === reply.id
+                  ? {
+                      ...row,
+                      userVote: source.userVote,
+                      upvoteCount: source.upvoteCount,
+                      downvoteCount: source.downvoteCount,
+                    }
+                  : row,
+              ),
+            },
         );
       };
       await client.cancelQueries({ queryKey: key, exact: true });
