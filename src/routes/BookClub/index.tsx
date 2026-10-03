@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { ArrowUpRight, Search } from "lucide-react";
 import BookClubCard from "./BookClubCard";
-import { IClub } from "../../types/IClub";
+import { IClub, IClubSummary } from "../../types/IClub";
 import CreateBookClub from "./CreateBookClub";
 import UpdateBookClub from "./UpdateBookClub";
 
@@ -10,51 +11,94 @@ import { bookClubRepo } from "./bookClubRepo";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { APP_NAME } from "@/config/seo";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { useAuthIdentity } from "@novelsync/platform-auth";
+import {
+  useBookClubListCache,
+  useBookClubs,
+  useMyBookClubIds,
+} from "@/hooks/queries/useBookClubQueries";
+import {
+  clubListView,
+  filterClubs,
+  isJoined,
+  toClubSummary,
+  withClubFirst,
+  withMemberCountChange,
+  withoutClub,
+} from "@/lib/bookClubList";
+
+const NO_CLUBS: IClubSummary[] = [];
+
+const SKELETON_NAME_WIDTHS = ["w-2/5", "w-3/5", "w-1/3", "w-1/2", "w-2/3"];
+
+// Mirrors BookClubCard's padding and line height so the rows that replace it
+// land where these were.
+const ClubRowsSkeleton = () => (
+  <div role="status" aria-label="Loading book clubs" className="animate-pulse">
+    {SKELETON_NAME_WIDTHS.map((width, index) => (
+      <div
+        key={index}
+        className="flex items-center gap-3 sm:gap-5 pl-4 sm:pl-6 py-3 sm:py-3.5 border-b border-neutral-200 dark:border-neutral-800"
+      >
+        <div className="flex-1 min-w-0 h-7 flex items-center">
+          <div className={`h-4 ${width} bg-neutral-200 dark:bg-neutral-800`} />
+        </div>
+        <div className="h-7 w-14 shrink-0 bg-neutral-200 dark:bg-neutral-800" />
+      </div>
+    ))}
+  </div>
+);
 
 const BookClubs = () => {
+  // Membership and ownership need only the uid, which is known before the
+  // profile behind `user` has loaded; the create form is what needs `user`.
+  const { uid } = useAuthIdentity();
   const { user } = useAuthContext();
 
-  const [bookClubs, setBookClubs] = useState<IClub[]>([]);
-
-  useEffect(() => {
-    const fetchBookClubs = async () => {
-      const clubs = await bookClubRepo.getBookClubs();
-      if (clubs) {
-        setBookClubs(clubs);
-      }
-    };
-    fetchBookClubs();
-  }, []);
+  const clubsQuery = useBookClubs();
+  const { data: myClubIds } = useMyBookClubIds(uid);
+  const bookClubs = clubsQuery.data ?? NO_CLUBS;
+  const patchClubs = useBookClubListCache();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showUpdateForm, setShowUpdateForm] = useState(false);
-  const [selectedClub, setSelectedClub] = useState<IClub | null>(null);
-  const [clubToDelete, setClubToDelete] = useState<IClub | null>(null);
+  const [selectedClub, setSelectedClub] = useState<IClubSummary | null>(null);
+  const [clubToDelete, setClubToDelete] = useState<IClubSummary | null>(null);
   const [notCreatorDeleteAttempt, setNotCreatorDeleteAttempt] =
-    useState<IClub | null>(null);
+    useState<IClubSummary | null>(null);
   const [notCreatorUpdateAttempt, setNotCreatorUpdateAttempt] =
-    useState<IClub | null>(null);
+    useState<IClubSummary | null>(null);
   const [loginRequiredForJoin, setLoginRequiredForJoin] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredClubs = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return bookClubs;
-    return bookClubs.filter((club) =>
-      [club.name, club.description, club.category].some((field) =>
-        field?.toLowerCase().includes(q),
-      ),
-    );
-  }, [bookClubs, searchQuery]);
+  const filteredClubs = useMemo(
+    () => filterClubs(bookClubs, searchQuery),
+    [bookClubs, searchQuery],
+  );
+  const listView = clubListView(
+    {
+      data: clubsQuery.data,
+      // A retry in flight shows the skeleton again rather than a dead button.
+      isError: clubsQuery.isError && !clubsQuery.isFetching,
+    },
+    filteredClubs.length,
+    searchQuery,
+  );
 
   const handleCreateClub = async (newClub: IClub) => {
-    if (user) {
-      newClub.creatorId = user.uid;
+    try {
+      const created = toClubSummary(await bookClubRepo.createBookClub(newClub));
+      // The founder is the club's first member.
+      await patchClubs(
+        created.id,
+        (clubs) => withClubFirst(clubs, created),
+        true,
+      );
+      setShowCreateForm(false);
+    } catch (error) {
+      console.error("Failed to create club:", error);
+      toast.error("We couldn't create the club. Please try again.");
     }
-    const id = await bookClubRepo.createBookClub(newClub);
-    // Use the Firestore-generated ID so card navigation hits the right document
-    setBookClubs((prevClubs) => [...prevClubs, { ...newClub, id }]);
-    setShowCreateForm(false);
   };
 
   const handleShowCreateForm = () => {
@@ -65,14 +109,22 @@ const BookClubs = () => {
     setShowCreateForm(false);
   };
 
-  const handleUpdateClub = (updatedClub: IClub) => {
-    bookClubRepo.updateBookClub(updatedClub.id, updatedClub);
-    setShowUpdateForm(false);
-    setSelectedClub(null);
+  const handleUpdateClub = async (updatedClub: IClubSummary) => {
+    try {
+      const saved = toClubSummary(
+        await bookClubRepo.updateBookClub(updatedClub.id, updatedClub),
+      );
+      await patchClubs(saved.id, (clubs) => withClubFirst(clubs, saved));
+      setShowUpdateForm(false);
+      setSelectedClub(null);
+    } catch (error) {
+      console.error("Failed to update club:", error);
+      toast.error("We couldn't save the club. Please try again.");
+    }
   };
 
-  const handleShowUpdateForm = (club: IClub) => {
-    if (club.creatorId === user?.uid) {
+  const handleShowUpdateForm = (club: IClubSummary) => {
+    if (club.creatorId === uid) {
       setSelectedClub(club);
       setShowUpdateForm(true);
     } else {
@@ -81,15 +133,13 @@ const BookClubs = () => {
   };
 
   const handleJoinClub = async (clubId: string) => {
-    if (user) {
+    if (uid) {
       try {
-        await bookClubRepo.joinBookClub(clubId, user.uid);
-        setBookClubs((prevClubs) =>
-          prevClubs.map((club) =>
-            club.id === clubId && !club.members.includes(user.uid)
-              ? { ...club, members: [...club.members, user.uid] }
-              : club,
-          ),
+        await bookClubRepo.joinBookClub(clubId, uid);
+        await patchClubs(
+          clubId,
+          (clubs) => withMemberCountChange(clubs, clubId, 1),
+          true,
         );
       } catch (error) {
         console.error("Failed to join club:", error);
@@ -99,37 +149,35 @@ const BookClubs = () => {
     }
   };
 
-  const handleDeleteClub = (club: IClub) => {
-    if (club.creatorId === user?.uid) {
+  const handleDeleteClub = (club: IClubSummary) => {
+    if (club.creatorId === uid) {
       setClubToDelete(club);
     } else {
       setNotCreatorDeleteAttempt(club);
     }
   };
 
-  const confirmDeleteClub = () => {
-    if (clubToDelete) {
-      bookClubRepo.deleteBookClub(clubToDelete.id);
-      setBookClubs((prevClubs) =>
-        prevClubs.filter((c) => c.id !== clubToDelete.id),
-      );
-      setClubToDelete(null);
+  const confirmDeleteClub = async () => {
+    if (!clubToDelete) return;
+    const { id } = clubToDelete;
+    setClubToDelete(null);
+    try {
+      await bookClubRepo.deleteBookClub(id);
+      await patchClubs(id, (clubs) => withoutClub(clubs, id), false);
+    } catch (error) {
+      console.error("Failed to delete club:", error);
+      toast.error("We couldn't delete the club. Please try again.");
     }
   };
 
   const handleLeaveClub = async (clubId: string) => {
-    if (user) {
+    if (uid) {
       try {
-        await bookClubRepo.leaveBookClub(clubId, user.uid);
-        setBookClubs((prevClubs) =>
-          prevClubs.map((club) =>
-            club.id === clubId
-              ? {
-                  ...club,
-                  members: club.members.filter((id) => id !== user.uid),
-                }
-              : club,
-          ),
+        await bookClubRepo.leaveBookClub(clubId, uid);
+        await patchClubs(
+          clubId,
+          (clubs) => withMemberCountChange(clubs, clubId, -1),
+          false,
         );
       } catch (error) {
         console.error("Failed to leave club:", error);
@@ -270,14 +318,31 @@ const BookClubs = () => {
         <div className="mt-10 mb-0 border-t border-neutral-900 dark:border-neutral-100 opacity-100" />
 
         {/* Club list */}
-        {filteredClubs.length > 0 ? (
+        {listView === "loading" ? (
+          <ClubRowsSkeleton />
+        ) : listView === "error" ? (
+          <div className="py-28 text-center" role="alert">
+            <p className="font-heading italic text-3xl text-neutral-300 dark:text-neutral-700 mb-6">
+              The clubs didn’t load.
+            </p>
+            <p className="font-body text-sm text-neutral-400 dark:text-neutral-600 mb-10">
+              Check your connection and try again.
+            </p>
+            <button
+              onClick={() => void clubsQuery.refetch()}
+              className="font-ui text-[11px] font-bold tracking-[0.14em] uppercase px-7 py-3 border border-neutral-900 dark:border-white text-neutral-900 dark:text-white hover:bg-neutral-900 hover:text-white dark:hover:bg-white dark:hover:text-neutral-900 transition-colors duration-200"
+            >
+              Try Again
+            </button>
+          </div>
+        ) : listView === "rows" ? (
           <div>
-            {filteredClubs.map((club: IClub, index) => (
+            {filteredClubs.map((club: IClubSummary, index) => (
               <BookClubCard
                 key={club.id}
                 index={index}
-                joined={user ? club.members.includes(user.uid) : false}
-                isCreator={user ? club.creatorId === user.uid : false}
+                joined={isJoined(uid, myClubIds, club.id)}
+                isCreator={club.creatorId === uid}
                 club={club}
                 onEdit={() => handleShowUpdateForm(club)}
                 onDelete={() => handleDeleteClub(club)}
@@ -286,7 +351,7 @@ const BookClubs = () => {
               />
             ))}
           </div>
-        ) : searchQuery ? (
+        ) : listView === "no-matches" ? (
           <div className="py-28 text-center">
             <p className="font-heading italic text-3xl text-neutral-300 dark:text-neutral-700 mb-6">
               No matches.

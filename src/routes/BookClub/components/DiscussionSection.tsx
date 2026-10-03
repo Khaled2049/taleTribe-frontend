@@ -3,6 +3,7 @@ import { Send } from "lucide-react";
 import { IClub, IPromptResponse } from "@/types/IClub";
 import { bookClubRepo } from "../bookClubRepo";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthIdentity } from "@novelsync/platform-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +17,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { RATE_LIMITS } from "@/config/rateLimits";
+import { useBookClubCache } from "@/hooks/queries/useBookClubQueries";
+import { withPrompt, withPromptResponse } from "@/lib/bookClubDetail";
 
 interface DiscussionSectionProps {
   club: IClub;
@@ -33,7 +36,9 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
   isCreator,
   userCurrentChapter = 0,
 }) => {
+  const { uid } = useAuthIdentity();
   const { user } = useAuthContext();
+  const updateClubCache = useBookClubCache(club.id);
   const prompts = club.discussionPrompts || [];
 
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
@@ -94,11 +99,12 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
 
     setIsSaving(true);
     try {
-      await bookClubRepo.createDiscussionPrompt(club.id, {
+      const created = await bookClubRepo.createDiscussionPrompt(club.id, {
         chapterNumber: newPrompt.chapterNumber,
         question: newPrompt.question.trim(),
         description: newPrompt.description.trim(),
       });
+      await updateClubCache((cached) => withPrompt(cached, created));
 
       setIsCreatingPrompt(false);
       setNewPrompt({ chapterNumber: 1, question: "", description: "" });
@@ -113,7 +119,7 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
   };
 
   const handleAddResponse = async (promptId: string) => {
-    if (!newResponse.trim() || !user) return;
+    if (!newResponse.trim() || !uid) return;
 
     setError(null);
 
@@ -126,8 +132,8 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
 
     const tempResponse: IPromptResponse = {
       id: `temp-${Date.now()}`,
-      userId: user.uid,
-      username: user.username || "Anonymous",
+      userId: uid,
+      username: user?.username || "Anonymous",
       content: newResponse,
       createdAt: new Date().toISOString(),
     };
@@ -139,9 +145,12 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
 
     setIsSaving(true);
     try {
-      await bookClubRepo.addPromptResponse(club.id, promptId, {
+      const saved = await bookClubRepo.addPromptResponse(club.id, promptId, {
         content: newResponse.trim(),
       });
+      await updateClubCache((cached) =>
+        withPromptResponse(cached, promptId, saved),
+      );
 
       setNewResponse("");
       setComposerFor(null);
@@ -257,7 +266,7 @@ const DiscussionSection: React.FC<DiscussionSectionProps> = ({
                   </div>
                 )}
 
-                {user && (
+                {uid && (
                   <div className="mt-4">
                     {showComposer ? (
                       <div className="space-y-2">

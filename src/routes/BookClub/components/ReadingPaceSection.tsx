@@ -7,9 +7,10 @@ import {
   IReadingSchedule,
 } from "@/types/IClub";
 import { bookClubRepo } from "../bookClubRepo";
-import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthIdentity } from "@novelsync/platform-auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/queries/queryKeys";
+import { useBookClubCache } from "@/hooks/queries/useBookClubQueries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,7 +90,8 @@ const ReadingPaceSection: React.FC<ReadingPaceSectionProps> = ({
   userCurrentChapter,
   membersById,
 }) => {
-  const { user } = useAuthContext();
+  const { uid } = useAuthIdentity();
+  const updateClubCache = useBookClubCache(club.id);
   const queryClient = useQueryClient();
   const schedule = club.readingSchedule;
 
@@ -110,13 +112,13 @@ const ReadingPaceSection: React.FC<ReadingPaceSectionProps> = ({
     Math.max(0, totalChapters > 0 ? Math.min(n, totalChapters) : n);
 
   const handleSaveProgress = async () => {
-    if (!user) return;
+    if (!uid) return;
     setIsSavingProgress(true);
     try {
-      const ownNotes = progress.find((p) => p.userId === user.uid)?.notes;
+      const ownNotes = progress.find((p) => p.userId === uid)?.notes;
       const saved = await bookClubRepo.updateReadingProgress(
         club.id,
-        user.uid,
+        uid,
         chapterDraft,
         ownNotes ?? undefined,
       );
@@ -211,11 +213,11 @@ const ReadingPaceSection: React.FC<ReadingPaceSectionProps> = ({
         totalChapters: editTotalChapters,
       };
 
-      if (schedule) {
-        await bookClubRepo.updateReadingSchedule(club.id, newSchedule);
-      } else {
-        await bookClubRepo.createReadingSchedule(club.id, newSchedule);
-      }
+      await updateClubCache(
+        schedule
+          ? await bookClubRepo.updateReadingSchedule(club.id, newSchedule)
+          : await bookClubRepo.createReadingSchedule(club.id, newSchedule),
+      );
 
       setIsEditing(false);
     } catch (err) {
@@ -260,7 +262,7 @@ const ReadingPaceSection: React.FC<ReadingPaceSectionProps> = ({
     });
   }, [schedule]);
 
-  const showStepper = !!user && isMember;
+  const showStepper = !!uid && isMember;
   const hasDraftChange = chapterDraft !== userCurrentChapter;
 
   return (
@@ -334,7 +336,7 @@ const ReadingPaceSection: React.FC<ReadingPaceSectionProps> = ({
           )}
         </div>
       )}
-      {!user && (
+      {!uid && (
         <p className="font-body text-sm italic text-ns-ink-muted mb-6">
           Sign in to track your reading progress.
         </p>
@@ -381,7 +383,7 @@ const ReadingPaceSection: React.FC<ReadingPaceSectionProps> = ({
                       <MemberDot
                         key={p.userId}
                         username={usernameFor(p)}
-                        isViewer={p.userId === user?.uid}
+                        isViewer={p.userId === uid}
                       />
                     ))}
                   </span>
@@ -407,7 +409,7 @@ const ReadingPaceSection: React.FC<ReadingPaceSectionProps> = ({
                   (p.currentChapter / denominator) * 100,
                   100,
                 );
-                const isViewer = p.userId === user?.uid;
+                const isViewer = p.userId === uid;
                 return (
                   <div
                     key={p.userId}

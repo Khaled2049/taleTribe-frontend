@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Check, X } from "lucide-react";
 import { IBookOfTheMonth, IClub, IPoll } from "@/types/IClub";
 import { bookClubRepo } from "../bookClubRepo";
-import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuthIdentity } from "@novelsync/platform-auth";
 import { Button } from "@/components/ui/button";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,8 @@ import {
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { BookPicker } from "@/components/common/BookPicker";
 import { RATE_LIMITS } from "@/config/rateLimits";
+import { useBookClubCache } from "@/hooks/queries/useBookClubQueries";
+import { withPoll, withPollClosed, withVote } from "@/lib/bookClubDetail";
 
 interface NextBookSectionProps {
   club: IClub;
@@ -32,7 +34,8 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
   club,
   isCreator,
 }) => {
-  const { user } = useAuthContext();
+  const { uid } = useAuthIdentity();
+  const updateClubCache = useBookClubCache(club.id);
   const polls = club.polls || [];
   const activePolls = polls.filter((p) => p.isActive);
   const pastPolls = polls.filter((p) => !p.isActive);
@@ -109,12 +112,13 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
 
     setIsSaving(true);
     try {
-      await bookClubRepo.createPoll(club.id, {
+      const created = await bookClubRepo.createPoll(club.id, {
         type: "book-selection",
         question: newPoll.question.trim(),
         options: newPoll.options,
         ...(newPoll.endDate ? { endDate: newPoll.endDate } : {}),
       });
+      await updateClubCache((cached) => withPoll(cached, created));
 
       setIsCreatingPoll(false);
       setNewPoll({
@@ -131,14 +135,17 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
   };
 
   const handleVote = async (pollId: string, optionIndex: number) => {
-    if (!user) return;
+    if (!uid) return;
 
     const poll = polls.find((p) => p.id === pollId);
-    const currentVote = poll?.votes[user.uid];
+    const currentVote = poll?.votes[uid];
     setOptimisticVotes((prev) => ({ ...prev, [pollId]: optionIndex }));
 
     try {
-      await bookClubRepo.voteOnPoll(club.id, pollId, user.uid, optionIndex);
+      await bookClubRepo.voteOnPoll(club.id, pollId, uid, optionIndex);
+      await updateClubCache((cached) =>
+        withVote(cached, pollId, uid, optionIndex),
+      );
     } catch (err) {
       console.error("Error voting:", err);
       setOptimisticVotes((prev) => {
@@ -157,8 +164,12 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
     if (!adoptTarget) return;
     setIsAdopting(true);
     try {
-      await bookClubRepo.updateBookOfTheMonth(club.id, adoptTarget.book);
-      await bookClubRepo.closePoll(club.id, adoptTarget.poll.id);
+      const pollId = adoptTarget.poll.id;
+      await updateClubCache(
+        await bookClubRepo.updateBookOfTheMonth(club.id, adoptTarget.book),
+      );
+      await bookClubRepo.closePoll(club.id, pollId);
+      await updateClubCache((cached) => withPollClosed(cached, pollId));
       setAdoptTarget(null);
     } catch (err) {
       console.error("Error adopting winner:", err);
@@ -168,11 +179,11 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
   };
 
   const getUserVote = (poll: IPoll): number | null => {
-    if (!user) return null;
+    if (!uid) return null;
     if (optimisticVotes[poll.id] !== undefined) {
       return optimisticVotes[poll.id];
     }
-    return poll.votes[user.uid] !== undefined ? poll.votes[user.uid] : null;
+    return poll.votes[uid] !== undefined ? poll.votes[uid] : null;
   };
 
   const getVoteCounts = (poll: IPoll): number[] => {
@@ -182,12 +193,12 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
         counts[optionIndex]++;
       }
     });
-    if (user && optimisticVotes[poll.id] !== undefined) {
+    if (uid && optimisticVotes[poll.id] !== undefined) {
       const optimisticVote = optimisticVotes[poll.id];
       if (
         optimisticVote >= 0 &&
         optimisticVote < poll.options.length &&
-        poll.votes[user.uid] === undefined
+        poll.votes[uid] === undefined
       ) {
         counts[optimisticVote]++;
       }
@@ -260,7 +271,7 @@ const NextBookSection: React.FC<NextBookSectionProps> = ({
                       key={index}
                       type="button"
                       onClick={() => handleVote(poll.id, index)}
-                      disabled={!user}
+                      disabled={!uid}
                       className="w-full text-left py-3 border-t border-ns-border first:border-t-0 group disabled:cursor-default"
                     >
                       <div className="flex items-center gap-3">

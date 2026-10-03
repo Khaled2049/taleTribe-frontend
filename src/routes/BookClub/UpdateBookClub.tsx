@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { IClub } from "../../types/IClub";
+import { IClubSummary } from "../../types/IClub";
 import { ArrowLeft } from "lucide-react";
 
 const CATEGORIES = [
@@ -16,8 +16,8 @@ const CATEGORIES = [
 ];
 
 interface UpdateBookClubProps {
-  club: IClub;
-  onUpdate: (updatedClub: IClub) => void;
+  club: IClubSummary;
+  onUpdate: (updatedClub: IClubSummary) => void;
   onCancel: () => void;
 }
 

@@ -1,7 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import api from "@/cloudFunctions";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { rateLimitService } from "@/services/RateLimitService";
+
+// Loaded at the first search rather than with the picker: the limiter is
+// Firestore-backed, and a static import would put the Firestore SDK in every
+// page that can open a book picker.
+const loadRateLimitService = () =>
+  import("@/services/RateLimitService").then((m) => m.rateLimitService);
 
 interface Book {
   id: string;
@@ -37,6 +42,7 @@ const BookSearch: React.FC<BookSearchProps> = ({ onBookSelect }) => {
 
       // Check rate limits if user is authenticated
       if (user) {
+        const rateLimitService = await loadRateLimitService();
         const rateLimitCheck = await rateLimitService.canSearchBooks(user.uid);
         if (!rateLimitCheck.allowed) {
           setError(rateLimitCheck.message || "Rate limit exceeded");
@@ -70,6 +76,7 @@ const BookSearch: React.FC<BookSearchProps> = ({ onBookSelect }) => {
 
         // Increment search count if user is authenticated
         if (user) {
+          const rateLimitService = await loadRateLimitService();
           await rateLimitService.incrementBookSearchCount(user.uid);
         }
       } catch (caught: unknown) {

@@ -1,11 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { IClub } from "../src/types/IClub";
-
-// The repo module pulls in Firestore for the realtime chat helpers, which the
-// wire mapper under test has nothing to do with.
-vi.mock("@novelsync/platform-auth/firestore", () => ({ firestore: {} }));
-
-const { clubInput } = await import("../src/routes/BookClub/bookClubRepo");
+import { clubInput } from "../src/routes/BookClub/bookClubRepo";
 
 // story-data decodes book club writes with DisallowUnknownFields, so any extra
 // key is a 400 for the whole request rather than a silently ignored field.
