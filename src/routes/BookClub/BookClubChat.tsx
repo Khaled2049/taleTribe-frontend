@@ -1,6 +1,6 @@
 import { IMessage } from "@/types/IMessage";
 import { useEffect, useRef, useState } from "react";
-import { bookClubRepo } from "./bookClubRepo";
+import { bookClubChatRepo } from "./bookClubChatRepo";
 import { Send, AlertTriangle } from "lucide-react";
 import { IUser } from "@/types/IUser";
 import SpoilerTag from "./components/SpoilerTag";
@@ -55,9 +55,12 @@ const BookClubChat: React.FC<BookClubChatProps> = ({
 
   useEffect(() => {
     // Subscribe to messages
-    const unsubscribe = bookClubRepo.getMessages(clubId, (updatedMessages) => {
-      setMessages(updatedMessages);
-    });
+    const unsubscribe = bookClubChatRepo.getMessages(
+      clubId,
+      (updatedMessages) => {
+        setMessages(updatedMessages);
+      },
+    );
 
     // Cleanup subscription on unmount
     return () => unsubscribe();
@@ -88,7 +91,7 @@ const BookClubChat: React.FC<BookClubChatProps> = ({
     }
 
     try {
-      await bookClubRepo.sendMessage(clubId, message);
+      await bookClubChatRepo.sendMessage(clubId, message);
       await rateLimitService.incrementMessageCount(user.uid);
       setErrorMessage(null);
       return true;

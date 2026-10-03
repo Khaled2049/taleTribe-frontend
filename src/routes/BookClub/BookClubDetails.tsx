@@ -1,9 +1,8 @@
-import React, { useState } from "react";
+import React, { lazy, Suspense, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ChevronDown, ChevronUp, Crown } from "lucide-react";
 import { bookClubRepo } from "./bookClubRepo";
 import { useAuthContext } from "@/contexts/AuthContext";
-import BookClubChat from "./BookClubChat";
 import ReadingPaceSection from "./components/ReadingPaceSection";
 import DiscussionSection from "./components/DiscussionSection";
 import NextBookSection from "./components/NextBookSection";
@@ -25,6 +24,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+// Chat is the only part of this page that needs the Firestore SDK, and it
+// starts collapsed.
+const BookClubChat = lazy(() => import("./BookClubChat"));
 
 interface MemberInfo {
   id: string;
@@ -429,11 +432,21 @@ const BookClubDetails: React.FC = () => {
               </button>
               {isChatOpen && (
                 <div className="pb-10">
-                  <BookClubChat
-                    clubId={club.id}
-                    user={user}
-                    userCurrentChapter={userCurrentChapter}
-                  />
+                  <Suspense
+                    fallback={
+                      <div
+                        role="status"
+                        aria-label="Loading chat"
+                        className="h-96 rounded-ns-lg border border-ns-border bg-ns-bg animate-pulse"
+                      />
+                    }
+                  >
+                    <BookClubChat
+                      clubId={club.id}
+                      user={user}
+                      userCurrentChapter={userCurrentChapter}
+                    />
+                  </Suspense>
                 </div>
               )}
             </section>

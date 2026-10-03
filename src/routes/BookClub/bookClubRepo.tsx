@@ -1,5 +1,4 @@
 import { isNotFound, request } from "@novelsync/story-data-client";
-import { firestore } from "@novelsync/platform-auth/firestore";
 import {
   IBookOfTheMonth,
   IClub,
@@ -10,20 +9,6 @@ import {
   IReadingSchedule,
   IPromptResponse,
 } from "@/types/IClub";
-import { IMessage } from "@/types/IMessage";
-import {
-  collection,
-  doc,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
-import { RATE_LIMITS } from "@/config/rateLimits";
-import { spoilerRangeField } from "@/lib/spoilerRange";
 
 /**
  * The write body the API accepts for create and update. The server rejects
@@ -140,44 +125,6 @@ class BookClubRepo {
       `/v1/book-clubs/${id}/members/me`,
       undefined,
       true,
-    );
-  }
-
-  // Chat intentionally remains in Firebase for realtime delivery during this migration phase.
-  async sendMessage(clubId: string, message: IMessage): Promise<string> {
-    if (message.content.length > RATE_LIMITS.MAX_MESSAGE_SIZE_CHARS)
-      throw new Error(
-        `Message is too long. Maximum ${RATE_LIMITS.MAX_MESSAGE_SIZE_CHARS} characters allowed.`,
-      );
-    const ref = doc(collection(firestore, `bookClubs/${clubId}/messages`));
-    const { spoilerChapterRange, ...rest } = message;
-    await setDoc(ref, {
-      ...rest,
-      ...spoilerRangeField(spoilerChapterRange),
-      id: ref.id,
-      timestamp: serverTimestamp(),
-    });
-    return ref.id;
-  }
-  getMessages(clubId: string, callback: (messages: IMessage[]) => void) {
-    return onSnapshot(
-      query(
-        collection(firestore, `bookClubs/${clubId}/messages`),
-        orderBy("timestamp", "desc"),
-        limit(50),
-      ),
-      (snapshot) =>
-        callback(snapshot.docs.map((x) => x.data() as IMessage).reverse()),
-    );
-  }
-  addSpoilerToMessage(
-    clubId: string,
-    messageId: string,
-    spoilerData: { chapterRange: { start: number; end?: number } },
-  ) {
-    return updateDoc(
-      doc(firestore, `bookClubs/${clubId}/messages`, messageId),
-      { hasSpoiler: true, ...spoilerRangeField(spoilerData.chapterRange) },
     );
   }
 
