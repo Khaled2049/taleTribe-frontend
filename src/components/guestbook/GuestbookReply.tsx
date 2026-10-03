@@ -12,7 +12,7 @@ import { IGuestbookReply } from "@novelsync/story-data-client";
 import { IUser } from "@/types/IUser";
 import { rateLimitMessage } from "@/lib/rateLimitError";
 import { useGuestbookPolicy } from "./guestbookPolicyContext";
-import type { ReplyIndex } from "@/lib/guestbookReplies";
+import { replyErrorMessage, type ReplyIndex } from "@/lib/guestbookReplies";
 import { formatRelativeTime } from "@/lib/relativeTime";
 
 interface GuestbookReplyProps {
@@ -84,7 +84,9 @@ export const GuestbookReply: React.FC<GuestbookReplyProps> = React.memo(
         setIsReplying(false);
         setError(null);
       } catch (err) {
-        setError(rateLimitMessage(err, "Failed to post reply"));
+        setError(
+          replyErrorMessage(err, rateLimitMessage(err, "Failed to post reply")),
+        );
       } finally {
         setIsLoading(false);
       }
