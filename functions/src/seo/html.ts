@@ -34,16 +34,46 @@ export function truncate(text: string, max: number): string {
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " " };
 
+const BLOCK_END = /^\/(p|div|h[1-6]|li|blockquote|pre|tr)$/;
+const RAW_TEXT = /^(script|style)$/;
+
+/**
+ * Drops markup in one pass over the input. Chained regex replaces are the
+ * wrong tool: removing one tag can splice its neighbours into a new one
+ * ("<scr<script>ipt>"), so each pass would have to be re-run to a fixed point.
+ * A "<" with no closing ">" discards the rest, which is how a browser reads it.
+ */
+function stripTags(html: string): string {
+  let text = "";
+  let at = 0;
+  while (at < html.length) {
+    const open = html.indexOf("<", at);
+    if (open < 0) return text + html.slice(at);
+    text += html.slice(at, open);
+    const close = html.indexOf(">", open);
+    if (close < 0) return text;
+    const name = (/^\/?[a-z][a-z0-9]*/i.exec(html.slice(open + 1, close))?.[0] ?? "").toLowerCase();
+    at = close + 1;
+    if (RAW_TEXT.test(name)) {
+      // Script and style bodies are code, not prose: skip to the closing tag.
+      const end = html.toLowerCase().indexOf(`</${name}`, at);
+      if (end < 0) return text;
+      at = end;
+    } else if (name === "br" || BLOCK_END.test(name)) {
+      text += "\n";
+    }
+  }
+  return text;
+}
+
 /**
  * Chapter HTML to plain paragraphs. Tags are dropped rather than sanitized:
  * the snapshot is replaced by the real reader on boot, so it needs the words,
- * not the markup, and text that is escaped afterwards cannot carry script.
+ * not the markup. The result is still untrusted text — an entity can decode to
+ * "<script>" — and is safe only because every caller escapes it on output.
  */
 export function htmlToParagraphs(html: string, maxChars: number): string[] {
-  const text = html
-    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, "")
-    .replace(/<\/(p|div|h[1-6]|li|blockquote|pre|tr)>|<br\s*\/?>/gi, "\n")
-    .replace(/<[^>]*>/g, "")
+  const text = stripTags(html)
     .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, code: string) => {
       if (code[0] !== "#") return ENTITIES[code.toLowerCase()] ?? entity;
       const point = code[1].toLowerCase() === "x" ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);

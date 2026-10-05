@@ -148,6 +148,24 @@ describe("html", () => {
     assert.equal(htmlToParagraphs(`<p>${"word ".repeat(100)}</p><p>${"more ".repeat(100)}</p>`, 600).length, 1);
   });
 
+  it("leaves no tag behind when markup is nested, split or unterminated", () => {
+    const cases: Array<[string, string[]]> = [
+      // "<scr<script>" is one tag, as a browser reads it; what follows is text.
+      ["<scr<script>ipt>alert(1)</script>after", ["ipt>alert(1)after"]],
+      ["<p>kept</p><script>alert(1)", ["kept"]],
+      ["<p>kept</p><SCRIPT type=x>a</p>b</ScRiPt >tail", ["kept", "tail"]],
+      ["<style>p{}</style><p>one<br/>two</p>", ["one", "two"]],
+      ["<p>kept</p><img src=x onerror=alert(1)", ["kept"]],
+      ["a < b and c > d", ["a d"]],
+    ];
+    for (const [input, expected] of cases) {
+      const paragraphs = htmlToParagraphs(input, 1000);
+      assert.deepEqual(paragraphs, expected, input);
+    }
+    // Entities decode to text; the caller's escaping is what keeps it inert.
+    assert.deepEqual(htmlToParagraphs("<p>&lt;script&gt;x&lt;/script&gt;</p>", 1000), ["<script>x</script>"]);
+  });
+
   it("truncates on a word boundary", () => {
     assert.equal(truncate("short", 160), "short");
     const cut = truncate("one two three four five six seven eight nine ten", 30);
