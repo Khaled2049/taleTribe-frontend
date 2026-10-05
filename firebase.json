@@ -4,6 +4,54 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "headers": [
       {
+        "source": "/create/**",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      },
+      {
+        "source": "/user-stories",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      },
+      {
+        "source": "/sign-in",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      },
+      {
+        "source": "/sign-up",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      },
+      {
+        "source": "/forgot-password",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      },
+      {
+        "source": "/auth/**",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      },
+      {
+        "source": "/mcp-connect",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      },
+      {
+        "source": "/guestbook",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      },
+      {
+        "source": "/guestbook/**",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      },
+      {
+        "source": "/book-clubs/*",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      },
+      {
+        "source": "/competitions/new",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      },
+      {
+        "source": "/competitions/*/edit",
+        "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      },
+      {
         "source": "**",
         "headers": [
           { "key": "X-Content-Type-Options", "value": "nosniff" },
@@ -24,6 +72,12 @@
       }
     ],
     "rewrites": [
+      { "source": "/sitemap.xml", "function": { "functionId": "seoRender", "region": "us-central1" } },
+      { "source": "/sitemaps/**", "function": { "functionId": "seoRender", "region": "us-central1" } },
+      { "source": "/stories", "function": { "functionId": "seoRender", "region": "us-central1" } },
+      { "source": "/stories/**", "function": { "functionId": "seoRender", "region": "us-central1" } },
+      { "source": "/story/**", "function": { "functionId": "seoRender", "region": "us-central1" } },
+      { "source": "/profile/**", "function": { "functionId": "seoRender", "region": "us-central1" } },
       {
         "source": "**",
         "destination": "/index.html"

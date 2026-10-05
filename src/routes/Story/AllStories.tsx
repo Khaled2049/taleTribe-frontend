@@ -1,10 +1,11 @@
 import { useAuthContext } from "../../contexts/AuthContext";
 import { FaBook } from "react-icons/fa";
 import { ChevronDown, Check, Search, Sparkles, X } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { APP_NAME } from "@/config/seo";
+import { genreName, genrePath, storyPath, tagSlug } from "@/lib/seoPaths";
 import StoriesHeader from "@/components/story/StoriesHeader";
 import { StoryMetadata } from "@novelsync/story-data-client";
 import { usePublishedStories } from "@/hooks/queries/publishedStories";
@@ -68,7 +69,13 @@ const AllStories: React.FC = () => {
   const isSmUp = useMediaQuery("(min-width: 640px)");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  // The filter lives in the URL (/stories/genre/:genre, /stories/tag/:tag) so
+  // every listing is a page a crawler can reach and a reader can share.
+  const params = useParams<{ genre?: string; tag?: string }>();
+  const knownGenre = CATEGORIES.some((c) => c.value === params.genre);
+  const selectedCategory = knownGenre ? (params.genre as string) : "all";
+  const tag = params.tag ? tagSlug(params.tag) : "";
+  const tagLabel = tag.replace(/-/g, " ");
   const [searchInput, setSearchInput] = useState("");
   const [genreMenuOpen, setGenreMenuOpen] = useState(false);
   const [discoveryTitle, setDiscoveryTitle] = useState("");
@@ -94,7 +101,7 @@ const AllStories: React.FC = () => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = usePublishedStories(selectedCategory, search);
+  } = usePublishedStories(selectedCategory, search, tag);
 
   const stories = useMemo(
     () => data?.pages.flatMap((page) => page.stories) ?? [],
@@ -150,12 +157,16 @@ const AllStories: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [genreMenuOpen]);
 
-  const handleCategoryChange = (category: string) => {
-    setSelectedCategory(category);
+  const resetForCategory = () => {
     setGenreMenuOpen(false);
     setDiscoveryTitle("");
     setDiscoveryPrompt(undefined);
     discover.reset();
+  };
+
+  const handleCategoryChange = (category: string) => {
+    resetForCategory();
+    navigate(genrePath(category));
   };
 
   const handleSearchChange = (value: string) => {
@@ -248,27 +259,34 @@ const AllStories: React.FC = () => {
   };
 
   const handleStoryClick = useCallback(
-    (story: StoryMetadata) => navigate(`/story/${story.id}`),
+    (story: StoryMetadata) => navigate(storyPath(story.id, story.title)),
     [navigate],
   );
 
   return (
     <>
-      <SEOHead
-        title={`Discover Stories - ${APP_NAME}`}
-        description={`Browse and discover amazing stories from talented writers. Explore fiction, fantasy, romance, sci-fi, and more. Join the ${APP_NAME} community and start reading today.`}
-        keywords={[
-          "stories",
-          "fiction",
-          "novels",
-          "reading",
-          "books",
-          "literature",
-          "story discovery",
-        ]}
-        url="/stories"
-        canonical="/stories"
-      />
+      {tag ? (
+        <SEOHead
+          title={`Stories tagged “${tagLabel}”`}
+          description={`Stories tagged ${tagLabel} on ${APP_NAME}, written by independent authors and free to read online.`}
+          // The server indexes a tag once enough stories carry it; until the
+          // first page has loaded the client cannot know, so it says nothing.
+          noindex={!loading && stories.length < 3}
+        />
+      ) : genreName(selectedCategory) ? (
+        <SEOHead
+          title={`${genreName(selectedCategory)} Stories`}
+          description={`Read ${genreName(selectedCategory)?.toLowerCase()} stories by independent writers on ${APP_NAME}. New chapters and new voices, free to read online.`}
+        />
+      ) : (
+        <SEOHead
+          title="Discover Stories"
+          description={`Browse original fiction from independent writers on ${APP_NAME} — fantasy, romance, science fiction, mystery, horror and more, free to read.`}
+          url="/stories"
+          // An unknown genre in the URL, or a search, is not a page of its own.
+          noindex={(!!params.genre && !knownGenre) || search !== ""}
+        />
+      )}
 
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="flex gap-8 items-start">
@@ -415,6 +433,18 @@ const AllStories: React.FC = () => {
               </div>
             </div>
 
+            {tag && (
+              <p className="mb-6 font-ui text-sm text-ns-ink-secondary">
+                Stories tagged “{tagLabel}” ·{" "}
+                <Link
+                  to="/stories"
+                  className="text-ns-accent hover:text-ns-accent-hover"
+                >
+                  Show all
+                </Link>
+              </p>
+            )}
+
             {forYouShelf}
 
             {discover.isError && (
@@ -470,9 +500,11 @@ const AllStories: React.FC = () => {
                         ? `Nothing matches “${search}”${
                             selectedCategory === "all" ? "" : " in this genre"
                           }.`
-                        : selectedCategory === "all"
-                          ? "No stories have been published yet."
-                          : "No stories found in this category yet."}
+                        : tag
+                          ? `No stories are tagged “${tagLabel}” yet.`
+                          : selectedCategory === "all"
+                            ? "No stories have been published yet."
+                            : "No stories found in this category yet."}
                     </p>
                   </div>
                 ) : (
@@ -543,11 +575,13 @@ const AllStories: React.FC = () => {
               {CATEGORIES.map((category) => {
                 const isActive = selectedCategory === category.value;
                 return (
-                  <button
+                  <Link
                     key={category.id}
-                    onClick={() => handleCategoryChange(category.value)}
+                    to={genrePath(category.value)}
+                    onClick={resetForCategory}
+                    aria-current={isActive ? "page" : undefined}
                     className={`
-                      group flex items-center gap-2.5 px-3 py-2 text-left
+                      group flex items-center gap-2.5 px-3 py-2 text-left no-underline
                       border-l-2 transition-all duration-200 text-sm font-ui
                       ${
                         isActive
@@ -563,7 +597,7 @@ const AllStories: React.FC = () => {
                       {category.symbol}
                     </span>
                     {category.name}
-                  </button>
+                  </Link>
                 );
               })}
             </nav>

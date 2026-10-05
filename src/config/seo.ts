@@ -6,13 +6,22 @@
 // Application name from environment variable (allows easy rebranding)
 export const APP_NAME = import.meta.env.VITE_APP_NAME || "TheTaleTribe";
 
-// Get the base URL from environment or use a default
+// KEEP IN SYNC with DEFAULT_SITE_URL in vite.config.ts and siteUrl() in
+// functions/src/seo/site.ts.
+const DEFAULT_SITE_URL = "https://thetaletribe.com";
+
+/**
+ * The one origin canonical and social URLs are built on. Deliberately not
+ * `window.location.origin`: the site also answers on its *.web.app and www
+ * hosts, and a canonical that follows the visitor's host tells a crawler each
+ * of them is the original.
+ */
 const getBaseUrl = () => {
-  if (typeof window !== "undefined") {
-    return window.location.origin;
-  }
-  // Fallback for SSR or build time
-  return import.meta.env.VITE_SITE_URL || "https://thetaletribe.web.app";
+  const configured = import.meta.env.VITE_SITE_URL;
+  if (configured) return configured.replace(/\/+$/, "");
+  return import.meta.env.DEV && typeof window !== "undefined"
+    ? window.location.origin
+    : DEFAULT_SITE_URL;
 };
 
 export const SEO_CONFIG = {
@@ -33,7 +42,8 @@ export const SEO_CONFIG = {
     "writing community",
     "story collaboration",
   ],
-  defaultImage: "/book.svg", // Default OG image
+  // Social crawlers reject SVG, so this must stay a raster image.
+  defaultImage: "/og-default.png",
   twitterHandle: "", // Add if you have a Twitter handle
   facebookAppId: "", // Add if you have a Facebook App ID
   author: `${APP_NAME} Team`,
@@ -42,20 +52,26 @@ export const SEO_CONFIG = {
 } as const;
 
 /**
- * Truncate text to a specific length for meta descriptions
+ * Truncate text for a meta description, on a word boundary.
  */
 export const truncateDescription = (
   text: string,
   maxLength: number = 160,
 ): string => {
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength).trim() + "...";
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= maxLength) return clean;
+  const cut = clean.slice(0, maxLength - 1);
+  const lastSpace = cut.lastIndexOf(" ");
+  const kept = lastSpace > maxLength * 0.6 ? cut.slice(0, lastSpace) : cut;
+  return `${kept.replace(/[\s.,;:!?-]+$/, "")}…`;
 };
 
 /**
- * Generate absolute URL from a relative path
+ * Generate absolute URL from a relative path. An already-absolute URL (a cover
+ * in Cloud Storage) is returned as is.
  */
 export const getAbsoluteUrl = (path: string): string => {
+  if (/^https?:\/\//i.test(path)) return path;
   const baseUrl = SEO_CONFIG.siteUrl.replace(/\/$/, "");
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   return `${baseUrl}${cleanPath}`;

@@ -35,6 +35,7 @@ import CompetitionResultsCard from "./CompetitionResultsCard";
 import SubmissionCard from "./SubmissionCard";
 import SubmissionPicker from "./SubmissionPicker";
 import type { CompetitionPhase } from "@/types/ICompetition";
+import { SEOHead } from "@/components/seo/SEOHead";
 import type { ICompetitionSubmission } from "@/types/ICompetitionSubmission";
 
 /**
@@ -232,6 +233,7 @@ const CompetitionDetail: React.FC = () => {
   if (!competition) {
     return (
       <div className="py-20 text-center">
+        <SEOHead title="Competition not found" noindex />
         <p className="font-heading text-3xl text-ns-ink-muted">
           Competition not found.
         </p>
@@ -277,6 +279,10 @@ const CompetitionDetail: React.FC = () => {
 
   return (
     <div className="min-h-screen container mx-auto px-4 max-w-7xl">
+      <SEOHead
+        title={`${competition.title} — Writing Competition`}
+        description={competition.description}
+      />
       <div className="flex items-center justify-between gap-4 py-[22px] border-b border-ns-border">
         <Link
           to="/competitions"

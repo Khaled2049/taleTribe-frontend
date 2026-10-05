@@ -4,6 +4,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { AlertCircle, Home, RotateCw } from "lucide-react";
+import { SEOHead } from "@/components/seo/SEOHead";
 
 /**
  * Route-level error element (wired via `errorElement` in main.tsx).
@@ -32,6 +33,9 @@ export const RouteError = () => {
 
   return (
     <div className="min-h-screen bg-ns-bg flex items-center justify-center px-6">
+      {/* Hosting answers 200 for any path, so this is what stops an unknown
+          URL being indexed as a copy of the home page. */}
+      <SEOHead title={title} noindex />
       <div className="text-center flex flex-col items-center gap-5 max-w-md animate-ns-fade-in">
         <div className="w-16 h-16 rounded-full bg-ns-destructive/10 flex items-center justify-center">
           <AlertCircle className="w-7 h-7 text-ns-destructive" />

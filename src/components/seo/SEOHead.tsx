@@ -1,31 +1,33 @@
 import React from "react";
 import { Helmet } from "react-helmet-async";
-import {
-  SEO_CONFIG,
-  truncateDescription,
-  getCanonicalUrl,
-  getAbsoluteUrl,
-} from "@/config/seo";
+import { useLocation } from "react-router-dom";
+import { SEO_CONFIG, truncateDescription, getAbsoluteUrl } from "@/config/seo";
 
 export interface SEOHeadProps {
   title?: string;
   description?: string;
   keywords?: string[];
   image?: string;
+  /** Canonical path. Defaults to the current path without its query string. */
   url?: string;
-  type?: "website" | "article" | "book";
+  type?: "website" | "article" | "book" | "profile";
   author?: string;
   publishedTime?: string;
   modifiedTime?: string;
   noindex?: boolean;
   nofollow?: boolean;
+  /** Overrides `url` when the canonical is a different page than this one. */
   canonical?: string;
   structuredData?: object | object[];
 }
 
 /**
  * SEOHead Component
- * Manages meta tags, Open Graph, and Twitter Cards for SEO
+ * Manages meta tags, Open Graph, and Twitter Cards for SEO.
+ *
+ * For story, profile and listing routes the seoRender Function has already
+ * written these tags into the document; Helmet adopts them (they carry
+ * data-rh) and keeps them current across client-side navigation.
  */
 export const SEOHead: React.FC<SEOHeadProps> = ({
   title,
@@ -42,26 +44,28 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
   canonical,
   structuredData,
 }) => {
-  // Use defaults if not provided
-  const pageTitle = title
-    ? `${title} - ${SEO_CONFIG.siteName}`
-    : SEO_CONFIG.defaultTitle;
+  const { pathname } = useLocation();
+
+  const pageTitle = !title
+    ? SEO_CONFIG.defaultTitle
+    : title.includes(SEO_CONFIG.siteName)
+      ? title
+      : `${title} | ${SEO_CONFIG.siteName}`;
   const pageDescription = description
     ? truncateDescription(description)
     : SEO_CONFIG.defaultDescription;
   const pageKeywords = keywords
     ? [...SEO_CONFIG.defaultKeywords, ...keywords].join(", ")
     : SEO_CONFIG.defaultKeywords.join(", ");
-  const pageImage = image
-    ? getAbsoluteUrl(image)
-    : getAbsoluteUrl(SEO_CONFIG.defaultImage);
-  const pageUrl = url ? getAbsoluteUrl(url) : SEO_CONFIG.siteUrl;
-  const canonicalUrl = canonical ? getCanonicalUrl(canonical) : pageUrl;
+  const pageImage = getAbsoluteUrl(image || SEO_CONFIG.defaultImage);
+  const canonicalUrl = getAbsoluteUrl(
+    canonical || url || pathname.replace(/(.)\/+$/, "$1"),
+  );
 
-  // Robots meta
   const robotsContent = [
     noindex ? "noindex" : "index",
     nofollow ? "nofollow" : "follow",
+    ...(noindex ? [] : ["max-image-preview:large"]),
   ].join(", ");
 
   return (
@@ -72,10 +76,11 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
       <meta name="keywords" content={pageKeywords} />
       <meta name="author" content={author || SEO_CONFIG.author} />
       <meta name="robots" content={robotsContent} />
-      <link rel="canonical" href={canonicalUrl} />
+      {/* A noindex page names no canonical: the two signals contradict. */}
+      {!noindex && <link rel="canonical" href={canonicalUrl} />}
       {/* Open Graph / Facebook */}
       <meta property="og:type" content={type} />
-      <meta property="og:url" content={pageUrl} />
+      <meta property="og:url" content={canonicalUrl} />
       <meta property="og:title" content={pageTitle} />
       <meta property="og:description" content={pageDescription} />
       <meta property="og:image" content={pageImage} />
@@ -87,26 +92,20 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
       {modifiedTime && (
         <meta property="article:modified_time" content={modifiedTime} />
       )}
-      {author && <meta property="article:author" content={author} />}
       {SEO_CONFIG.facebookAppId && (
         <meta property="fb:app_id" content={SEO_CONFIG.facebookAppId} />
       )}
-      {/* Twitter Card */}
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:url" content={pageUrl} />
+      {/* A caller's image is a portrait cover or avatar, which the large card crops. */}
+      <meta
+        name="twitter:card"
+        content={image ? "summary" : "summary_large_image"}
+      />
       <meta name="twitter:title" content={pageTitle} />
       <meta name="twitter:description" content={pageDescription} />
       <meta name="twitter:image" content={pageImage} />
       {SEO_CONFIG.twitterHandle && (
         <meta name="twitter:site" content={`@${SEO_CONFIG.twitterHandle}`} />
       )}
-      {/* Additional Meta Tags */}
-      <meta name="theme-color" content="#B91C1C" />
-      <meta name="mobile-web-app-capable" content="yes" />
-      <meta
-        name="apple-mobile-web-app-status-bar-style"
-        content="black-translucent"
-      />
       {/* Structured Data (JSON-LD) */}
       {structuredData && (
         <script type="application/ld+json">

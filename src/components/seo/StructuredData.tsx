@@ -65,7 +65,7 @@ export interface BreadcrumbSchemaProps {
 export const OrganizationSchema: React.FC<OrganizationSchemaProps> = ({
   name = SEO_CONFIG.siteName,
   url = SEO_CONFIG.siteUrl,
-  logo = getAbsoluteUrl("/book.svg"),
+  logo = getAbsoluteUrl(SEO_CONFIG.defaultImage),
   description = SEO_CONFIG.defaultDescription,
   sameAs = [],
 }) => {
@@ -122,7 +122,7 @@ export const ArticleSchema: React.FC<ArticleSchemaProps> = ({
   author,
   publisher = {
     name: SEO_CONFIG.siteName,
-    logo: getAbsoluteUrl("/book.svg"),
+    logo: getAbsoluteUrl(SEO_CONFIG.defaultImage),
   },
   url,
 }) => {

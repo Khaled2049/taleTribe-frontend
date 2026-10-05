@@ -98,11 +98,18 @@ class PublicStoryRepo {
         };
     }
 
-    async getPublishedStories(cursor: string | null, category?: string, search?: string): Promise<PublicStoryPage> {
+    async getPublishedStories(
+        cursor: string | null,
+        category?: string,
+        search?: string,
+        filter: { tag?: string; author?: string } = {},
+    ): Promise<PublicStoryPage> {
         const params = new URLSearchParams({ limit: String(STORIES_PAGE_SIZE) });
         if (cursor) params.set("cursor", cursor);
         if (category && category !== "all") params.set("category", category);
         if (search?.trim()) params.set("q", search.trim());
+        if (filter.tag) params.set("tag", filter.tag);
+        if (filter.author) params.set("author", filter.author);
         const page = await this.request<ApiPublicStoryPage>(`/v1/public/stories?${params}`);
         return { stories: page.stories.map((story) => this.story(story)), cursor: page.nextCursor || null };
     }

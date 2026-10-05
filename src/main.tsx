@@ -25,6 +25,7 @@ import {
 } from "./routes/Story/prefetchStoryDetail";
 import { prefetchBookClub } from "./routes/BookClub/prefetchBookClub";
 import { getCurrentUid, useAuthIdentity } from "@novelsync/platform-auth";
+import { storyIdFromParam } from "./lib/seoPaths";
 import { prefetchGuestbookRoute } from "./routes/Guestbook/prefetchGuestbook";
 import { StoriesPageSkeleton } from "./routes/Story/StoriesPageSkeleton";
 import { UserStoriesSkeleton } from "./routes/Story/UserStoriesSkeleton";
@@ -157,6 +158,17 @@ const router = createBrowserRouter([
           </Suspense>
         ),
       },
+      // Genre and tag listings are the same page filtered, each at its own
+      // crawlable URL. The filter is read from the params, not from state.
+      ...["/stories/genre/:genre", "/stories/tag/:tag"].map((path) => ({
+        path,
+        hydrateFallbackElement: <StoriesPageSkeleton />,
+        element: (
+          <Suspense fallback={<StoriesPageSkeleton />}>
+            <AllStories />
+          </Suspense>
+        ),
+      })),
       {
         path: "/competitions",
         element: (
@@ -423,7 +435,8 @@ const router = createBrowserRouter([
       {
         path: "/story/:id",
         loader: ({ params }) => {
-          if (params.id) void prefetchStoryDetail(params.id);
+          const storyId = storyIdFromParam(params.id);
+          if (storyId) void prefetchStoryDetail(storyId);
           return null;
         },
         hydrateFallbackElement: <StoryDetailSkeleton />,
@@ -437,8 +450,9 @@ const router = createBrowserRouter([
             path: "read/:chapterId?",
             element: null,
             loader: ({ params }) => {
-              if (params.id && params.chapterId) {
-                void prefetchReaderChapter(params.id, params.chapterId);
+              const storyId = storyIdFromParam(params.id);
+              if (storyId && params.chapterId) {
+                void prefetchReaderChapter(storyId, params.chapterId);
               }
               return null;
             },

@@ -33,3 +33,4 @@ export {
   recommendStories,
   explainRecommendations,
 } from "./endpoints/recommendations";
+export { seoRender } from "./endpoints/seoRender";

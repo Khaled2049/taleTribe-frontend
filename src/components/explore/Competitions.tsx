@@ -24,6 +24,8 @@ import {
 import { useNow } from "@/hooks/useCountdown";
 import { getHostName } from "@/lib/competitionListing";
 import { ICompetition } from "@/types/ICompetition";
+import { SEOHead } from "@/components/seo/SEOHead";
+import { APP_NAME } from "@/config/seo";
 
 const PAGE_SIZE = 8;
 
@@ -162,6 +164,11 @@ const Competitions: React.FC = () => {
     // Matches AllStories' container: these pages sit beside each other in the
     // navbar, and used to share the explore shell's column before it was removed.
     <div className="min-h-screen container mx-auto px-4 max-w-7xl">
+      <SEOHead
+        title="Writing Competitions"
+        description={`Enter writing competitions on ${APP_NAME}: themed prompts, community voting and prize pools for independent fiction writers.`}
+        url="/competitions"
+      />
       <header className="pt-8 pb-6">
         <h1 className="font-heading font-light text-[2.5rem] lg:text-[3rem] leading-[1] tracking-[-0.02em] text-ns-ink">
           Competitions

@@ -34,7 +34,12 @@ import { StoryCommentsSection } from "./components/StoryCommentsSection";
 import { ChapterReader } from "./components/reader/ChapterReader";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
-import { getAbsoluteUrl } from "@/config/seo";
+import {
+  chapterPath,
+  storyIdFromParam,
+  storyPath,
+  tagPath,
+} from "@/lib/seoPaths";
 import { readingHistoryRepo } from "@novelsync/story-data-client";
 
 const NO_CHAPTERS: Omit<Chapter, "content">[] = [];
@@ -51,7 +56,9 @@ const onIdle = (run: () => void) => {
 };
 
 const StoryDetail: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  // The param is "<slug>-<uuid>"; only the uuid identifies the story.
+  const { id: routeParam } = useParams<{ id: string }>();
+  const id = storyIdFromParam(routeParam);
   const { user } = useAuthContext();
   const { uid, loading: authLoading } = useAuthIdentity();
   const queryClient = useQueryClient();
@@ -69,6 +76,9 @@ const StoryDetail: React.FC = () => {
   const detailQuery = usePublicStory(id);
   const viewerQuery = useStoryViewer(id, uid);
   const story = detailQuery.data?.story ?? null;
+  const base = story
+    ? storyPath(story.id, story.title)
+    : `/story/${routeParam}`;
   const chapters = detailQuery.data?.chapters ?? NO_CHAPTERS;
   const routeIndex = routeChapterId
     ? chapters.findIndex((chapter) => chapter.id === routeChapterId)
@@ -303,12 +313,12 @@ const StoryDetail: React.FC = () => {
       if (!target) return;
       if (id && uid) readingHistoryRepo.saveProgress(id, target.id);
       setCurrentChapterIndex(index);
-      navigate(`/story/${id}/read/${target.id}`, {
+      navigate(`${base}/read/${target.id}`, {
         replace: true,
         state: location.state,
       });
     },
-    [id, uid, chapters, navigate, location.state],
+    [id, base, uid, chapters, navigate, location.state],
   );
 
   const handlePrevChapter = useCallback(
@@ -325,9 +335,25 @@ const StoryDetail: React.FC = () => {
     if ((location.state as { fromDetails?: boolean } | null)?.fromDetails) {
       navigate(-1);
     } else {
-      navigate(`/story/${id}`, { replace: true });
+      navigate(base, { replace: true });
     }
-  }, [location.state, navigate, id]);
+  }, [location.state, navigate, base]);
+
+  // A bare-id or renamed-story URL is moved to the canonical one, matching the
+  // 301 the server gives a crawler, so a copied link is always the canonical.
+  useEffect(() => {
+    if (!storyReady || !story) return;
+    const current = `/story/${routeParam}`;
+    const canonical = storyPath(story.id, story.title);
+    if (current === canonical || !location.pathname.startsWith(current)) return;
+    navigate(
+      canonical +
+        location.pathname.slice(current.length) +
+        location.search +
+        location.hash,
+      { replace: true, state: location.state },
+    );
+  }, [storyReady, story, routeParam, location, navigate]);
 
   useEffect(() => {
     if (viewMode !== "reader" || !id || !story) return;
@@ -339,7 +365,7 @@ const StoryDetail: React.FC = () => {
     }
     const target = chapters[currentChapterIndex];
     if (target) {
-      navigate(`/story/${id}/read/${target.id}`, {
+      navigate(`${base}/read/${target.id}`, {
         replace: true,
         state: location.state,
       });
@@ -347,6 +373,7 @@ const StoryDetail: React.FC = () => {
   }, [
     viewMode,
     id,
+    base,
     story,
     openedStoryId,
     routeIndex,
@@ -437,69 +464,56 @@ const StoryDetail: React.FC = () => {
   );
 
   // --- Render ---
+  if (!id) {
+    return (
+      <>
+        <SEOHead title="Story not found" noindex />
+        <StoryErrorState
+          error="Story not found"
+          onRetry={() => navigate("/stories")}
+        />
+      </>
+    );
+  }
+
   if (detailQuery.isPending) {
     return <StoryDetailSkeleton />;
   }
 
   if (detailQuery.isError || !story) {
     return (
-      <StoryErrorState
-        error={detailQuery.isError ? "Failed to load story" : "Story not found"}
-        onRetry={() => void detailQuery.refetch()}
-      />
+      <>
+        <SEOHead title="Story not found" noindex />
+        <StoryErrorState
+          error={
+            detailQuery.isError ? "Failed to load story" : "Story not found"
+          }
+          onRetry={() => void detailQuery.refetch()}
+        />
+      </>
     );
   }
 
   // --- VIEW 1: DETAILS ---
   if (viewMode === "details") {
     const genres = story.tags || ["Fiction", "Adventure", "Fantasy"];
-    const storyUrl = `/story/${story.id}`;
-    const storyImage = story.coverImageUrl
-      ? getAbsoluteUrl(story.coverImageUrl)
-      : getAbsoluteUrl("/book.svg");
-
-    const structuredData = {
-      "@context": "https://schema.org",
-      "@type": "Book",
-      name: story.title,
-      description: story.description,
-      author: {
-        "@type": "Person",
-        name: story.author,
-      },
-      image: storyImage,
-      url: getAbsoluteUrl(storyUrl),
-      datePublished: story.createdAt.toISOString(),
-      dateModified: story.updatedAt.toISOString(),
-      aggregateRating: story.averageRating
-        ? {
-            "@type": "AggregateRating",
-            ratingValue: story.averageRating,
-            ratingCount: ratingsCount || 0,
-          }
-        : undefined,
-      keywords: genres.join(", "),
-      numberOfPages: chapterCount,
-    };
-
     const canRate = !!uid && userRating === null;
     const displayRating = userRating ?? story.averageRating ?? 0;
     const starsToShow = hoveredHeroStar ?? displayRating;
 
     return (
       <>
+        {/* JSON-LD for this page is written by the seoRender Function. */}
         <SEOHead
-          title={story.title}
-          description={story.description}
+          title={`${story.title} by ${story.author}`}
+          description={
+            story.description || `Read ${story.title} by ${story.author}.`
+          }
           keywords={genres}
           image={story.coverImageUrl}
-          url={storyUrl}
-          type="article"
+          url={base}
+          type="book"
           author={story.author}
-          publishedTime={story.createdAt.toISOString()}
-          modifiedTime={story.updatedAt.toISOString()}
-          canonical={storyUrl}
-          structuredData={structuredData}
         />
 
         <div className="min-h-screen bg-ns-bg font-body">
@@ -511,7 +525,11 @@ const StoryDetail: React.FC = () => {
                 {story.coverImageUrl ? (
                   <img
                     src={story.coverImageUrl}
-                    alt={story.title}
+                    alt={`Cover of ${story.title}`}
+                    width={352}
+                    height={528}
+                    fetchPriority="high"
+                    decoding="async"
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -528,12 +546,13 @@ const StoryDetail: React.FC = () => {
                 {/* Genre pills */}
                 <div className="flex flex-wrap gap-2 mb-5">
                   {genres.map((g) => (
-                    <span
+                    <Link
                       key={g}
-                      className="px-2.5 py-0.5 rounded-full border border-ns-border font-ui text-[10px] uppercase tracking-widest text-ns-ink-muted"
+                      to={tagPath(g)}
+                      className="px-2.5 py-0.5 rounded-full border border-ns-border font-ui text-[10px] uppercase tracking-widest text-ns-ink-muted no-underline transition-colors hover:border-ns-border-strong hover:text-ns-ink"
                     >
                       {g}
-                    </span>
+                    </Link>
                   ))}
                 </div>
 
@@ -584,7 +603,14 @@ const StoryDetail: React.FC = () => {
 
                 {/* Actions */}
                 <div className="flex flex-wrap items-center gap-3">
-                  <button
+                  {/* A real link, so the first chapter is reachable by a crawler. */}
+                  <Link
+                    to={
+                      chapters[activeIndex]
+                        ? `${base}/read/${chapters[activeIndex].id}`
+                        : `${base}/read`
+                    }
+                    state={{ fromDetails: true }}
                     onClick={() => {
                       const chapter = chapters[activeIndex];
                       if (id && uid && chapter) {
@@ -597,17 +623,12 @@ const StoryDetail: React.FC = () => {
                             : 0,
                         );
                       }
-                      if (chapter) {
-                        navigate(`/story/${id}/read/${chapter.id}`, {
-                          state: { fromDetails: true },
-                        });
-                      }
                     }}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-ns-accent text-white font-ui text-sm font-medium rounded-ns shadow-ns-sm hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-ns-accent text-white font-ui text-sm font-medium rounded-ns shadow-ns-sm no-underline hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150"
                   >
                     <BookOpen className="w-4 h-4" />
                     Read Now
-                  </button>
+                  </Link>
                   <button
                     onClick={handleLike}
                     className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-ns border font-ui text-sm transition-all duration-150 active:scale-[0.97] ${
@@ -644,7 +665,7 @@ const StoryDetail: React.FC = () => {
                 bio={detailQuery.data?.author.bio}
                 photoURL={detailQuery.data?.author.photoUrl}
                 authorWalletAddress={detailQuery.data?.author.walletAddress}
-                storyId={id!}
+                storyId={id}
                 loading={detailQuery.isPlaceholderData}
               />
 
@@ -674,7 +695,10 @@ const StoryDetail: React.FC = () => {
   // --- VIEW 2: READER ---
   if (!currentChapter && chapterError && !chapterLoading) {
     return (
-      <StoryErrorState error={chapterError} onRetry={handleRetryChapter} />
+      <>
+        <SEOHead title="Chapter not found" noindex />
+        <StoryErrorState error={chapterError} onRetry={handleRetryChapter} />
+      </>
     );
   }
 
@@ -696,19 +720,38 @@ const StoryDetail: React.FC = () => {
       : null;
 
   return (
-    <ChapterReader
-      currentChapter={currentChapter}
-      currentChapterIndex={activeIndex}
-      totalChapters={chapters.length}
-      chapterLoading={chapterLoading}
-      chapterError={chapterError}
-      onRetryChapter={handleRetryChapter}
-      onBackToDetails={handleBackToDetails}
-      onPrevChapter={handlePrevChapter}
-      onNextChapter={handleNextChapter}
-      resumeScrollPercent={resumeScrollPercent}
-      onScrollPersist={handleScrollPersist}
-    />
+    <>
+      <SEOHead
+        title={`${currentChapter.title} — ${story.title}`}
+        description={
+          // The opening lines, matching what the server wrote for crawlers.
+          currentChapter.content
+            .slice(0, 2000)
+            .replace(/<[^>]*>/g, " ")
+            .trim() ||
+          `Read ${currentChapter.title} of ${story.title} by ${story.author}.`
+        }
+        image={story.coverImageUrl}
+        url={chapterPath(story.id, story.title, currentChapter.id)}
+        type="article"
+        author={story.author}
+        // Without a chapter in the URL this is a redirect in progress.
+        noindex={!routeChapterId}
+      />
+      <ChapterReader
+        currentChapter={currentChapter}
+        currentChapterIndex={activeIndex}
+        totalChapters={chapters.length}
+        chapterLoading={chapterLoading}
+        chapterError={chapterError}
+        onRetryChapter={handleRetryChapter}
+        onBackToDetails={handleBackToDetails}
+        onPrevChapter={handlePrevChapter}
+        onNextChapter={handleNextChapter}
+        resumeScrollPercent={resumeScrollPercent}
+        onScrollPersist={handleScrollPersist}
+      />
+    </>
   );
 };
 

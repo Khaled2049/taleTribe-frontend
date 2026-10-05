@@ -161,6 +161,8 @@ const BookClubDetails: React.FC = () => {
         url={`/book-clubs/${club.id}`}
         type="website"
         canonical={`/book-clubs/${club.id}`}
+        // Members only: a crawler is sent to sign in and never sees this.
+        noindex
         structuredData={{
           "@context": "https://schema.org",
           "@type": "Organization",
