@@ -177,6 +177,9 @@ jobs:
           VITE_APP_NAME: ${{ secrets.VITE_APP_NAME }}
           VITE_AGENT_MCP_URL: ${{ secrets.VITE_AGENT_MCP_URL || 'https://novelsync-agents-ukvrbnaddq-uc.a.run.app' }}
           VITE_STORY_DATA_URL: ${{ secrets.VITE_STORY_DATA_URL }}
+          # The one origin canonical URLs, robots.txt and the sitemap name.
+          # Must match SITE_URL in the Functions .env written below.
+          VITE_SITE_URL: ${{ vars.SITE_URL || 'https://thetaletribe.com' }}
 
         run: yarn build
       - name: Upload dist
@@ -233,6 +236,7 @@ jobs:
           ASSISTANT_EDIT_PROPOSALS_ENABLED: ${{ vars.ASSISTANT_EDIT_PROPOSALS_ENABLED || 'true' }}
           RECOMMENDATION_SERVICE_URL: ${{ needs.terraform-apply.outputs.recommendation_url }}
           STORY_DATA_URL: ${{ secrets.VITE_STORY_DATA_URL }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://thetaletribe.com' }}
         run: |
           {
             echo "AGENT_SERVICE_URL=$AGENT_SERVICE_URL"
@@ -240,6 +244,7 @@ jobs:
             echo "ASSISTANT_EDIT_PROPOSALS_ENABLED=$ASSISTANT_EDIT_PROPOSALS_ENABLED"
             echo "RECOMMENDATION_SERVICE_URL=$RECOMMENDATION_SERVICE_URL"
             echo "STORY_DATA_URL=$STORY_DATA_URL"
+            echo "SITE_URL=$SITE_URL"
           } > functions/.env
 
       - name: Install locked Functions dependencies
@@ -268,6 +273,11 @@ jobs:
           FRONTEND_URL="https://${FIREBASE_HOSTING_SITE}.web.app"
           echo "Checking frontend health: $FRONTEND_URL"
           curl -f -I "$FRONTEND_URL" || exit 1
+          # These two are served by the seoRender Function through a Hosting
+          # rewrite; a broken rewrite takes every story page down with it.
+          curl -fsS -o /dev/null "$FRONTEND_URL/stories" || exit 1
+          curl -fsS "$FRONTEND_URL/sitemap.xml" | grep -q '<sitemapindex' || exit 1
+          curl -fsS "$FRONTEND_URL/robots.txt" | grep -q '^Sitemap: ' || exit 1
           echo "Frontend is healthy!"
 
       - name: Deployment Summary
