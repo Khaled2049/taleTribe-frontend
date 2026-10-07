@@ -23,33 +23,35 @@ declare global {
       /** Create a story through the New Story wizard; yields its storyId and
        *  leaves the browser on the editor route (/create/<storyId>). */
       createStory(title: string): Chainable<string>;
+      /** Review and accept the writer agreement if this user has not done so. */
+      acceptWriterAgreement(): Chainable<void>;
       /** Poll a story-data collection until `predicate(rows)` is true. Same
        *  shape as pollDocs, but for the PostgreSQL-backed domains. */
       pollStoryData(
         path: string,
         uid: string,
         predicate: (rows: Record<string, unknown>[]) => boolean,
-        opts?: { tries?: number; intervalMs?: number }
+        opts?: { tries?: number; intervalMs?: number },
       ): Chainable<Record<string, unknown>[]>;
       /** Poll a Firestore doc until `predicate(doc)` is true; yields the doc.
        *  Handles eventual consistency (e.g. trigger-maintained counters). */
       pollDoc(
         path: string,
         predicate: (doc: Record<string, unknown> | null) => boolean,
-        opts?: { tries?: number; intervalMs?: number }
+        opts?: { tries?: number; intervalMs?: number },
       ): Chainable<Record<string, unknown> | null>;
       /** Poll a (sub)collection until `predicate(docs)` is true; yields docs. */
       pollDocs(
         path: string,
         predicate: (docs: Record<string, unknown>[]) => boolean,
-        opts?: { tries?: number; intervalMs?: number }
+        opts?: { tries?: number; intervalMs?: number },
       ): Chainable<Record<string, unknown>[]>;
     }
   }
 }
 
 Cypress.Commands.add("seedUser", (args) =>
-  cy.task<{ uid: string }>("seedUser", args).then((r) => r.uid)
+  cy.task<{ uid: string }>("seedUser", args).then((r) => r.uid),
 );
 
 Cypress.Commands.add("login", (email: string, password: string) => {
@@ -78,9 +80,25 @@ Cypress.Commands.add("login", (email: string, password: string) => {
   cy.location("pathname", { timeout: 12000 }).should("not.include", "/sign-in");
 });
 
+Cypress.Commands.add("acceptWriterAgreement", () => {
+  cy.get('#writer-agreement-title, [data-cy="wizard-title"]', {
+    timeout: 15000,
+  }).should("be.visible");
+  cy.get("body").then((body) => {
+    if (body.find("#writer-agreement-title").length) {
+      cy.get("#writer-terms").check();
+      cy.get("#writer-rights").check();
+      cy.get("#writer-adult").check();
+      cy.contains("button", "Agree and continue").click();
+      cy.get("#writer-agreement-title").should("not.exist");
+    }
+  });
+});
+
 Cypress.Commands.add("createStory", (title: string) => {
   cy.visit("/user-stories");
   cy.get('[data-cy="new-story"]').click();
+  cy.acceptWriterAgreement();
   cy.get('[data-cy="wizard-title"]').type(title);
   cy.get('[data-cy="wizard-create"]').click();
   cy.location("pathname", { timeout: 20000 }).should("include", "/create/");
@@ -92,31 +110,29 @@ Cypress.Commands.add(
   (
     path: string,
     predicate: (doc: Record<string, unknown> | null) => boolean,
-    opts?: { tries?: number; intervalMs?: number }
+    opts?: { tries?: number; intervalMs?: number },
   ) => {
     const tries = opts?.tries ?? 30;
     const intervalMs = opts?.intervalMs ?? 500;
 
     const poll = (
-      remaining: number
+      remaining: number,
     ): Cypress.Chainable<Record<string, unknown> | null> =>
-      cy
-        .task<Record<string, unknown> | null>("getDoc", path)
-        .then((doc) => {
-          if (predicate(doc)) return cy.wrap(doc);
-          if (remaining <= 0) {
-            throw new Error(
-              `pollDoc(${path}) predicate never satisfied. Last: ${JSON.stringify(
-                doc
-              )}`
-            );
-          }
-          // eslint-disable-next-line cypress/no-unnecessary-waiting
-          return cy.wait(intervalMs).then(() => poll(remaining - 1));
-        });
+      cy.task<Record<string, unknown> | null>("getDoc", path).then((doc) => {
+        if (predicate(doc)) return cy.wrap(doc);
+        if (remaining <= 0) {
+          throw new Error(
+            `pollDoc(${path}) predicate never satisfied. Last: ${JSON.stringify(
+              doc,
+            )}`,
+          );
+        }
+        // eslint-disable-next-line cypress/no-unnecessary-waiting
+        return cy.wait(intervalMs).then(() => poll(remaining - 1));
+      });
 
     return poll(tries);
-  }
+  },
 );
 
 Cypress.Commands.add(
@@ -125,13 +141,13 @@ Cypress.Commands.add(
     path: string,
     uid: string,
     predicate: (rows: Record<string, unknown>[]) => boolean,
-    opts?: { tries?: number; intervalMs?: number }
+    opts?: { tries?: number; intervalMs?: number },
   ) => {
     const tries = opts?.tries ?? 30;
     const intervalMs = opts?.intervalMs ?? 500;
 
     const poll = (
-      remaining: number
+      remaining: number,
     ): Cypress.Chainable<Record<string, unknown>[]> =>
       cy
         .task<Record<string, unknown>[] | null>("storyData", { path, uid })
@@ -140,7 +156,7 @@ Cypress.Commands.add(
           if (predicate(list)) return cy.wrap(list);
           if (remaining <= 0) {
             throw new Error(
-              `pollStoryData(${path}) predicate never satisfied. Count: ${list.length}`
+              `pollStoryData(${path}) predicate never satisfied. Count: ${list.length}`,
             );
           }
           // eslint-disable-next-line cypress/no-unnecessary-waiting
@@ -148,7 +164,7 @@ Cypress.Commands.add(
         });
 
     return poll(tries);
-  }
+  },
 );
 
 Cypress.Commands.add(
@@ -156,29 +172,27 @@ Cypress.Commands.add(
   (
     path: string,
     predicate: (docs: Record<string, unknown>[]) => boolean,
-    opts?: { tries?: number; intervalMs?: number }
+    opts?: { tries?: number; intervalMs?: number },
   ) => {
     const tries = opts?.tries ?? 30;
     const intervalMs = opts?.intervalMs ?? 500;
 
     const poll = (
-      remaining: number
+      remaining: number,
     ): Cypress.Chainable<Record<string, unknown>[]> =>
-      cy
-        .task<Record<string, unknown>[]>("listDocs", path)
-        .then((docs) => {
-          if (predicate(docs)) return cy.wrap(docs);
-          if (remaining <= 0) {
-            throw new Error(
-              `pollDocs(${path}) predicate never satisfied. Count: ${docs.length}`
-            );
-          }
-          // eslint-disable-next-line cypress/no-unnecessary-waiting
-          return cy.wait(intervalMs).then(() => poll(remaining - 1));
-        });
+      cy.task<Record<string, unknown>[]>("listDocs", path).then((docs) => {
+        if (predicate(docs)) return cy.wrap(docs);
+        if (remaining <= 0) {
+          throw new Error(
+            `pollDocs(${path}) predicate never satisfied. Count: ${docs.length}`,
+          );
+        }
+        // eslint-disable-next-line cypress/no-unnecessary-waiting
+        return cy.wait(intervalMs).then(() => poll(remaining - 1));
+      });
 
     return poll(tries);
-  }
+  },
 );
 
 export {};

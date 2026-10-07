@@ -20,6 +20,7 @@ describe("Story lifecycle", () => {
   it("creates a story owned by the signed-in user", () => {
     cy.visit("/user-stories");
     cy.get('[data-cy="new-story"]').click();
+    cy.acceptWriterAgreement();
 
     cy.get('[data-cy="wizard-title"]').type("The Glass Cartographer");
     cy.get('[data-cy="wizard-create"]').click();
@@ -51,6 +52,7 @@ describe("Story lifecycle", () => {
 
     cy.visit("/user-stories");
     cy.get('[data-cy="new-story"]').click();
+    cy.acceptWriterAgreement();
     cy.get('[data-cy="wizard-title"]').type("One Story Too Many");
     cy.get('[data-cy="wizard-create"]').click();
 
