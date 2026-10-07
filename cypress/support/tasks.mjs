@@ -18,7 +18,10 @@ const FS_REST = `http://localhost:8080/v1/projects/${PROJECT_ID}/databases/(defa
 const FS_EMU = `http://localhost:8080/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 const STORY_DATA_URL = "http://127.0.0.1:8084";
 
-const OWNER = { "Content-Type": "application/json", Authorization: "Bearer owner" };
+const OWNER = {
+  "Content-Type": "application/json",
+  Authorization: "Bearer owner",
+};
 
 async function jsonOrThrow(res, what) {
   if (!res.ok) {
@@ -46,7 +49,7 @@ async function ensureAuthUser(email, password) {
       method: "POST",
       headers: OWNER,
       body: JSON.stringify({ email, password, returnSecureToken: true }),
-    }
+    },
   );
   const s = await jsonOrThrow(signIn, "auth signIn");
   return { uid: s.localId, idToken: s.idToken };
@@ -122,7 +125,9 @@ async function getDoc(path) {
 /** List documents in a (sub)collection. `path` is e.g. "jobs" or
  *  "stories/<id>/chapters". Returns decoded docs (each with `id`). */
 async function listDocs(path) {
-  const res = await fetch(`${FS_REST}/${path}?pageSize=300`, { headers: OWNER });
+  const res = await fetch(`${FS_REST}/${path}?pageSize=300`, {
+    headers: OWNER,
+  });
   const data = await jsonOrThrow(res, `list ${path}`);
   return (data.documents ?? []).map((d) => ({
     id: d.name.split("/").pop(),
@@ -155,13 +160,39 @@ async function storyData({ method = "GET", path, uid, body }) {
 
 /** Create `count` stories straight through the API, concurrently. */
 async function seedStoryDataStories({ uid, count, titlePrefix = "Filler" }) {
+  // Synthetic local author fixtures only; real users must review the UI.
+  const agreement = await storyData({ path: "/v1/me/writer-agreement", uid });
+  if (!agreement.accepted) {
+    const result = await storyData({
+      method: "POST",
+      path: "/v1/me/writer-agreement",
+      uid,
+      body: {
+        termsVersion: agreement.termsVersion,
+        privacyVersion: agreement.privacyVersion,
+        attestationVersion: agreement.attestationVersion,
+        agreeTerms: true,
+        acknowledgePrivacy: true,
+        attestRights: true,
+        adult: true,
+      },
+    });
+    if (result.__error)
+      throw new Error(`Fixture writer agreement failed: ${result.body}`);
+  }
   await Promise.all(
     Array.from({ length: count }, (_, i) =>
       storyData({
         method: "POST",
         path: "/v1/stories",
         uid,
-        body: { title: `${titlePrefix} ${i + 1}`, description: "", authorName: "e2e", tags: [], published: false },
+        body: {
+          title: `${titlePrefix} ${i + 1}`,
+          description: "",
+          authorName: "e2e",
+          tags: [],
+          published: false,
+        },
       }),
     ),
   );
