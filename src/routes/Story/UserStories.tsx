@@ -5,7 +5,9 @@ import { Plus, Eye, BookOpen, PenLine } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuthIdentity } from "@novelsync/platform-auth";
-import type { Story } from "@novelsync/story-data-client";
+import { StoryDataError, type Story } from "@novelsync/story-data-client";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { ApiError } from "@/cloudFunctions";
 import { StoryRow } from "./components/StoryRow";
 import { useOwnerStoryPages } from "@/hooks/queries/ownerStories";
 import { useStoryEarnings } from "@/hooks/queries/useStoryEarnings";
@@ -31,12 +33,33 @@ const loadStoryEditModal = () =>
 const StoryEditModal = lazy(loadStoryEditModal);
 const StoryMetadataModal = lazy(() => import("./StoryMetadataModal"));
 
+interface ActionError {
+  title: string;
+  message: string;
+}
+
+// A refusal carries the server's own reason, usually a lowercase fragment;
+// anything else (5xx, network) falls back to the action's generic copy.
+const actionErrorMessage = (error: unknown, fallback: string) => {
+  let reason: unknown;
+  if (error instanceof StoryDataError && error.status < 500) {
+    reason = error.message;
+  } else if (error instanceof ApiError) {
+    reason = error.response.data.error;
+  }
+  if (typeof reason !== "string" || !reason.trim()) return fallback;
+  const text = reason.trim();
+  const sentence = text.charAt(0).toUpperCase() + text.slice(1);
+  return /[.!?]$/.test(sentence) ? sentence : `${sentence}.`;
+};
+
 const UserStories = () => {
   const identity = useAuthIdentity();
   const uid = identity.uid ?? undefined;
   const [operationLoading, setOperationLoading] = useState<string | null>(null);
   const [editingStory, setEditingStory] = useState<Story | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [actionError, setActionError] = useState<ActionError | null>(null);
   const [activeTab, setActiveTab] = useState<"writing" | "reading">("writing");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -77,9 +100,16 @@ const UserStories = () => {
   const prefetchEditor = (storyId: string) =>
     prefetchWorkspace(uid ?? null, storyId);
 
+  const reportError = (title: string, fallback: string) => (error: unknown) =>
+    setActionError({ title, message: actionErrorMessage(error, fallback) });
+
   const handleDeleteStory = (storyId: string) => {
     setOperationLoading(storyId);
     deleteStory.mutate(storyId, {
+      onError: reportError(
+        "Can't delete this story",
+        "Something went wrong and the story was not deleted. Please try again.",
+      ),
       onSettled: () => setOperationLoading(null),
     });
   };
@@ -88,7 +118,14 @@ const UserStories = () => {
   // both publishes a draft and unpublishes a live story.
   const handleTogglePublishStory = (storyId: string) => {
     setOperationLoading(storyId);
+    const wasPublished = stories.find((s) => s.id === storyId)?.isPublished;
     togglePublish.mutate(storyId, {
+      onError: reportError(
+        wasPublished
+          ? "Can't unpublish this story"
+          : "Can't publish this story",
+        "Something went wrong and the story was not updated. Please try again.",
+      ),
       onSettled: () => setOperationLoading(null),
     });
   };
@@ -116,12 +153,23 @@ const UserStories = () => {
     setOperationLoading(storyId);
     updateCover.mutate(
       { storyId, imageFile, previewUrl },
-      { onSettled: () => setOperationLoading(null) },
+      {
+        onError: reportError(
+          "Can't update the cover",
+          "Something went wrong and the cover was not updated. Please try again.",
+        ),
+        onSettled: () => setOperationLoading(null),
+      },
     );
   };
 
   const handleClearReadingHistory = () => {
-    clearHistory.mutate();
+    clearHistory.mutate(undefined, {
+      onError: reportError(
+        "Can't clear reading history",
+        "Something went wrong and your reading history was not cleared. Please try again.",
+      ),
+    });
   };
 
   const handleEditDetails = async (storyId: string) => {
@@ -491,6 +539,17 @@ const UserStories = () => {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!actionError}
+        onOpenChange={(open) => !open && setActionError(null)}
+        title={actionError?.title ?? ""}
+        description={actionError?.message ?? ""}
+        confirmLabel="Got it"
+        variant="danger"
+        hideCancel
+        onConfirm={() => setActionError(null)}
+      />
 
       {editingStory && (
         <Suspense fallback={null}>
