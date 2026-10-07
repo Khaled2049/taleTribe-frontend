@@ -5,7 +5,8 @@ import { Plus, Eye, BookOpen, PenLine } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuthIdentity } from "@novelsync/platform-auth";
-import type { Story } from "@novelsync/story-data-client";
+import { StoryDataError, type Story } from "@novelsync/story-data-client";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { StoryRow } from "./components/StoryRow";
 import { useOwnerStoryPages } from "@/hooks/queries/ownerStories";
 import { useStoryEarnings } from "@/hooks/queries/useStoryEarnings";
@@ -31,12 +32,23 @@ const loadStoryEditModal = () =>
 const StoryEditModal = lazy(loadStoryEditModal);
 const StoryMetadataModal = lazy(() => import("./StoryMetadataModal"));
 
+// story-data explains a refused delete in a lowercase sentence fragment.
+const deleteErrorMessage = (error: unknown) => {
+  if (error instanceof StoryDataError && error.status < 500 && error.message) {
+    const text = error.message.trim();
+    const sentence = text.charAt(0).toUpperCase() + text.slice(1);
+    return /[.!?]$/.test(sentence) ? sentence : `${sentence}.`;
+  }
+  return "Something went wrong and the story was not deleted. Please try again.";
+};
+
 const UserStories = () => {
   const identity = useAuthIdentity();
   const uid = identity.uid ?? undefined;
   const [operationLoading, setOperationLoading] = useState<string | null>(null);
   const [editingStory, setEditingStory] = useState<Story | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"writing" | "reading">("writing");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -80,6 +92,7 @@ const UserStories = () => {
   const handleDeleteStory = (storyId: string) => {
     setOperationLoading(storyId);
     deleteStory.mutate(storyId, {
+      onError: (error) => setDeleteError(deleteErrorMessage(error)),
       onSettled: () => setOperationLoading(null),
     });
   };
@@ -491,6 +504,17 @@ const UserStories = () => {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteError}
+        onOpenChange={(open) => !open && setDeleteError(null)}
+        title="Can't delete this story"
+        description={deleteError ?? ""}
+        confirmLabel="Got it"
+        variant="danger"
+        hideCancel
+        onConfirm={() => setDeleteError(null)}
+      />
 
       {editingStory && (
         <Suspense fallback={null}>
