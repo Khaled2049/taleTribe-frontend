@@ -142,9 +142,22 @@ fire a repo call before any component mounts, and an unconfigured client throws.
 ### Routing
 All routes are defined in `src/main.tsx` using React Router v7. Every route is lazy-loaded. Key route groups:
 - `/create/:storyId` — writing workspace (children: `/characters`, `/plot`, `/places`)
-- `/story/:id` — public reader view
+- `/story/:id` — public reader view; the param is `<slug>-<uuid>`, read with `storyIdFromParam`
+- `/stories`, `/stories/genre/:genre`, `/stories/tag/:tag` — discovery, filter in the URL
 - `/user-stories` — author dashboard
-- `/explore`, `/book-clubs`, `/library` — discovery
+- `/book-clubs`, `/competitions` — community
+
+### SEO
+Read `docs/seo.md` before touching public routes, `index.html`, `firebase.json`
+rewrites/headers, or `functions/src/seo/`. The short version:
+- Firebase Hosting rewrites `/story/**`, `/profile/**`, `/stories/**` and the
+  sitemap to the `seoRender` Function, which fills head tags, JSON-LD and a
+  content snapshot into the SPA shell, 404s missing stories and 301s to
+  canonical URLs.
+- Build story/profile/genre/tag links with `src/lib/seoPaths.ts`. It is KEEP
+  IN SYNC with `functions/src/seo/paths.ts`.
+- A new private route needs an `X-Robots-Tag` entry in `firebase.json`.
+- Default tags in `index.html` must carry `data-rh="true"`.
 
 ### Data Layer
 
@@ -384,7 +397,7 @@ VITE_USE_EMULATORS               # default true in dev
 VITE_MAX_AI_USAGE                # default 100 — keep aligned with MAX_AI_USAGE
 VITE_AGENT_MCP_URL               # agents base URL for /mcp-connect
 VITE_APP_NAME
-VITE_SITE_URL
+VITE_SITE_URL                    # canonical origin; default https://thetaletribe.com
 
 # Web3
 VITE_CHAIN_ID                    # default 31337 (local Anvil)
@@ -409,6 +422,8 @@ RECOMMENDATIONS_MIN_INSTANCES # warm instances for recommendStories, default 0 (
 STORY_DATA_URL              # story-data base URL for the dual-read paths
 CORS_EXTRA_ORIGINS          # comma-separated additional allowed origins
 LOCAL_REDIRECT_URL
+SITE_URL                    # canonical origin for seoRender — keep equal to VITE_SITE_URL
+SEO_TEMPLATE_URL            # optional: where seoRender fetches the SPA shell
 FUNCTIONS_EMULATOR          # set by the emulator itself
 ```
 

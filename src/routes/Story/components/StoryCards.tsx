@@ -5,6 +5,19 @@ import { FaEye, FaThumbsUp } from "react-icons/fa";
 import type { StoryMetadata } from "@novelsync/story-data-client";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import { prefetchStoryDetail } from "@/routes/Story/prefetchStoryDetail";
+import { profilePath, storyPath } from "@/lib/seoPaths";
+
+// The card is clickable as a whole, but a crawler follows only anchors, so the
+// title is a real link. It stops the click reaching the card's own handler.
+const StoryTitleLink: React.FC<{ story: StoryMetadata }> = ({ story }) => (
+  <Link
+    to={storyPath(story.id, story.title)}
+    onClick={(e) => e.stopPropagation()}
+    className="text-inherit no-underline"
+  >
+    {story.title}
+  </Link>
+);
 
 export const ABOVE_THE_FOLD_COVERS = 6;
 
@@ -105,11 +118,11 @@ export const StoryGridCard = memo(function StoryGridCard({
           title={story.title}
           className="font-ui font-medium text-sm truncate text-ns-ink group-hover:text-ns-accent transition-colors duration-200"
         >
-          {story.title}
+          <StoryTitleLink story={story} />
         </h3>
         {story.userId ? (
           <Link
-            to={`/profile/${story.userId}`}
+            to={profilePath(story.userId)}
             title={story.author}
             onClick={(e) => e.stopPropagation()}
             className="block text-xs text-ns-ink-muted font-ui truncate hover:text-ns-accent transition-colors"
@@ -162,11 +175,11 @@ export const StoryListRow = memo(function StoryListRow({
 
       <div className="flex-1 min-w-0">
         <h3 className="font-ui font-medium text-sm truncate text-ns-ink group-hover:text-ns-accent transition-colors duration-200">
-          {story.title}
+          <StoryTitleLink story={story} />
         </h3>
         {story.userId ? (
           <Link
-            to={`/profile/${story.userId}`}
+            to={profilePath(story.userId)}
             onClick={(e) => e.stopPropagation()}
             className="block text-xs text-ns-ink-muted font-ui truncate mt-0.5 hover:text-ns-accent transition-colors"
           >

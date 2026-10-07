@@ -4,53 +4,63 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Primary Meta Tags -->
+    <!--
+      Defaults for any route that sets none. Tags marked data-rh are owned by
+      react-helmet-async, which replaces them per page, and by the seoRender
+      Function, which strips them before writing a public page's own — so a
+      tag added here without the attribute would be duplicated on every page.
+      The site-URL placeholder below is filled in by the seo plugin in
+      vite.config.ts.
+    -->
     <title>%VITE_APP_NAME% — Where Your Stories Live</title>
-    <meta
-      name="title"
-      content="%VITE_APP_NAME% — Where Your Stories Live"
-    />
     <meta
       name="description"
       content="TheTaleTribe is where writers write, publish, and build a presence around their work. Join a community of writers and readers who take independent storytelling seriously."
+      data-rh="true"
     />
-    <meta
-      name="keywords"
-      content="indie authors, independent publishing, story writing platform, author community, writing community, novel writing, storytelling, indie fiction, book community"
-    />
-    <meta name="author" content="%VITE_APP_NAME% Team" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow" data-rh="true" />
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/book.svg" />
     <link rel="apple-touch-icon" href="/book.svg" />
 
     <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="%VITE_APP_NAME%" />
+    <meta property="og:type" content="website" data-rh="true" />
+    <meta property="og:site_name" content="%VITE_APP_NAME%" data-rh="true" />
     <meta
       property="og:title"
       content="%VITE_APP_NAME% — Where Your Stories Live"
+      data-rh="true"
     />
     <meta
       property="og:description"
       content="TheTaleTribe is where writers write, publish, and build a presence around their work. Join a community of writers and readers who take independent storytelling seriously."
+      data-rh="true"
     />
-    <meta property="og:url" content="https://thetaletribe.web.app/" />
-    <meta property="og:image" content="https://thetaletribe.web.app/book.svg" />
-    <meta property="og:locale" content="en_US" />
+    <meta
+      property="og:image"
+      content="__SITE_URL__/og-default.png"
+      data-rh="true"
+    />
+    <meta property="og:locale" content="en_US" data-rh="true" />
 
     <!-- Twitter -->
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary_large_image" data-rh="true" />
     <meta
       name="twitter:title"
       content="%VITE_APP_NAME% — Where Your Stories Live"
+      data-rh="true"
     />
     <meta
       name="twitter:description"
       content="TheTaleTribe is where writers write, publish, and build a presence around their work. Join a community of writers and readers who take independent storytelling seriously."
+      data-rh="true"
     />
-    <meta name="twitter:image" content="https://thetaletribe.web.app/book.svg" />
+    <meta
+      name="twitter:image"
+      content="__SITE_URL__/og-default.png"
+      data-rh="true"
+    />
 
     <!-- Theme -->
     <meta name="theme-color" content="#B91C1C" />

@@ -1,3 +1,4 @@
+import { storyPath } from "@/lib/seoPaths";
 import React, { useState, useEffect, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -410,7 +411,7 @@ const OwnerSettings: React.FC<{ identity: React.ReactNode }> = ({
                     className="flex items-center justify-between gap-4 py-2.5"
                   >
                     <Link
-                      to={`/story/${story.id}`}
+                      to={storyPath(story.id, story.title)}
                       className="line-clamp-1 font-body text-sm text-ns-ink transition-colors hover:text-ns-accent"
                     >
                       {story.title}

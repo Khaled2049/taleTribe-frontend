@@ -15,6 +15,9 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { usePublicProfile } from "@/hooks/queries/useUserQueries";
 import { EditableField } from "@/components/ui/editable-field";
 import { SEOHead } from "@/components/seo/SEOHead";
+import { APP_NAME } from "@/config/seo";
+import { useAuthorStories } from "@/hooks/queries/publishedStories";
+import { profilePath, storyPath } from "@/lib/seoPaths";
 import FollowButton from "@/components/common/FollowButton";
 import { storageService } from "@/services/StorageService";
 import { validateImageFile } from "@/utils/imageUpload";
@@ -35,6 +38,11 @@ const PublicUserProfile: React.FC = () => {
   const isSelf = !!user && user.uid === userId;
 
   const { data: profile, isLoading: profileLoading } = usePublicProfile(userId);
+  // The owner already sees their stories in the settings below.
+  const { data: authorStories = [] } = useAuthorStories(
+    userId,
+    !!profile?.isWriter && !isSelf,
+  );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -89,6 +97,7 @@ const PublicUserProfile: React.FC = () => {
   if (!profile) {
     return (
       <div className="min-h-screen bg-ns-bg flex items-center justify-center px-4">
+        <SEOHead title="Profile not found" noindex />
         <div className="text-center">
           <UserX className="w-10 h-10 mx-auto mb-4 text-ns-ink-muted opacity-40" />
           <h1 className="font-heading text-xl text-ns-ink mb-2">
@@ -198,7 +207,16 @@ const PublicUserProfile: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-ns-bg">
-      <SEOHead title={`@${username}'s profile`} noindex />
+      {/* Indexed only for members who have published: a reader's profile has
+          nothing on it a search result should lead to. */}
+      <SEOHead
+        title={`${fullName ? `${fullName} (@${username})` : `@${username}`} — Stories`}
+        description={bio || `Read stories by @${username} on ${APP_NAME}.`}
+        image={photoURL || undefined}
+        url={userId ? profilePath(userId) : undefined}
+        type="profile"
+        noindex={!profile.isWriter}
+      />
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
         <header className="relative animate-ns-fade-in overflow-hidden border-b border-ns-border pb-10 sm:pb-12">
           <div
@@ -324,6 +342,34 @@ const PublicUserProfile: React.FC = () => {
             </div>
           )}
         </header>
+
+        {authorStories.length > 0 && (
+          <section className="mt-10" aria-labelledby="published-stories">
+            <h2
+              id="published-stories"
+              className="font-ui text-[10px] font-semibold uppercase tracking-[0.2em] text-ns-accent"
+            >
+              Published stories
+            </h2>
+            <ul className="mt-4 divide-y divide-ns-border border-t border-ns-border">
+              {authorStories.map((story) => (
+                <li key={story.id} className="py-4">
+                  <Link
+                    to={storyPath(story.id, story.title)}
+                    className="font-heading text-2xl text-ns-ink no-underline transition-colors hover:text-ns-accent"
+                  >
+                    {story.title}
+                  </Link>
+                  {story.description && (
+                    <p className="mt-1 line-clamp-2 font-body text-[15px] leading-relaxed text-ns-ink-secondary">
+                      {story.description}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {isSelf && (
           <Suspense
