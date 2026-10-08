@@ -114,6 +114,18 @@ const ENTITY_PROPOSALS_PRESENTED =
   import.meta.env.VITE_ASSISTANT_ENTITY_PROPOSALS_ENABLED === "true";
 const SPECIALISTS_PRESENTED =
   import.meta.env.VITE_ASSISTANT_SPECIALISTS_ENABLED === "true";
+const SPECIALIST_COPY: Record<string, { name: string; working: string }> = {
+  story_architect: {
+    name: "Story Architect",
+    working: "Getting a second opinion on structure and pacing",
+  },
+  character_editor: {
+    name: "Character Editor",
+    working: "Getting a second opinion on this character",
+  },
+  critic: { name: "Critic", working: "Getting an editorial read" },
+  drafter: { name: "Drafting Agent", working: "Writing a draft for you" },
+};
 const AssistantPanelContext = createContext<{
   storyId: string;
   navigateTo: (to: string, state?: { assistantChapterId: string }) => void;
@@ -216,21 +228,30 @@ function toolDetails(
         icon: FileSearch,
       };
     case "consult_specialist": {
-      const name =
-        argRecord?.specialist === "character_editor"
-          ? "Character Editor"
-          : "Story Architect";
+      const specialist = SPECIALIST_COPY[String(argRecord?.specialist)] ?? {
+        name: "a specialist",
+        working: "Getting a second opinion",
+      };
+      const drafting = argRecord?.specialist === "drafter";
       return {
-        title: `Asking the ${name}`,
+        title: drafting
+          ? `Handing this to the ${specialist.name}`
+          : `Asking the ${specialist.name}`,
         detail:
           resultRecord?.accepted === false
-            ? "Could not be consulted for this question"
-            : resultRecord?.accepted === true
-              ? "Shared a view — the answer below weighs it"
-              : argRecord?.specialist === "character_editor"
-                ? "Getting a second opinion on this character"
-                : "Getting a second opinion on structure and pacing",
-        icon: Users,
+            ? drafting
+              ? "Could not draft this yet"
+              : "Could not be consulted for this question"
+            : resultRecord?.delivered === true
+              ? resultRecord.truncated === true
+                ? "Draft written below — it was cut short"
+                : "Draft written below"
+              : resultRecord?.accepted === true
+                ? resultRecord.reviewed === true
+                  ? "Weighed the other views — the answer below reflects it"
+                  : "Shared a view — the answer below weighs it"
+                : specialist.working,
+        icon: drafting ? WandSparkles : Users,
       };
     }
     default:

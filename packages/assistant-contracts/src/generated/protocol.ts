@@ -66,11 +66,11 @@ export namespace RunContract {
   export type Changes = [StoryChange]|[StoryChange, StoryChange]|[StoryChange, StoryChange, StoryChange]|[StoryChange, StoryChange, StoryChange, StoryChange]|[StoryChange, StoryChange, StoryChange, StoryChange, StoryChange]
   export type Operation = ("character.create" | "character.update" | "place.create" | "place.update" | "plot.create" | "plot.update" | "event.create" | "event.update")
   /**
-   * Required for an update, as returned by a read tool. Omit for a create.
+   * Required for an update: the entity's exact name, or its id. Omit for a create.
    */
   export type Entityid = (string | null)
   /**
-   * Required for event.create and event.update: the plot line the event belongs to.
+   * Required for event.create and event.update: the plot line the event belongs to, by exact name or id.
    */
   export type Plotlineid = (string | null)
   export type Name = (string | null)
@@ -669,9 +669,9 @@ export const CAPABILITIES: readonly Capability[] = [
     ],
     "gate": "specialists",
     "title": "Get a specialist's judgement",
-    "summary": "Bring in a story architect for structure and pacing, or a character editor for motivation and consistency, and fold what they find into one answer.",
+    "summary": "Bring in a story architect for structure and pacing, a character editor for motivation and consistency, or a critic for an editorial read, and fold what they find into one answer. A drafting agent can write a scene for an event you have planned.",
     "example": "The middle of my story feels slow. Why?",
-    "limits": "Up to 2 specialists per reply. They advise; they never change anything."
+    "limits": "Up to 2 specialists per reply. They advise or draft in chat; they never change your story."
   },
   {
     "id": "research_web",

@@ -256,7 +256,9 @@ deny the whole subtree.
   `entity_approval` continuation.
   Behind `ASSISTANT_SPECIALISTS_ENABLED` (agents only, default off) the
   assistant can call `consult_specialist` to get a Story Architect's or
-  Character Editor's judgement, at most two per reply. A consult is one extra
+  Character Editor's or Critic's judgement, at most two per reply, or hand a
+  scene to the Drafting Agent, whose prose streams into the reply as ordinary
+  text while its tool part stays a status line. A consult is one extra
   model call run entirely in the agents service; the browser only renders the
   tool part as a status line and the findings stay in the saved thread.
 - **Brainstorm / Text Enhancement**: API calls to Cloud Functions
