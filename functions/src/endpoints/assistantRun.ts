@@ -75,7 +75,16 @@ export async function handleAssistantRun(request: Request, response: Response) {
     request.body && typeof request.body === "object"
       ? (request.body as Record<string, unknown>)
       : null;
-  if (body?.continuation != null && !flags.edits) {
+  // The edit switch governs editor continuations only. A story-change
+  // approval is settled whenever the assistant itself is on.
+  const continuationKind = (
+    body?.continuation as Record<string, unknown> | null | undefined
+  )?.kind;
+  if (
+    body?.continuation != null &&
+    continuationKind !== "entity_approval" &&
+    !flags.edits
+  ) {
     response.status(404).json({ error: "Assistant edits are disabled" });
     return;
   }

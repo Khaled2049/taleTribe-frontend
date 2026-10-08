@@ -4,8 +4,10 @@ import {
   AssistantStreamError,
   editorContinuationSchema,
   emptyRunState,
+  entityContinuationSchema,
   proposeEditorEditSchema,
-  type EditorContinuation,
+  proposeStoryChangesSchema,
+  type AssistantContinuation,
 } from "@novelsync/assistant-contracts";
 import {
   AssistantRequestError,
@@ -17,81 +19,86 @@ import {
   toAssistantRunResult,
   type AssistantFailure,
 } from "./assistantRunModel";
-import { buildHelpRunResult } from "./localHelpResult";
-import { parseSlashCommand } from "./slashCommands";
+import { buildHelpRunResult, buildLocalNotice } from "./localHelpResult";
+import { parseRoomCommand, parseSlashCommand } from "./slashCommands";
 import type { EditorActionLedger } from "./editorActionLedger";
+import { objectValue, proposalArgs } from "./toolParts";
 
 type ActiveRequestRef = { current: AbortController | null };
 
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
+const APPROVAL_KINDS = {
+  apply_editor_edit: {
+    kind: "editor_approval",
+    proposeTool: "propose_editor_edit",
+    proposalSchema: proposeEditorEditSchema,
+    continuationSchema: editorContinuationSchema,
+    failure: "The editor decision could not be resumed safely. Please retry.",
+  },
+  apply_story_changes: {
+    kind: "entity_approval",
+    proposeTool: "propose_story_changes",
+    proposalSchema: proposeStoryChangesSchema,
+    continuationSchema: entityContinuationSchema,
+    failure: "The story change could not be resumed safely. Please retry.",
+  },
+} as const;
 
-export function editorContinuationForMessage(
+/**
+ * The continuation for the approval this message was just resumed from.
+ *
+ * A resumed run writes into the same message, so one message can hold decided
+ * approvals of both kinds. Only the latest one is being resumed; searching per
+ * tool would resend an older decision of the other kind.
+ */
+export function continuationForMessage(
   message: ThreadMessage,
   ledger: EditorActionLedger,
-): EditorContinuation | undefined {
+): AssistantContinuation | undefined {
   if (message.role !== "assistant") return undefined;
   const applyPart = [...message.content]
     .reverse()
     .find(
       (part) =>
         part.type === "tool-call" &&
-        part.toolName === "apply_editor_edit" &&
+        Object.prototype.hasOwnProperty.call(APPROVAL_KINDS, part.toolName) &&
         part.approval?.approved !== undefined,
     );
   if (applyPart?.type !== "tool-call" || !applyPart.approval) return undefined;
+  const spec =
+    APPROVAL_KINDS[applyPart.toolName as keyof typeof APPROVAL_KINDS];
 
   const action = ledger.get(applyPart.approval.id);
-  if (action.status !== "resolved") {
+  const proposalId = objectValue(applyPart.args)?.proposalId;
+  const proposal = spec.proposalSchema.safeParse(
+    proposalArgs(message.content, spec.proposeTool, proposalId),
+  );
+  const previousRunId = objectValue(message.metadata.custom?.novelsync)?.runId;
+  if (
+    action.status !== "resolved" ||
+    typeof proposalId !== "string" ||
+    !proposal.success ||
+    typeof previousRunId !== "string"
+  ) {
     throw new AssistantRequestError({
       code: "unsupported_capability",
-      message: "The editor decision could not be resumed safely. Please retry.",
-    });
-  }
-  const applyArgs = objectValue(applyPart.args);
-  const proposalId = applyArgs?.proposalId;
-  if (typeof proposalId !== "string") {
-    throw new AssistantRequestError({
-      code: "unsupported_capability",
-      message: "The editor proposal is missing its secure linkage.",
-    });
-  }
-  const proposalPart = [...message.content].reverse().find((part) => {
-    if (part.type !== "tool-call" || part.toolName !== "propose_editor_edit") {
-      return false;
-    }
-    return objectValue(part.result)?.proposalId === proposalId;
-  });
-  if (proposalPart?.type !== "tool-call") {
-    throw new AssistantRequestError({
-      code: "unsupported_capability",
-      message: "The linked editor proposal is no longer available.",
-    });
-  }
-  const proposal = proposeEditorEditSchema.safeParse(proposalPart.args);
-  const metadata = objectValue(message.metadata.custom?.novelsync);
-  const previousRunId = metadata?.runId;
-  if (!proposal.success || typeof previousRunId !== "string") {
-    throw new AssistantRequestError({
-      code: "unsupported_capability",
-      message: "The editor proposal could not be validated locally.",
+      message: spec.failure,
     });
   }
 
-  return editorContinuationSchema.parse({
-    kind: "editor_approval",
+  return spec.continuationSchema.parse({
+    kind: spec.kind,
     previousRunId,
     approvalId: applyPart.approval.id,
     toolCallId: applyPart.toolCallId,
     proposalId,
     decision: action.decision,
     proposal: proposal.data,
-    result: action.result,
+    // Both schemas are strict, so each gets only its own result field.
+    ...(spec.kind === "editor_approval"
+      ? { result: action.result }
+      : { results: action.results }),
     feedback: action.feedback,
-  }) as EditorContinuation;
+  }) as AssistantContinuation;
 }
 
 function safeRuntimeFailure(error: unknown): AssistantFailure {
@@ -131,7 +138,7 @@ export function createAssistantAdapter({
 
       try {
         const currentMessage = unstable_getMessage();
-        const continuation = editorContinuationForMessage(
+        const continuation = continuationForMessage(
           currentMessage,
           actionLedger,
         );
@@ -146,12 +153,22 @@ export function createAssistantAdapter({
           return;
         }
 
+        // `/room <question>` convenes the specialists on purpose. The command
+        // is stripped, so the room is briefed with the question itself.
+        const roomQuestion = continuation ? null : parseRoomCommand(prompt);
+        if (roomQuestion === "") {
+          yield buildLocalNotice(
+            "Add your question after /room — for example: /room why does my ending feel weak?",
+          );
+          return;
+        }
+
         for await (const event of streamAssistantRun(
           storyId,
-          prompt,
+          roomQuestion ?? prompt,
           signal,
           transport,
-          { continuation },
+          { continuation, mode: roomQuestion ? "room" : undefined },
         )) {
           state = applyEvent(state, event);
           // LocalRuntime already prepends the message's pre-run content to

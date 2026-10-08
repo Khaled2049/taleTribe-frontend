@@ -245,6 +245,24 @@ deny the whole subtree.
   reintroduce that assumption elsewhere in the codebase. The gateway enforces
   ownership, `checkAiAccess` quota and BYOK; the browser flag
   `VITE_ASSISTANT_UI_ENABLED` only controls presentation.
+  The assistant can also call `propose_story_changes`: up to five creates or
+  updates to characters, places, plot lines and plot events. The agent binds
+  each update to the target's current revision and never writes; the browser
+  applies an accepted proposal in `components/chat/storyChangeApply.ts`. That
+  module re-reads each record and overlays only the proposed fields, because
+  story-data replaces the whole record on update. It is not atomic: it stops at
+  the first change that does not save and reports per-change results back in an
+  `entity_approval` continuation.
+  It can call `consult_specialist` to get a Story Architect's, Character
+  Editor's or Critic's judgement, at most two per reply, or hand a scene to the
+  Drafting Agent, whose prose streams into the reply as ordinary text while its
+  tool part stays a status line. A consult is one extra model call run entirely
+  in the agents service, and the findings stay in the saved thread.
+  `/room <question>` sends `mode: "room"`: the cap rises to four consults, the
+  first step must consult, and each view renders as an attributed
+  `SpecialistViewCard` above one recommendation. Only the request field enters
+  room mode; the model cannot. None of these has a feature flag: they are on
+  whenever the assistant is.
 - **Brainstorm / Text Enhancement**: API calls to Cloud Functions
 - **Daily quota**: UI display uses `VITE_MAX_AI_USAGE` (default 100) and user profile fields (`aiUsage`, `lastAiUsageDate`). Server-side enforcement is in `functions/src/aiSettings.ts` (`checkAiAccess` → `consumePlatformDailyQuota`), controlled by `MAX_AI_USAGE` env var. Keep `VITE_MAX_AI_USAGE` aligned with `MAX_AI_USAGE`. BYOK users bypass quota.
 - **Indexing budget**: (re)embedding is metered separately from the chat quota, at `MAX_INDEX_USAGE` (default 300/day) per user. It lives entirely in `taleTribe-agents` now — the outbox consumer (`postgres_context.py`, `indexing_usage` table in story-data) charges it; no Function is involved. A unit is one embedding pass, not one autosave: nothing collapses the outbox on the write side, so the consumer drops events superseded by a higher revision of the same source in the batch. Applies to BYOK users too: indexing uses the platform embedder regardless. Deletes are never gated. Over budget, an event is deferred to the next UTC day rather than dropped, so the index goes stale but never loses the write.

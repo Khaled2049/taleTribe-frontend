@@ -19,7 +19,9 @@ admin.initializeApp({
 });
 const app = express();
 app.disable("x-powered-by");
-app.use(express.json({ limit: "4kb" }));
+// The protocol allows a 10k-char message, an 8k editor window, a 10k selection
+// and a continuation that carries a whole proposal, so 4kb refused real requests.
+app.use(express.json({ limit: "1mb" }));
 const assistantRunRateLimit = rateLimit({
   windowMs: 60_000,
   limit: 20,

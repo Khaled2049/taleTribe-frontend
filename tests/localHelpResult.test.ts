@@ -66,4 +66,12 @@ describe("local help result", () => {
       expect(text).toContain(boundary);
     }
   });
+
+  it("always lists specialists and story changes", () => {
+    const ids = capabilitiesFor({ editsEnabled: false }).map(
+      (capability) => capability.id,
+    );
+    expect(ids).toContain("consult_specialist");
+    expect(ids).toContain("propose_story_changes");
+  });
 });

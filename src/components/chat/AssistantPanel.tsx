@@ -55,7 +55,10 @@ import {
 } from "./assistantNavigation";
 import { createAssistantAdapter } from "./assistantRuntime";
 import type { AssistantMessageMetadata } from "./assistantRunModel";
-import { HELP_COMMAND } from "./slashCommands";
+import { HELP_COMMAND, ROOM_COMMAND } from "./slashCommands";
+import { SpecialistViewCard } from "./SpecialistViewCard";
+import { specialistView } from "./specialistView";
+import { objectValue, proposalArgs } from "./toolParts";
 import {
   proposeEditorEditSchema,
   type Capability,
@@ -94,6 +97,10 @@ import { AssistantFab, AssistantRail } from "./AssistantDockParts";
 import { AssistantTabs, type AssistantTab } from "./AssistantTabs";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useAssistantProposal } from "./AssistantProposalContext";
+import {
+  ApplyStoryChangesCard,
+  ProposeStoryChangesCard,
+} from "./StoryChangeCards";
 
 const READ_TOOL_NAMES = [
   "get_story_overview",
@@ -105,6 +112,18 @@ const READ_TOOL_NAMES = [
 ] as const;
 const EDITOR_ACTIONS_PRESENTED =
   import.meta.env.VITE_ASSISTANT_EDITOR_ACTIONS_ENABLED !== "false";
+const SPECIALIST_COPY: Record<string, { name: string; working: string }> = {
+  story_architect: {
+    name: "Story Architect",
+    working: "Getting a second opinion on structure and pacing",
+  },
+  character_editor: {
+    name: "Character Editor",
+    working: "Getting a second opinion on this character",
+  },
+  critic: { name: "Critic", working: "Getting an editorial read" },
+  drafter: { name: "Drafting Agent", working: "Writing a draft for you" },
+};
 const AssistantPanelContext = createContext<{
   storyId: string;
   navigateTo: (to: string, state?: { assistantChapterId: string }) => void;
@@ -115,18 +134,33 @@ const AssistantPanelContext = createContext<{
 const noopSubscribe = () => () => undefined;
 const zeroVersion = () => 0;
 
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 function resultItems(result: unknown): unknown[] {
   if (Array.isArray(result)) return result;
   const record = objectValue(result);
   if (Array.isArray(record?.entities)) return record.entities;
   if (Array.isArray(record?.results)) return record.results;
   return [];
+}
+
+/** What a finished consult reports, or null while it is still running. */
+function consultDetail(
+  result: Record<string, unknown> | null,
+  drafting: boolean,
+): string | null {
+  if (result?.accepted === false) {
+    return drafting
+      ? "Could not draft this yet"
+      : "Could not be consulted for this question";
+  }
+  if (result?.delivered === true) {
+    return result.truncated === true
+      ? "Draft written below — it was cut short"
+      : "Draft written below";
+  }
+  if (result?.accepted !== true) return null;
+  return result.reviewed === true
+    ? "Weighed the other views — the answer below reflects it"
+    : "Shared a view — the answer below weighs it";
 }
 
 function toolDetails(
@@ -206,6 +240,20 @@ function toolDetails(
             : "Reading the words you picked out",
         icon: FileSearch,
       };
+    case "consult_specialist": {
+      const specialist = SPECIALIST_COPY[String(argRecord?.specialist)] ?? {
+        name: "a specialist",
+        working: "Getting a second opinion",
+      };
+      const drafting = argRecord?.specialist === "drafter";
+      return {
+        title: drafting
+          ? `Handing this to the ${specialist.name}`
+          : `Asking the ${specialist.name}`,
+        detail: consultDetail(resultRecord, drafting) ?? specialist.working,
+        icon: drafting ? WandSparkles : Users,
+      };
+    }
     default:
       return {
         title: "Reading your story",
@@ -364,18 +412,12 @@ function ApplyEditorEditCard({
   const approvalId = approval?.id;
   const action = useEditorAction(context?.actionLedger, approvalId);
   const proposalId = objectValue(args)?.proposalId;
-  const proposalPart = [...messageContent].reverse().find((part) => {
-    if (part.type !== "tool-call" || part.toolName !== "propose_editor_edit") {
-      return false;
-    }
-    return objectValue(part.result)?.proposalId === proposalId;
-  });
   const proposal = useMemo<ProposeEditorEditArgs | null>(() => {
     const parsed = proposeEditorEditSchema.safeParse(
-      proposalPart?.type === "tool-call" ? proposalPart.args : null,
+      proposalArgs(messageContent, "propose_editor_edit", proposalId),
     );
     return parsed.success ? parsed.data : null;
-  }, [proposalPart]);
+  }, [messageContent, proposalId]);
   const operation =
     proposal?.operations.length === 1 &&
     proposal.operations[0]?.type === "replace"
@@ -668,6 +710,27 @@ function ApplyEditorEditCard({
   );
 }
 
+/** In room mode a specialist's view is its own card; otherwise a status line. */
+function ConsultSpecialistPart(props: ToolCallMessagePartProps) {
+  const view = specialistView(props.result);
+  return view ? (
+    <SpecialistViewCard view={view} />
+  ) : (
+    <ReadToolCard {...props} />
+  );
+}
+
+function ApplyStoryChangesPart(props: ToolCallMessagePartProps) {
+  const context = useContext(AssistantPanelContext);
+  return (
+    <ApplyStoryChangesCard
+      {...props}
+      storyId={context?.storyId}
+      ledger={context?.actionLedger}
+    />
+  );
+}
+
 function PlainTextPart({ text }: TextMessagePartProps) {
   const role = useAuiState((state) => state.message.role);
   if (role === "user") {
@@ -946,6 +1009,9 @@ function AssistantMessage() {
                   ),
                   propose_editor_edit: ProposeEditorEditCard,
                   apply_editor_edit: ApplyEditorEditCard,
+                  propose_story_changes: ProposeStoryChangesCard,
+                  apply_story_changes: ApplyStoryChangesPart,
+                  consult_specialist: ConsultSpecialistPart,
                 },
                 Fallback: ReadToolCard,
               },
@@ -995,6 +1061,10 @@ function EmptyAssistant() {
     [
       "Search your story",
       "Search the story for the protagonist’s central conflict.",
+    ],
+    [
+      "Convene the writers' room",
+      `${ROOM_COMMAND} What is the weakest part of this story, and why?`,
     ],
     ...(EDITOR_ACTIONS_PRESENTED
       ? [

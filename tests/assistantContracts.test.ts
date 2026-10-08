@@ -81,13 +81,19 @@ describe("assistant protocol fixtures", () => {
       "approval-pause-resume",
       "approval-rejected",
       "cancellation",
+      "entity-approval-applied",
+      "entity-approval-partial",
+      "entity-approval-requested",
       "max-steps",
       "multi-tool",
       "provider-error",
       "research-citations",
       "single-tool-round",
+      "specialist-consult",
+      "specialist-draft",
       "stale-edit",
       "text-only",
+      "writers-room",
     ]);
   });
 

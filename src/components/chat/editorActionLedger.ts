@@ -1,8 +1,13 @@
-import type { EditorApplyResult } from "@novelsync/assistant-contracts";
+import type {
+  EditorApplyResult,
+  StoryChangeResult,
+} from "@novelsync/assistant-contracts";
 
 export type EditorActionResolution = {
   decision: "applied" | "rejected" | "revision_requested" | "apply_failed";
   result?: EditorApplyResult;
+  /** Story-change approvals report one outcome per change instead. */
+  results?: StoryChangeResult[];
   feedback?: string;
 };
 

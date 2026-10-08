@@ -32,7 +32,7 @@ export class StoryWorldbuildingRepo {
     async deletePlace(storyId: string, id: string, revision?: number) { await this.request<void>("DELETE", `/v1/stories/${storyId}/places/${id}`, undefined, this.rev("place", id, revision)); this.written.delete(`place:${id}`); }
 
     async getPlots(storyId: string) { return (await this.request<PlotLine[]>("GET", `/v1/stories/${storyId}/plots`) ?? []).map((x) => this.line(x)); }
-    async addPlot(storyId: string, name: string) { return this.line(this.wrote("plot", await this.request<PlotLine>("POST", `/v1/stories/${storyId}/plots`, { name, description: "" }))); }
+    async addPlot(storyId: string, name: string, description = "") { return this.line(this.wrote("plot", await this.request<PlotLine>("POST", `/v1/stories/${storyId}/plots`, { name, description }))); }
     async updatePlotMeta(storyId: string, line: PlotLine) { return this.line(this.wrote("plot", await this.request<PlotLine>("PATCH", `/v1/stories/${storyId}/plots/${line.id}`, { name: line.name, description: line.description }, this.rev("plot", line.id, line.revision)))); }
     async deletePlot(storyId: string, id: string, revision?: number) { await this.request<void>("DELETE", `/v1/stories/${storyId}/plots/${id}`, undefined, this.rev("plot", id, revision)); this.written.delete(`plot:${id}`); }
     private eventInput(x: Omit<PlotEvent, "id" | "revision"> | PlotEvent) { const { id: _id, revision: _revision, userId: _userId, dependents: _dependents, createdAt: _createdAt, updatedAt: _updatedAt, ...input } = x as PlotEvent; return input; }

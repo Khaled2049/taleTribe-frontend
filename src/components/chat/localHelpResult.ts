@@ -39,6 +39,16 @@ export function helpPlainText(
  * suppresses the "N tokens · N credits" line. A reply that cost nothing must
  * not be presented as if it were billed.
  */
+/** A reply the browser writes itself: no run, no tokens, no credits. */
+export function buildLocalNotice(text: string): ChatModelRunResult {
+  const skeleton = toAssistantRunResult(emptyRunState());
+  return {
+    content: [{ type: "text", text, status: { type: "complete" } }],
+    status: { type: "complete", reason: "stop" },
+    metadata: skeleton.metadata,
+  };
+}
+
 export function buildHelpRunResult({
   editsEnabled,
   researchEnabled = false,

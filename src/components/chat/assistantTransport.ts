@@ -4,7 +4,7 @@ import {
   readAssistantStream,
   type AssistantEvent,
   type EditorContext,
-  type EditorContinuation,
+  type AssistantContinuation,
 } from "@novelsync/assistant-contracts";
 import {
   assistantFailureForStatus,
@@ -23,7 +23,9 @@ export type AssistantTransportDependencies = {
 };
 
 export type AssistantRunOptions = {
-  continuation?: EditorContinuation;
+  continuation?: AssistantContinuation;
+  /** Convene the Writers' Room for this message. */
+  mode?: "room";
 };
 
 const RETRYABLE_GATEWAY_STATUSES = new Set([502, 503, 504]);
@@ -138,6 +140,7 @@ export async function* streamAssistantRun(
         threadId,
         editorContext: editorContext ?? undefined,
         continuation: options.continuation,
+        mode: options.mode,
       }),
     ),
     signal,
