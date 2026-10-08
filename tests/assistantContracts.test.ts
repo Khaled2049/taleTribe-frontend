@@ -89,6 +89,7 @@ describe("assistant protocol fixtures", () => {
       "provider-error",
       "research-citations",
       "single-tool-round",
+      "specialist-consult",
       "stale-edit",
       "text-only",
     ]);

@@ -42,15 +42,18 @@ export function helpPlainText(
 export function buildHelpRunResult({
   editsEnabled,
   entityProposalsEnabled = false,
+  specialistsEnabled = false,
   researchEnabled = false,
 }: {
   editsEnabled: boolean;
   entityProposalsEnabled?: boolean;
+  specialistsEnabled?: boolean;
   researchEnabled?: boolean;
 }): ChatModelRunResult {
   const capabilities = capabilitiesFor({
     editsEnabled,
     entityProposalsEnabled,
+    specialistsEnabled,
     researchEnabled,
   });
   const skeleton = toAssistantRunResult(emptyRunState());

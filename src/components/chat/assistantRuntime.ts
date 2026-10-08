@@ -174,6 +174,7 @@ export function createAssistantAdapter({
   actionLedger,
   editsEnabled,
   entityProposalsEnabled = false,
+  specialistsEnabled = false,
 }: {
   storyId: string;
   activeRequest: ActiveRequestRef;
@@ -182,6 +183,7 @@ export function createAssistantAdapter({
   /** Mirrors the server flag, so `/help` never lists a tool a run won't offer. */
   editsEnabled: boolean;
   entityProposalsEnabled?: boolean;
+  specialistsEnabled?: boolean;
 }): ChatModelAdapter {
   return {
     async *run({ abortSignal, messages, unstable_getMessage }) {
@@ -202,7 +204,11 @@ export function createAssistantAdapter({
         // have. Checked after the continuation, because an approval resume is
         // not a fresh prompt however its text happens to read.
         if (!continuation && parseSlashCommand(prompt) === "help") {
-          yield buildHelpRunResult({ editsEnabled, entityProposalsEnabled });
+          yield buildHelpRunResult({
+            editsEnabled,
+            entityProposalsEnabled,
+            specialistsEnabled,
+          });
           return;
         }
 

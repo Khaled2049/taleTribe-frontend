@@ -112,6 +112,8 @@ const EDITOR_ACTIONS_PRESENTED =
 // Presentation only, like the editor flag: the server decides what a run offers.
 const ENTITY_PROPOSALS_PRESENTED =
   import.meta.env.VITE_ASSISTANT_ENTITY_PROPOSALS_ENABLED === "true";
+const SPECIALISTS_PRESENTED =
+  import.meta.env.VITE_ASSISTANT_SPECIALISTS_ENABLED === "true";
 const AssistantPanelContext = createContext<{
   storyId: string;
   navigateTo: (to: string, state?: { assistantChapterId: string }) => void;
@@ -213,6 +215,24 @@ function toolDetails(
             : "Reading the words you picked out",
         icon: FileSearch,
       };
+    case "consult_specialist": {
+      const name =
+        argRecord?.specialist === "character_editor"
+          ? "Character Editor"
+          : "Story Architect";
+      return {
+        title: `Asking the ${name}`,
+        detail:
+          resultRecord?.accepted === false
+            ? "Could not be consulted for this question"
+            : resultRecord?.accepted === true
+              ? "Shared a view — the answer below weighs it"
+              : argRecord?.specialist === "character_editor"
+                ? "Getting a second opinion on this character"
+                : "Getting a second opinion on structure and pacing",
+        icon: Users,
+      };
+    }
     default:
       return {
         title: "Reading your story",
@@ -1239,6 +1259,7 @@ function AssistantConversation({
         actionLedger,
         editsEnabled: EDITOR_ACTIONS_PRESENTED,
         entityProposalsEnabled: ENTITY_PROPOSALS_PRESENTED,
+        specialistsEnabled: SPECIALISTS_PRESENTED,
         transport: {
           endpoint,
           getIdToken: async () => auth.currentUser?.getIdToken() ?? null,
