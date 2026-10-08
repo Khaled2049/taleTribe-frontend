@@ -12,7 +12,7 @@ import {
   type Place,
   type PlotLine,
 } from "@novelsync/story-data-client";
-import { entityContinuationForMessage } from "@/components/chat/assistantRuntime";
+import { continuationForMessage } from "@/components/chat/assistantRuntime";
 import { EditorActionLedger } from "@/components/chat/editorActionLedger";
 import {
   allApplied,
@@ -199,7 +199,11 @@ describe("applying an approved story proposal", () => {
       proposalOf(createHospital),
       repo as unknown as StoryChangeRepo,
     );
-    expect(result.status).toBe("stale");
+    expect(result).toEqual({
+      index: 0,
+      status: "applied",
+      entityId: "place-2",
+    });
     expect(repo.addPlace).not.toHaveBeenCalled();
   });
 
@@ -263,6 +267,20 @@ describe("staleness shown on the card", () => {
 });
 
 describe("story-change contracts", () => {
+  it("rejects a field the change's kind does not own", () => {
+    expect(
+      proposeStoryChangesSchema.safeParse(
+        proposalOf({
+          ...createHospital,
+          fields: { name: "Abandoned Hospital", tensionLevel: 8 },
+        }),
+      ).success,
+    ).toBe(false);
+    expect(
+      proposeStoryChangesSchema.safeParse(proposalOf(createHospital)).success,
+    ).toBe(true);
+  });
+
   it("rejects fields outside the allowlist and oversized proposals", () => {
     expect(
       proposeStoryChangesSchema.safeParse(
@@ -317,10 +335,7 @@ describe("story-change continuation", () => {
         { index: 1, status: "failed" },
       ],
     });
-    const continuation = entityContinuationForMessage(
-      pausedMessage(true),
-      ledger,
-    );
+    const continuation = continuationForMessage(pausedMessage(true), ledger);
     expect(continuation).toMatchObject({
       kind: "entity_approval",
       previousRunId: "run-1",
@@ -329,7 +344,7 @@ describe("story-change continuation", () => {
       proposalId: "proposal-1",
       decision: "apply_failed",
     });
-    expect(continuation?.results).toHaveLength(2);
+    expect(continuation).toHaveProperty("results.length", 2);
 
     const request = buildRunRequest({
       storyId: "story-1",
@@ -342,18 +357,76 @@ describe("story-change continuation", () => {
 
   it("fails closed when the approval has no recorded browser decision", () => {
     expect(() =>
-      entityContinuationForMessage(
-        pausedMessage(true),
-        new EditorActionLedger(),
-      ),
+      continuationForMessage(pausedMessage(true), new EditorActionLedger()),
     ).toThrow(/resumed safely/);
+  });
+
+  it("resumes the latest approval when an older editor decision shares the message", () => {
+    const editorProposal = {
+      chapterId: "chapter-1",
+      baseRevision: 3,
+      baseDocumentVersion: 7,
+      summary: "Tighten the image",
+      operations: [
+        {
+          type: "replace",
+          from: 1,
+          to: 6,
+          originalText: "Hello",
+          replacementText: "Hail",
+        },
+      ],
+    };
+    const message = pausedMessage(true);
+    const content = [
+      {
+        type: "tool-call",
+        toolCallId: "editor-call",
+        toolName: "propose_editor_edit",
+        args: editorProposal,
+        argsText: JSON.stringify(editorProposal),
+        result: { proposalId: "proposal-0" },
+      },
+      {
+        type: "tool-call",
+        toolCallId: "apply-0",
+        toolName: "apply_editor_edit",
+        args: { proposalId: "proposal-0" },
+        argsText: '{"proposalId":"proposal-0"}',
+        approval: { id: "approval-0", approved: false },
+      },
+      ...message.content,
+    ];
+    const ledger = new EditorActionLedger();
+    ledger.resolve("approval-0", {
+      decision: "revision_requested",
+      feedback: "Change the cast instead",
+    });
+    ledger.resolve("approval-1", {
+      decision: "applied",
+      results: [
+        { index: 0, status: "applied", entityId: "char-1" },
+        { index: 1, status: "applied", entityId: "place-1" },
+      ],
+    });
+
+    expect(
+      continuationForMessage(
+        { ...message, content } as unknown as ThreadMessage,
+        ledger,
+      ),
+    ).toMatchObject({
+      kind: "entity_approval",
+      approvalId: "approval-1",
+      decision: "applied",
+    });
   });
 
   it("ignores messages with no story-change approval", () => {
     const message = pausedMessage(true);
     const content = message.content.slice(0, 1);
     expect(
-      entityContinuationForMessage(
+      continuationForMessage(
         { ...message, content } as ThreadMessage,
         new EditorActionLedger(),
       ),

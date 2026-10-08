@@ -58,6 +58,7 @@ import type { AssistantMessageMetadata } from "./assistantRunModel";
 import { HELP_COMMAND, ROOM_COMMAND } from "./slashCommands";
 import { SpecialistViewCard } from "./SpecialistViewCard";
 import { specialistView } from "./specialistView";
+import { objectValue, proposalArgs } from "./toolParts";
 import {
   proposeEditorEditSchema,
   type Capability,
@@ -133,18 +134,33 @@ const AssistantPanelContext = createContext<{
 const noopSubscribe = () => () => undefined;
 const zeroVersion = () => 0;
 
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 function resultItems(result: unknown): unknown[] {
   if (Array.isArray(result)) return result;
   const record = objectValue(result);
   if (Array.isArray(record?.entities)) return record.entities;
   if (Array.isArray(record?.results)) return record.results;
   return [];
+}
+
+/** What a finished consult reports, or null while it is still running. */
+function consultDetail(
+  result: Record<string, unknown> | null,
+  drafting: boolean,
+): string | null {
+  if (result?.accepted === false) {
+    return drafting
+      ? "Could not draft this yet"
+      : "Could not be consulted for this question";
+  }
+  if (result?.delivered === true) {
+    return result.truncated === true
+      ? "Draft written below — it was cut short"
+      : "Draft written below";
+  }
+  if (result?.accepted !== true) return null;
+  return result.reviewed === true
+    ? "Weighed the other views — the answer below reflects it"
+    : "Shared a view — the answer below weighs it";
 }
 
 function toolDetails(
@@ -234,20 +250,7 @@ function toolDetails(
         title: drafting
           ? `Handing this to the ${specialist.name}`
           : `Asking the ${specialist.name}`,
-        detail:
-          resultRecord?.accepted === false
-            ? drafting
-              ? "Could not draft this yet"
-              : "Could not be consulted for this question"
-            : resultRecord?.delivered === true
-              ? resultRecord.truncated === true
-                ? "Draft written below — it was cut short"
-                : "Draft written below"
-              : resultRecord?.accepted === true
-                ? resultRecord.reviewed === true
-                  ? "Weighed the other views — the answer below reflects it"
-                  : "Shared a view — the answer below weighs it"
-                : specialist.working,
+        detail: consultDetail(resultRecord, drafting) ?? specialist.working,
         icon: drafting ? WandSparkles : Users,
       };
     }
@@ -409,18 +412,12 @@ function ApplyEditorEditCard({
   const approvalId = approval?.id;
   const action = useEditorAction(context?.actionLedger, approvalId);
   const proposalId = objectValue(args)?.proposalId;
-  const proposalPart = [...messageContent].reverse().find((part) => {
-    if (part.type !== "tool-call" || part.toolName !== "propose_editor_edit") {
-      return false;
-    }
-    return objectValue(part.result)?.proposalId === proposalId;
-  });
   const proposal = useMemo<ProposeEditorEditArgs | null>(() => {
     const parsed = proposeEditorEditSchema.safeParse(
-      proposalPart?.type === "tool-call" ? proposalPart.args : null,
+      proposalArgs(messageContent, "propose_editor_edit", proposalId),
     );
     return parsed.success ? parsed.data : null;
-  }, [proposalPart]);
+  }, [messageContent, proposalId]);
   const operation =
     proposal?.operations.length === 1 &&
     proposal.operations[0]?.type === "replace"

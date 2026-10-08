@@ -37,6 +37,7 @@ import {
   isStale,
   type StorySnapshot,
 } from "./storyChangeApply";
+import { objectValue, proposalArgs } from "./toolParts";
 
 const noopSubscribe = () => () => undefined;
 const zeroVersion = () => 0;
@@ -70,12 +71,6 @@ const FIELD_LABEL: Record<keyof StoryChangeFields, string> = {
   locationId: "Location",
   notes: "Notes",
 };
-
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
 
 function useAction(
   ledger: EditorActionLedger | undefined,
@@ -218,6 +213,7 @@ export function ApplyStoryChangesCard({
   const queryClient = useQueryClient();
   const { isOnline } = useNetworkStatus();
   const messageContent = useAuiState((state) => state.message.content);
+  const isLastMessage = useAuiState((state) => state.message.isLast);
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedback, setFeedback] = useState("");
   const approvalId = approval?.id;
@@ -225,30 +221,34 @@ export function ApplyStoryChangesCard({
   const proposalId = objectValue(args)?.proposalId;
 
   const proposal = useMemo<ProposeStoryChangesArgs | null>(() => {
-    const part = [...messageContent]
-      .reverse()
-      .find(
-        (candidate) =>
-          candidate.type === "tool-call" &&
-          candidate.toolName === "propose_story_changes" &&
-          objectValue(candidate.result)?.proposalId === proposalId,
-      );
     const parsed = proposeStoryChangesSchema.safeParse(
-      part?.type === "tool-call" ? part.args : null,
+      proposalArgs(messageContent, "propose_story_changes", proposalId),
     );
     return parsed.success ? parsed.data : null;
   }, [messageContent, proposalId]);
 
-  const characters = useCharacters(storyId).data;
-  const places = usePlaces(storyId).data;
-  const plots = usePlots(storyId).data;
+  const characterQuery = useCharacters(storyId);
+  const placeQuery = usePlaces(storyId);
+  const plotQuery = usePlots(storyId);
+  const characters = characterQuery.data;
+  const places = placeQuery.data;
+  const plots = plotQuery.data;
+  // Accepting before these load would mean approving without the before-values.
+  const loaded = Boolean(characters && places && plots);
+  const loadFailed =
+    !loaded &&
+    (characterQuery.isError || placeQuery.isError || plotQuery.isError);
   const snapshot = useMemo<StorySnapshot>(
     () => ({ characters, places, plots }),
     [characters, places, plots],
   );
 
-  const resolved =
+  const decided =
     approval?.approved !== undefined || action.status === "resolved";
+  // Once the conversation has moved on, resuming this message's run would
+  // rewind it, so an undecided suggestion is closed rather than left live.
+  const expired = !decided && !isLastMessage && action.status !== "applying";
+  const resolved = decided || expired;
   const busy = action.status === "applying";
   const anyStale =
     !resolved &&
@@ -257,6 +257,7 @@ export function ApplyStoryChangesCard({
     Boolean(storyId && ledger && approvalId && proposal) &&
     !resolved &&
     !busy &&
+    loaded &&
     !anyStale &&
     isOnline;
 
@@ -335,10 +336,12 @@ export function ApplyStoryChangesCard({
   const terminalMessage =
     action.status !== "resolved"
       ? approval?.approved === undefined
-        ? null
+        ? expired
+          ? "This suggestion expired when the conversation moved on. Ask again for a fresh one."
+          : null
         : approval.approved
-          ? "This suggestion was accepted."
-          : "This suggestion was not applied."
+          ? "Saved to your story."
+          : "This suggestion is closed. The reply below says what was saved."
       : action.decision === "applied"
         ? "Saved to your story."
         : action.decision === "apply_failed"
@@ -400,6 +403,16 @@ export function ApplyStoryChangesCard({
           >
             Part of your story changed after this was drafted. Ask for a
             revision to get an up-to-date suggestion.
+          </p>
+        )}
+        {!loaded && !resolved && (
+          <p
+            role="status"
+            className="font-ui text-xs leading-5 text-ns-ink-muted"
+          >
+            {loadFailed
+              ? "Your story could not be loaded to compare. Reload and try again."
+              : "Loading your story to compare…"}
           </p>
         )}
         {!isOnline && !resolved && (

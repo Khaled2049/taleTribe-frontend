@@ -27,6 +27,11 @@ export function SpecialistViewCard({ view }: { view: SpecialistView }) {
         <p className="min-w-0 flex-1 truncate text-xs font-semibold text-ns-ink">
           {view.name}
         </p>
+        {view.degraded && (
+          <span className="shrink-0 rounded-full border border-ns-border-strong bg-ns-elevated px-2 py-0.5 text-[10px] font-semibold text-ns-ink-muted">
+            Partial view
+          </span>
+        )}
         {view.reviewed && (
           <span className="shrink-0 rounded-full border border-ns-border-strong bg-ns-elevated px-2 py-0.5 text-[10px] font-semibold text-ns-ink-secondary">
             Weighed the others

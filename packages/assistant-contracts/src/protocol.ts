@@ -154,6 +154,46 @@ export const storyChangeFieldsSchema = z
   .partial()
   .strict();
 
+type StoryChangeField = keyof z.infer<typeof storyChangeFieldsSchema>;
+
+// KEEP IN SYNC with STORY_CHANGE_FIELDS in taleTribe-agents assistant/protocol.py.
+export const STORY_CHANGE_FIELDS_BY_KIND: Record<
+  "character" | "place" | "plot" | "event",
+  readonly StoryChangeField[]
+> = {
+  character: [
+    "name",
+    "age",
+    "soul",
+    "personality",
+    "voice",
+    "backstory",
+    "affiliations",
+    "notes",
+  ],
+  place: [
+    "name",
+    "description",
+    "atmosphere",
+    "geography",
+    "history",
+    "significance",
+    "notes",
+  ],
+  plot: ["name", "description"],
+  event: [
+    "name",
+    "content",
+    "tensionLevel",
+    "pacing",
+    "storyBeat",
+    "emotionalTone",
+    "characterIds",
+    "locationId",
+    "notes",
+  ],
+};
+
 export const storyChangeSchema = z
   .object({
     operation: z.enum(STORY_CHANGE_OPERATIONS),
@@ -163,7 +203,22 @@ export const storyChangeSchema = z
     baseRevision: z.number().int().nonnegative().optional(),
     label: z.string().min(1).max(LIMITS.entityNameChars),
   })
-  .strict();
+  .strict()
+  // A field the kind does not own would be shown on the card and then dropped
+  // or refused on save, so the proposal is not reviewable as drafted.
+  .superRefine((change, ctx) => {
+    const kind = change.operation.split(".")[0] as "character";
+    const allowed: readonly string[] = STORY_CHANGE_FIELDS_BY_KIND[kind];
+    for (const field of Object.keys(change.fields)) {
+      if (!allowed.includes(field)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["fields", field],
+          message: `${kind} changes cannot set ${field}`,
+        });
+      }
+    }
+  });
 
 export const proposeStoryChangesSchema = z
   .object({

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ChatModelRunResult, ThreadMessage } from "@assistant-ui/react";
 import {
   createAssistantAdapter,
-  editorContinuationForMessage,
+  continuationForMessage,
 } from "@/components/chat/assistantRuntime";
 import type { AssistantMessageMetadata } from "@/components/chat/assistantRunModel";
 import { EditorActionLedger } from "@/components/chat/editorActionLedger";
@@ -67,22 +67,20 @@ describe("assistant approval continuation", () => {
       },
     });
 
-    expect(editorContinuationForMessage(pausedMessage(), ledger)).toMatchObject(
-      {
-        previousRunId: "run-1",
-        proposalId: "proposal-1",
-        approvalId: "approval-1",
-        toolCallId: "apply-1",
-        decision: "applied",
-        proposal,
-        result: { status: "saved" },
-      },
-    );
+    expect(continuationForMessage(pausedMessage(), ledger)).toMatchObject({
+      previousRunId: "run-1",
+      proposalId: "proposal-1",
+      approvalId: "approval-1",
+      toolCallId: "apply-1",
+      decision: "applied",
+      proposal,
+      result: { status: "saved" },
+    });
   });
 
   it("fails closed when a resolved approval has no browser action result", () => {
     expect(() =>
-      editorContinuationForMessage(pausedMessage(), new EditorActionLedger()),
+      continuationForMessage(pausedMessage(), new EditorActionLedger()),
     ).toThrow(/could not be resumed safely/);
   });
 });

@@ -186,7 +186,7 @@ describe("a specialist's view", () => {
     expect(view?.recommendations).toEqual([{ title: "Cut it", detail: "" }]);
     expect(view?.risks).toEqual(["Thin"]);
     expect(view?.suggestedChanges).toEqual([
-      { operation: "", target: "", change: "Raise tension." },
+      { target: "", change: "Raise tension." },
     ]);
   });
 });

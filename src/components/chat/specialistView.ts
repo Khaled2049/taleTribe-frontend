@@ -1,5 +1,7 @@
+import { objectValue } from "./toolParts";
+
 type Recommendation = { title: string; detail: string };
-type SuggestedChange = { operation: string; target: string; change: string };
+type SuggestedChange = { target: string; change: string };
 
 export type SpecialistView = {
   name: string;
@@ -10,12 +12,6 @@ export type SpecialistView = {
   suggestedChanges: SuggestedChange[];
   risks: string[];
 };
-
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
 
 const text = (value: unknown): string =>
   typeof value === "string" ? value.trim() : "";
@@ -32,8 +28,8 @@ function items<T>(value: unknown, read: (row: unknown) => T | null): T[] {
  * Tool results are model-derived data, so nothing here trusts their shape.
  */
 export function specialistView(result: unknown): SpecialistView | null {
-  const payload = record(result);
-  const findings = record(payload?.findings);
+  const payload = objectValue(result);
+  const findings = objectValue(payload?.findings);
   const analysis = text(findings?.analysis);
   if (!payload || payload.room !== true || payload.accepted !== true) {
     return null;
@@ -45,20 +41,14 @@ export function specialistView(result: unknown): SpecialistView | null {
     degraded: payload.degraded === true,
     analysis,
     recommendations: items(findings.recommendations, (row) => {
-      const item = record(row);
+      const item = objectValue(row);
       const title = text(item?.title);
       return title ? { title, detail: text(item?.detail) } : null;
     }),
     suggestedChanges: items(findings.suggestedChanges, (row) => {
-      const item = record(row);
+      const item = objectValue(row);
       const change = text(item?.change);
-      return change
-        ? {
-            operation: text(item?.operation),
-            target: text(item?.target),
-            change,
-          }
-        : null;
+      return change ? { target: text(item?.target), change } : null;
     }),
     risks: items(findings.risks, (row) => text(row) || null),
   };

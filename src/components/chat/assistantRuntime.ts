@@ -8,8 +8,6 @@ import {
   proposeEditorEditSchema,
   proposeStoryChangesSchema,
   type AssistantContinuation,
-  type EditorContinuation,
-  type EntityContinuation,
 } from "@novelsync/assistant-contracts";
 import {
   AssistantRequestError,
@@ -24,108 +22,55 @@ import {
 import { buildHelpRunResult, buildLocalNotice } from "./localHelpResult";
 import { parseRoomCommand, parseSlashCommand } from "./slashCommands";
 import type { EditorActionLedger } from "./editorActionLedger";
+import { objectValue, proposalArgs } from "./toolParts";
 
 type ActiveRequestRef = { current: AbortController | null };
 
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-export function editorContinuationForMessage(
-  message: ThreadMessage,
-  ledger: EditorActionLedger,
-): EditorContinuation | undefined {
-  if (message.role !== "assistant") return undefined;
-  const applyPart = [...message.content]
-    .reverse()
-    .find(
-      (part) =>
-        part.type === "tool-call" &&
-        part.toolName === "apply_editor_edit" &&
-        part.approval?.approved !== undefined,
-    );
-  if (applyPart?.type !== "tool-call" || !applyPart.approval) return undefined;
-
-  const action = ledger.get(applyPart.approval.id);
-  if (action.status !== "resolved") {
-    throw new AssistantRequestError({
-      code: "unsupported_capability",
-      message: "The editor decision could not be resumed safely. Please retry.",
-    });
-  }
-  const applyArgs = objectValue(applyPart.args);
-  const proposalId = applyArgs?.proposalId;
-  if (typeof proposalId !== "string") {
-    throw new AssistantRequestError({
-      code: "unsupported_capability",
-      message: "The editor proposal is missing its secure linkage.",
-    });
-  }
-  const proposalPart = [...message.content].reverse().find((part) => {
-    if (part.type !== "tool-call" || part.toolName !== "propose_editor_edit") {
-      return false;
-    }
-    return objectValue(part.result)?.proposalId === proposalId;
-  });
-  if (proposalPart?.type !== "tool-call") {
-    throw new AssistantRequestError({
-      code: "unsupported_capability",
-      message: "The linked editor proposal is no longer available.",
-    });
-  }
-  const proposal = proposeEditorEditSchema.safeParse(proposalPart.args);
-  const metadata = objectValue(message.metadata.custom?.novelsync);
-  const previousRunId = metadata?.runId;
-  if (!proposal.success || typeof previousRunId !== "string") {
-    throw new AssistantRequestError({
-      code: "unsupported_capability",
-      message: "The editor proposal could not be validated locally.",
-    });
-  }
-
-  return editorContinuationSchema.parse({
+const APPROVAL_KINDS = {
+  apply_editor_edit: {
     kind: "editor_approval",
-    previousRunId,
-    approvalId: applyPart.approval.id,
-    toolCallId: applyPart.toolCallId,
-    proposalId,
-    decision: action.decision,
-    proposal: proposal.data,
-    result: action.result,
-    feedback: action.feedback,
-  }) as EditorContinuation;
-}
+    proposeTool: "propose_editor_edit",
+    proposalSchema: proposeEditorEditSchema,
+    continuationSchema: editorContinuationSchema,
+    failure: "The editor decision could not be resumed safely. Please retry.",
+  },
+  apply_story_changes: {
+    kind: "entity_approval",
+    proposeTool: "propose_story_changes",
+    proposalSchema: proposeStoryChangesSchema,
+    continuationSchema: entityContinuationSchema,
+    failure: "The story change could not be resumed safely. Please retry.",
+  },
+} as const;
 
-/** The story-change twin of `editorContinuationForMessage`. */
-export function entityContinuationForMessage(
+/**
+ * The continuation for the approval this message was just resumed from.
+ *
+ * A resumed run writes into the same message, so one message can hold decided
+ * approvals of both kinds. Only the latest one is being resumed; searching per
+ * tool would resend an older decision of the other kind.
+ */
+export function continuationForMessage(
   message: ThreadMessage,
   ledger: EditorActionLedger,
-): EntityContinuation | undefined {
+): AssistantContinuation | undefined {
   if (message.role !== "assistant") return undefined;
   const applyPart = [...message.content]
     .reverse()
     .find(
       (part) =>
         part.type === "tool-call" &&
-        part.toolName === "apply_story_changes" &&
+        Object.prototype.hasOwnProperty.call(APPROVAL_KINDS, part.toolName) &&
         part.approval?.approved !== undefined,
     );
   if (applyPart?.type !== "tool-call" || !applyPart.approval) return undefined;
+  const spec =
+    APPROVAL_KINDS[applyPart.toolName as keyof typeof APPROVAL_KINDS];
 
   const action = ledger.get(applyPart.approval.id);
   const proposalId = objectValue(applyPart.args)?.proposalId;
-  const proposalPart = [...message.content]
-    .reverse()
-    .find(
-      (part) =>
-        part.type === "tool-call" &&
-        part.toolName === "propose_story_changes" &&
-        objectValue(part.result)?.proposalId === proposalId,
-    );
-  const proposal = proposeStoryChangesSchema.safeParse(
-    proposalPart?.type === "tool-call" ? proposalPart.args : null,
+  const proposal = spec.proposalSchema.safeParse(
+    proposalArgs(message.content, spec.proposeTool, proposalId),
   );
   const previousRunId = objectValue(message.metadata.custom?.novelsync)?.runId;
   if (
@@ -136,21 +81,24 @@ export function entityContinuationForMessage(
   ) {
     throw new AssistantRequestError({
       code: "unsupported_capability",
-      message: "The story change could not be resumed safely. Please retry.",
+      message: spec.failure,
     });
   }
 
-  return entityContinuationSchema.parse({
-    kind: "entity_approval",
+  return spec.continuationSchema.parse({
+    kind: spec.kind,
     previousRunId,
     approvalId: applyPart.approval.id,
     toolCallId: applyPart.toolCallId,
     proposalId,
     decision: action.decision,
     proposal: proposal.data,
-    results: action.results,
+    // Both schemas are strict, so each gets only its own result field.
+    ...(spec.kind === "editor_approval"
+      ? { result: action.result }
+      : { results: action.results }),
     feedback: action.feedback,
-  });
+  }) as AssistantContinuation;
 }
 
 function safeRuntimeFailure(error: unknown): AssistantFailure {
@@ -190,9 +138,10 @@ export function createAssistantAdapter({
 
       try {
         const currentMessage = unstable_getMessage();
-        const continuation: AssistantContinuation | undefined =
-          editorContinuationForMessage(currentMessage, actionLedger) ??
-          entityContinuationForMessage(currentMessage, actionLedger);
+        const continuation = continuationForMessage(
+          currentMessage,
+          actionLedger,
+        );
         const prompt = latestUserText(messages);
 
         // `/help` is answered here and goes no further: no request, no token,

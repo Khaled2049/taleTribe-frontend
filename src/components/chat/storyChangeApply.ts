@@ -88,114 +88,104 @@ export function isStale(
 
 class StaleChange extends Error {}
 
-// A create whose name is already taken has most likely been applied already
-// (a reload between the save and its acknowledgement), so it must not repeat.
-function assertNameFree(rows: { name: string }[], name: string) {
-  const wanted = name.trim().toLowerCase();
-  if (rows.some((row) => row.name.trim().toLowerCase() === wanted)) {
+type Saved = { id: string };
+
+/** Create the row, or update the target if it is still at its drafted revision. */
+async function save<T extends { id: string; name: string; revision?: number }>(
+  change: StoryChange,
+  rows: T[],
+  create: (name: string) => Promise<Saved>,
+  update: (current: T) => Promise<Saved>,
+): Promise<string> {
+  if (isCreate(change)) {
+    const name = change.fields.name ?? change.label;
+    // The agent refuses to draft a create under a taken name, so a match here
+    // is this create landing earlier (a reload before its acknowledgement).
+    const wanted = name.trim().toLowerCase();
+    const existing = rows.find(
+      (row) => row.name.trim().toLowerCase() === wanted,
+    );
+    return existing ? existing.id : (await create(name)).id;
+  }
+  const current = rows.find((row) => row.id === change.entityId);
+  if (!current || current.revision !== change.baseRevision) {
     throw new StaleChange();
   }
+  return (await update(current)).id;
 }
 
+// story-data replaces the whole record on update, so every update starts from
+// a fresh read and overlays only the proposed fields. Sending the fields alone
+// would blank the rest, relationships included.
 async function applyOne(
   storyId: string,
   change: StoryChange,
   repo: StoryChangeRepo,
 ): Promise<string> {
   const fields = change.fields;
-  const kind = changeKind(change);
-  const name = fields.name ?? change.label;
-
-  // story-data replaces the whole record on update, so every update starts
-  // from a fresh read and overlays only the proposed fields. Sending the
-  // fields alone would blank the rest, relationships included.
-  if (kind === "character") {
-    if (isCreate(change)) {
-      assertNameFree(await repo.getCharacters(storyId), name);
-      const created = await repo.addCharacter(storyId, {
-        ...fields,
-        name,
-        relationships: [],
-        userId: "",
-      } as Omit<Character, "id" | "revision">);
-      return created.id;
-    }
-    const characters = await repo.getCharacters(storyId);
-    const current = currentTarget(change, { characters }) as
-      Character | undefined;
-    if (!current || current.revision !== change.baseRevision) {
-      throw new StaleChange();
-    }
-    return (await repo.updateCharacter(storyId, { ...current, ...fields })).id;
-  }
-
-  if (kind === "place") {
-    if (isCreate(change)) {
-      assertNameFree(await repo.getPlaces(storyId), name);
-      const created = await repo.addPlace(storyId, {
-        ...fields,
-        name,
-        userId: "",
-      } as Omit<Place, "id" | "revision">);
-      return created.id;
-    }
-    const places = await repo.getPlaces(storyId);
-    const current = currentTarget(change, { places }) as Place | undefined;
-    if (!current || current.revision !== change.baseRevision) {
-      throw new StaleChange();
-    }
-    return (await repo.updatePlace(storyId, { ...current, ...fields })).id;
-  }
-
-  if (kind === "plot") {
-    if (isCreate(change)) {
-      assertNameFree(await repo.getPlots(storyId), name);
-      const created = await repo.addPlot(
-        storyId,
-        name,
-        fields.description ?? "",
+  switch (changeKind(change)) {
+    case "character":
+      return save(
+        change,
+        await repo.getCharacters(storyId),
+        (name) =>
+          repo.addCharacter(storyId, {
+            ...fields,
+            name,
+            relationships: [],
+            userId: "",
+          } as Omit<Character, "id" | "revision">),
+        (current) => repo.updateCharacter(storyId, { ...current, ...fields }),
       );
-      return created.id;
+    case "place":
+      return save(
+        change,
+        await repo.getPlaces(storyId),
+        (name) =>
+          repo.addPlace(storyId, { ...fields, name, userId: "" } as Omit<
+            Place,
+            "id" | "revision"
+          >),
+        (current) => repo.updatePlace(storyId, { ...current, ...fields }),
+      );
+    case "plot":
+      return save(
+        change,
+        await repo.getPlots(storyId),
+        (name) => repo.addPlot(storyId, name, fields.description ?? ""),
+        (current) =>
+          repo.updatePlotMeta(storyId, {
+            ...current,
+            name: fields.name ?? current.name,
+            description: fields.description ?? current.description,
+          }),
+      );
+    case "event": {
+      const plots = await repo.getPlots(storyId);
+      const line = plots.find((x) => x.id === change.plotLineId);
+      if (!line) throw new StaleChange();
+      return save(
+        change,
+        line.events,
+        (name) =>
+          repo.addEvent(storyId, line.id, {
+            content: "",
+            characterIds: [],
+            locationId: null,
+            dependencies: [],
+            dependents: [],
+            tensionLevel: 5,
+            pacing: "moderate",
+            storyBeat: "rising_action",
+            orderIndex: line.events.length,
+            ...fields,
+            name,
+          }),
+        (current) =>
+          repo.updateEvent(storyId, line.id, { ...current, ...fields }),
+      );
     }
-    const plots = await repo.getPlots(storyId);
-    const current = currentTarget(change, { plots }) as PlotLine | undefined;
-    if (!current || current.revision !== change.baseRevision) {
-      throw new StaleChange();
-    }
-    const updated = await repo.updatePlotMeta(storyId, {
-      ...current,
-      name: fields.name ?? current.name,
-      description: fields.description ?? current.description,
-    });
-    return updated.id;
   }
-
-  const plots = await repo.getPlots(storyId);
-  const line = plots.find((x) => x.id === change.plotLineId);
-  if (!line) throw new StaleChange();
-  if (isCreate(change)) {
-    assertNameFree(line.events, name);
-    const created = await repo.addEvent(storyId, line.id, {
-      content: "",
-      characterIds: [],
-      locationId: null,
-      dependencies: [],
-      dependents: [],
-      tensionLevel: 5,
-      pacing: "moderate",
-      storyBeat: "rising_action",
-      orderIndex: line.events.length,
-      ...fields,
-      name,
-    });
-    return created.id;
-  }
-  const current = line.events.find((x) => x.id === change.entityId);
-  if (!current || current.revision !== change.baseRevision) {
-    throw new StaleChange();
-  }
-  return (await repo.updateEvent(storyId, line.id, { ...current, ...fields }))
-    .id;
 }
 
 /**
