@@ -93,6 +93,7 @@ describe("assistant protocol fixtures", () => {
       "specialist-draft",
       "stale-edit",
       "text-only",
+      "writers-room",
     ]);
   });
 

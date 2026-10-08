@@ -72,11 +72,10 @@ test("continuations are rejected at the gateway when edit proposals are off", as
   assert.deepEqual(payload, { error: "Assistant edits are disabled" });
 });
 
-test("story-change continuations need their own flag, not the edit flag", async () => {
+test("the edit kill switch does not block a story-change approval", async () => {
   const prior = { ...process.env };
   process.env.ASSISTANT_API_ENABLED = "true";
-  process.env.ASSISTANT_EDIT_PROPOSALS_ENABLED = "true";
-  delete process.env.ASSISTANT_ENTITY_PROPOSALS_ENABLED;
+  process.env.ASSISTANT_EDIT_PROPOSALS_ENABLED = "false";
   let status = 0;
   let payload: unknown;
   const response = {
@@ -94,16 +93,18 @@ test("story-change continuations need their own flag, not the edit flag", async 
     await handleAssistantRun(
       {
         method: "POST",
+        headers: {},
         body: { storyId: "story-1", continuation: { kind: "entity_approval" } },
-      } as Request,
+      } as unknown as Request,
       response,
     );
   } finally {
     process.env = prior;
   }
 
-  assert.equal(status, 404);
-  assert.deepEqual(payload, { error: "Assistant story changes are disabled" });
+  // It gets past the flag gate and is stopped by authentication instead.
+  assert.notEqual(status, 404);
+  assert.notDeepEqual(payload, { error: "Assistant edits are disabled" });
 });
 
 test("a browser cannot supply its own identity, story, or provider key", () => {

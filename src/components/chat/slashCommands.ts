@@ -21,3 +21,17 @@ export function parseSlashCommand(text: string): SlashCommand | null {
 
 /** The canonical spelling, for suggestion chips and composer hints. */
 export const HELP_COMMAND = "/help";
+
+export const ROOM_COMMAND = "/room";
+
+/**
+ * The question after `/room`, `""` for the bare command, or null when the
+ * message is not a room request.
+ *
+ * Unlike `/help` this command takes an argument, so it matches a prefix -- but
+ * only as a whole word. `/roommate drama` is prose and stays a prompt.
+ */
+export function parseRoomCommand(text: string): string | null {
+  const match = /^\/room(?:\s+([\s\S]*))?$/i.exec(text.trim());
+  return match ? (match[1] ?? "").trim() : null;
+}

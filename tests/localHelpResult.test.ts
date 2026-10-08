@@ -67,18 +67,11 @@ describe("local help result", () => {
     }
   });
 
-  it("lists specialists and story changes only when their flags are on", () => {
-    const ids = (flags: Parameters<typeof capabilitiesFor>[0]) =>
-      capabilitiesFor(flags).map((capability) => capability.id);
-    const off = ids({ editsEnabled: true });
-    expect(off).not.toContain("consult_specialist");
-    expect(off).not.toContain("propose_story_changes");
-    const on = ids({
-      editsEnabled: true,
-      entityProposalsEnabled: true,
-      specialistsEnabled: true,
-    });
-    expect(on).toContain("consult_specialist");
-    expect(on).toContain("propose_story_changes");
+  it("always lists specialists and story changes", () => {
+    const ids = capabilitiesFor({ editsEnabled: false }).map(
+      (capability) => capability.id,
+    );
+    expect(ids).toContain("consult_specialist");
+    expect(ids).toContain("propose_story_changes");
   });
 });

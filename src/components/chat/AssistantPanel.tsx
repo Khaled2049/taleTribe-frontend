@@ -55,7 +55,9 @@ import {
 } from "./assistantNavigation";
 import { createAssistantAdapter } from "./assistantRuntime";
 import type { AssistantMessageMetadata } from "./assistantRunModel";
-import { HELP_COMMAND } from "./slashCommands";
+import { HELP_COMMAND, ROOM_COMMAND } from "./slashCommands";
+import { SpecialistViewCard } from "./SpecialistViewCard";
+import { specialistView } from "./specialistView";
 import {
   proposeEditorEditSchema,
   type Capability,
@@ -109,11 +111,6 @@ const READ_TOOL_NAMES = [
 ] as const;
 const EDITOR_ACTIONS_PRESENTED =
   import.meta.env.VITE_ASSISTANT_EDITOR_ACTIONS_ENABLED !== "false";
-// Presentation only, like the editor flag: the server decides what a run offers.
-const ENTITY_PROPOSALS_PRESENTED =
-  import.meta.env.VITE_ASSISTANT_ENTITY_PROPOSALS_ENABLED === "true";
-const SPECIALISTS_PRESENTED =
-  import.meta.env.VITE_ASSISTANT_SPECIALISTS_ENABLED === "true";
 const SPECIALIST_COPY: Record<string, { name: string; working: string }> = {
   story_architect: {
     name: "Story Architect",
@@ -716,6 +713,16 @@ function ApplyEditorEditCard({
   );
 }
 
+/** In room mode a specialist's view is its own card; otherwise a status line. */
+function ConsultSpecialistPart(props: ToolCallMessagePartProps) {
+  const view = specialistView(props.result);
+  return view ? (
+    <SpecialistViewCard view={view} />
+  ) : (
+    <ReadToolCard {...props} />
+  );
+}
+
 function ApplyStoryChangesPart(props: ToolCallMessagePartProps) {
   const context = useContext(AssistantPanelContext);
   return (
@@ -1007,6 +1014,7 @@ function AssistantMessage() {
                   apply_editor_edit: ApplyEditorEditCard,
                   propose_story_changes: ProposeStoryChangesCard,
                   apply_story_changes: ApplyStoryChangesPart,
+                  consult_specialist: ConsultSpecialistPart,
                 },
                 Fallback: ReadToolCard,
               },
@@ -1056,6 +1064,10 @@ function EmptyAssistant() {
     [
       "Search your story",
       "Search the story for the protagonist’s central conflict.",
+    ],
+    [
+      "Convene the writers' room",
+      `${ROOM_COMMAND} What is the weakest part of this story, and why?`,
     ],
     ...(EDITOR_ACTIONS_PRESENTED
       ? [
@@ -1279,8 +1291,6 @@ function AssistantConversation({
         activeRequest,
         actionLedger,
         editsEnabled: EDITOR_ACTIONS_PRESENTED,
-        entityProposalsEnabled: ENTITY_PROPOSALS_PRESENTED,
-        specialistsEnabled: SPECIALISTS_PRESENTED,
         transport: {
           endpoint,
           getIdToken: async () => auth.currentUser?.getIdToken() ?? null,

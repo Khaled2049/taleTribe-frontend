@@ -34,7 +34,7 @@ const assistantEvent = await compile(
 // every listed capability is reachable.
 const capabilityType = [
   "",
-  'export type CapabilityGate = "always" | "edits" | "entities" | "specialists" | "research";',
+  'export type CapabilityGate = "always" | "edits" | "research";',
   "export type Capability = {",
   "  readonly id: string;",
   "  readonly tools: readonly string[];",

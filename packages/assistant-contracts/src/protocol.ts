@@ -245,6 +245,8 @@ export const runRequestSchema = z
       .union([entityContinuationSchema, editorContinuationSchema])
       .nullable()
       .optional(),
+    // Writers' Room: several specialists on purpose, each shown as a card.
+    mode: z.literal("room").optional(),
   })
   .strict();
 
@@ -273,6 +275,7 @@ export function buildRunRequest(input: {
   threadId?: string;
   editorContext?: EditorContext;
   continuation?: AssistantContinuation;
+  mode?: "room";
 }): RunRequest {
   return runRequestSchema.parse({
     v: ASSISTANT_PROTOCOL_VERSION,
@@ -282,5 +285,6 @@ export function buildRunRequest(input: {
     message: { role: "user", parts: [{ type: "text", text: input.text }] },
     editorContext: input.editorContext,
     continuation: input.continuation,
+    mode: input.mode,
   }) as RunRequest;
 }

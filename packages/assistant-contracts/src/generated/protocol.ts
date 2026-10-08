@@ -100,6 +100,7 @@ export namespace RunContract {
   export type Status1 = ("applied" | "stale" | "failed" | "skipped")
   export type Entityid1 = (string | null)
   export type Feedback1 = (string | null)
+  export type Mode = ("room" | null)
 
   /**
    * What the browser sends. Carries no identity -- see the module docstring.
@@ -112,6 +113,7 @@ export namespace RunContract {
   message: UserMessage
   editorContext?: (EditorContext | null)
   continuation?: Continuation
+  mode?: Mode
   }
   /**
    * v1 user input is text-only; the list is for forward room, not features.
@@ -556,7 +558,7 @@ export const LIMITS = {
   "eventCharacters": 20
 } as const;
 
-export type CapabilityGate = "always" | "edits" | "entities" | "specialists" | "research";
+export type CapabilityGate = "always" | "edits" | "research";
 export type Capability = {
   readonly id: string;
   readonly tools: readonly string[];
@@ -656,7 +658,7 @@ export const CAPABILITIES: readonly Capability[] = [
       "propose_story_changes",
       "apply_story_changes"
     ],
-    "gate": "entities",
+    "gate": "always",
     "title": "Suggest changes to your cast, places and plot",
     "summary": "Draft a new character, place, plot line or plot event, or changes to one you have. You review each change and nothing is saved until you accept it.",
     "example": "Add an abandoned hospital as a location.",
@@ -667,11 +669,11 @@ export const CAPABILITIES: readonly Capability[] = [
     "tools": [
       "consult_specialist"
     ],
-    "gate": "specialists",
+    "gate": "always",
     "title": "Get a specialist's judgement",
     "summary": "Bring in a story architect for structure and pacing, a character editor for motivation and consistency, or a critic for an editorial read, and fold what they find into one answer. A drafting agent can write a scene for an event you have planned.",
     "example": "The middle of my story feels slow. Why?",
-    "limits": "Up to 2 specialists per reply. They advise or draft in chat; they never change your story."
+    "limits": "Up to 2 specialists per reply, or type /room and your question to hear from several at once. They advise or draft in chat; they never change your story."
   },
   {
     "id": "research_web",

@@ -21,8 +21,8 @@ import {
   toAssistantRunResult,
   type AssistantFailure,
 } from "./assistantRunModel";
-import { buildHelpRunResult } from "./localHelpResult";
-import { parseSlashCommand } from "./slashCommands";
+import { buildHelpRunResult, buildLocalNotice } from "./localHelpResult";
+import { parseRoomCommand, parseSlashCommand } from "./slashCommands";
 import type { EditorActionLedger } from "./editorActionLedger";
 
 type ActiveRequestRef = { current: AbortController | null };
@@ -173,8 +173,6 @@ export function createAssistantAdapter({
   transport,
   actionLedger,
   editsEnabled,
-  entityProposalsEnabled = false,
-  specialistsEnabled = false,
 }: {
   storyId: string;
   activeRequest: ActiveRequestRef;
@@ -182,8 +180,6 @@ export function createAssistantAdapter({
   actionLedger: EditorActionLedger;
   /** Mirrors the server flag, so `/help` never lists a tool a run won't offer. */
   editsEnabled: boolean;
-  entityProposalsEnabled?: boolean;
-  specialistsEnabled?: boolean;
 }): ChatModelAdapter {
   return {
     async *run({ abortSignal, messages, unstable_getMessage }) {
@@ -204,20 +200,26 @@ export function createAssistantAdapter({
         // have. Checked after the continuation, because an approval resume is
         // not a fresh prompt however its text happens to read.
         if (!continuation && parseSlashCommand(prompt) === "help") {
-          yield buildHelpRunResult({
-            editsEnabled,
-            entityProposalsEnabled,
-            specialistsEnabled,
-          });
+          yield buildHelpRunResult({ editsEnabled });
+          return;
+        }
+
+        // `/room <question>` convenes the specialists on purpose. The command
+        // is stripped, so the room is briefed with the question itself.
+        const roomQuestion = continuation ? null : parseRoomCommand(prompt);
+        if (roomQuestion === "") {
+          yield buildLocalNotice(
+            "Add your question after /room — for example: /room why does my ending feel weak?",
+          );
           return;
         }
 
         for await (const event of streamAssistantRun(
           storyId,
-          prompt,
+          roomQuestion ?? prompt,
           signal,
           transport,
-          { continuation },
+          { continuation, mode: roomQuestion ? "room" : undefined },
         )) {
           state = applyEvent(state, event);
           // LocalRuntime already prepends the message's pre-run content to
