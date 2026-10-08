@@ -94,6 +94,10 @@ import { AssistantFab, AssistantRail } from "./AssistantDockParts";
 import { AssistantTabs, type AssistantTab } from "./AssistantTabs";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useAssistantProposal } from "./AssistantProposalContext";
+import {
+  ApplyStoryChangesCard,
+  ProposeStoryChangesCard,
+} from "./StoryChangeCards";
 
 const READ_TOOL_NAMES = [
   "get_story_overview",
@@ -105,6 +109,9 @@ const READ_TOOL_NAMES = [
 ] as const;
 const EDITOR_ACTIONS_PRESENTED =
   import.meta.env.VITE_ASSISTANT_EDITOR_ACTIONS_ENABLED !== "false";
+// Presentation only, like the editor flag: the server decides what a run offers.
+const ENTITY_PROPOSALS_PRESENTED =
+  import.meta.env.VITE_ASSISTANT_ENTITY_PROPOSALS_ENABLED === "true";
 const AssistantPanelContext = createContext<{
   storyId: string;
   navigateTo: (to: string, state?: { assistantChapterId: string }) => void;
@@ -668,6 +675,17 @@ function ApplyEditorEditCard({
   );
 }
 
+function ApplyStoryChangesPart(props: ToolCallMessagePartProps) {
+  const context = useContext(AssistantPanelContext);
+  return (
+    <ApplyStoryChangesCard
+      {...props}
+      storyId={context?.storyId}
+      ledger={context?.actionLedger}
+    />
+  );
+}
+
 function PlainTextPart({ text }: TextMessagePartProps) {
   const role = useAuiState((state) => state.message.role);
   if (role === "user") {
@@ -946,6 +964,8 @@ function AssistantMessage() {
                   ),
                   propose_editor_edit: ProposeEditorEditCard,
                   apply_editor_edit: ApplyEditorEditCard,
+                  propose_story_changes: ProposeStoryChangesCard,
+                  apply_story_changes: ApplyStoryChangesPart,
                 },
                 Fallback: ReadToolCard,
               },
@@ -1218,6 +1238,7 @@ function AssistantConversation({
         activeRequest,
         actionLedger,
         editsEnabled: EDITOR_ACTIONS_PRESENTED,
+        entityProposalsEnabled: ENTITY_PROPOSALS_PRESENTED,
         transport: {
           endpoint,
           getIdToken: async () => auth.currentUser?.getIdToken() ?? null,

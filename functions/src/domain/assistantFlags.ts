@@ -4,6 +4,8 @@ export function assistantFlags(env: NodeJS.ProcessEnv = process.env) {
   return {
     api,
     edits: api && env.ASSISTANT_EDIT_PROPOSALS_ENABLED !== "false",
+    // Off unless set: needs the agents flag and the approval-card frontend.
+    entities: api && env.ASSISTANT_ENTITY_PROPOSALS_ENABLED === "true",
     research: api && env.ASSISTANT_RESEARCH_ENABLED === "true",
   };
 }

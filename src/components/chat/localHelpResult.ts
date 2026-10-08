@@ -41,12 +41,18 @@ export function helpPlainText(
  */
 export function buildHelpRunResult({
   editsEnabled,
+  entityProposalsEnabled = false,
   researchEnabled = false,
 }: {
   editsEnabled: boolean;
+  entityProposalsEnabled?: boolean;
   researchEnabled?: boolean;
 }): ChatModelRunResult {
-  const capabilities = capabilitiesFor({ editsEnabled, researchEnabled });
+  const capabilities = capabilitiesFor({
+    editsEnabled,
+    entityProposalsEnabled,
+    researchEnabled,
+  });
   const skeleton = toAssistantRunResult(emptyRunState());
   const base = (skeleton.metadata?.custom?.novelsync ??
     {}) as AssistantMessageMetadata;

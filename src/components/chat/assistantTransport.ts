@@ -4,7 +4,7 @@ import {
   readAssistantStream,
   type AssistantEvent,
   type EditorContext,
-  type EditorContinuation,
+  type AssistantContinuation,
 } from "@novelsync/assistant-contracts";
 import {
   assistantFailureForStatus,
@@ -23,7 +23,7 @@ export type AssistantTransportDependencies = {
 };
 
 export type AssistantRunOptions = {
-  continuation?: EditorContinuation;
+  continuation?: AssistantContinuation;
 };
 
 const RETRYABLE_GATEWAY_STATUSES = new Set([502, 503, 504]);

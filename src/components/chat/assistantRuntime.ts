@@ -4,8 +4,12 @@ import {
   AssistantStreamError,
   editorContinuationSchema,
   emptyRunState,
+  entityContinuationSchema,
   proposeEditorEditSchema,
+  proposeStoryChangesSchema,
+  type AssistantContinuation,
   type EditorContinuation,
+  type EntityContinuation,
 } from "@novelsync/assistant-contracts";
 import {
   AssistantRequestError,
@@ -94,6 +98,61 @@ export function editorContinuationForMessage(
   }) as EditorContinuation;
 }
 
+/** The story-change twin of `editorContinuationForMessage`. */
+export function entityContinuationForMessage(
+  message: ThreadMessage,
+  ledger: EditorActionLedger,
+): EntityContinuation | undefined {
+  if (message.role !== "assistant") return undefined;
+  const applyPart = [...message.content]
+    .reverse()
+    .find(
+      (part) =>
+        part.type === "tool-call" &&
+        part.toolName === "apply_story_changes" &&
+        part.approval?.approved !== undefined,
+    );
+  if (applyPart?.type !== "tool-call" || !applyPart.approval) return undefined;
+
+  const action = ledger.get(applyPart.approval.id);
+  const proposalId = objectValue(applyPart.args)?.proposalId;
+  const proposalPart = [...message.content]
+    .reverse()
+    .find(
+      (part) =>
+        part.type === "tool-call" &&
+        part.toolName === "propose_story_changes" &&
+        objectValue(part.result)?.proposalId === proposalId,
+    );
+  const proposal = proposeStoryChangesSchema.safeParse(
+    proposalPart?.type === "tool-call" ? proposalPart.args : null,
+  );
+  const previousRunId = objectValue(message.metadata.custom?.novelsync)?.runId;
+  if (
+    action.status !== "resolved" ||
+    typeof proposalId !== "string" ||
+    !proposal.success ||
+    typeof previousRunId !== "string"
+  ) {
+    throw new AssistantRequestError({
+      code: "unsupported_capability",
+      message: "The story change could not be resumed safely. Please retry.",
+    });
+  }
+
+  return entityContinuationSchema.parse({
+    kind: "entity_approval",
+    previousRunId,
+    approvalId: applyPart.approval.id,
+    toolCallId: applyPart.toolCallId,
+    proposalId,
+    decision: action.decision,
+    proposal: proposal.data,
+    results: action.results,
+    feedback: action.feedback,
+  });
+}
+
 function safeRuntimeFailure(error: unknown): AssistantFailure {
   if (error instanceof AssistantRequestError) return error.failure;
   if (error instanceof AssistantStreamError) {
@@ -114,6 +173,7 @@ export function createAssistantAdapter({
   transport,
   actionLedger,
   editsEnabled,
+  entityProposalsEnabled = false,
 }: {
   storyId: string;
   activeRequest: ActiveRequestRef;
@@ -121,6 +181,7 @@ export function createAssistantAdapter({
   actionLedger: EditorActionLedger;
   /** Mirrors the server flag, so `/help` never lists a tool a run won't offer. */
   editsEnabled: boolean;
+  entityProposalsEnabled?: boolean;
 }): ChatModelAdapter {
   return {
     async *run({ abortSignal, messages, unstable_getMessage }) {
@@ -131,10 +192,9 @@ export function createAssistantAdapter({
 
       try {
         const currentMessage = unstable_getMessage();
-        const continuation = editorContinuationForMessage(
-          currentMessage,
-          actionLedger,
-        );
+        const continuation: AssistantContinuation | undefined =
+          editorContinuationForMessage(currentMessage, actionLedger) ??
+          entityContinuationForMessage(currentMessage, actionLedger);
         const prompt = latestUserText(messages);
 
         // `/help` is answered here and goes no further: no request, no token,
@@ -142,7 +202,7 @@ export function createAssistantAdapter({
         // have. Checked after the continuation, because an approval resume is
         // not a fresh prompt however its text happens to read.
         if (!continuation && parseSlashCommand(prompt) === "help") {
-          yield buildHelpRunResult({ editsEnabled });
+          yield buildHelpRunResult({ editsEnabled, entityProposalsEnabled });
           return;
         }
 

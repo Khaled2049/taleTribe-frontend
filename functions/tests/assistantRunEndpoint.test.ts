@@ -72,6 +72,40 @@ test("continuations are rejected at the gateway when edit proposals are off", as
   assert.deepEqual(payload, { error: "Assistant edits are disabled" });
 });
 
+test("story-change continuations need their own flag, not the edit flag", async () => {
+  const prior = { ...process.env };
+  process.env.ASSISTANT_API_ENABLED = "true";
+  process.env.ASSISTANT_EDIT_PROPOSALS_ENABLED = "true";
+  delete process.env.ASSISTANT_ENTITY_PROPOSALS_ENABLED;
+  let status = 0;
+  let payload: unknown;
+  const response = {
+    status(code: number) {
+      status = code;
+      return this;
+    },
+    json(value: unknown) {
+      payload = value;
+      return this;
+    },
+  } as unknown as Response;
+
+  try {
+    await handleAssistantRun(
+      {
+        method: "POST",
+        body: { storyId: "story-1", continuation: { kind: "entity_approval" } },
+      } as Request,
+      response,
+    );
+  } finally {
+    process.env = prior;
+  }
+
+  assert.equal(status, 404);
+  assert.deepEqual(payload, { error: "Assistant story changes are disabled" });
+});
+
 test("a browser cannot supply its own identity, story, or provider key", () => {
   const built = buildRunRequest(
     {

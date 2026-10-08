@@ -104,6 +104,106 @@ export const editorContinuationSchema = z
   })
   .strict();
 
+export const STORY_CHANGE_OPERATIONS = [
+  "character.create",
+  "character.update",
+  "place.create",
+  "place.update",
+  "plot.create",
+  "plot.update",
+  "event.create",
+  "event.update",
+] as const;
+
+const entityProse = z.string().min(1).max(LIMITS.entityProseChars);
+
+/** Only the fields a change sets; which ones apply depends on the kind. */
+export const storyChangeFieldsSchema = z
+  .object({
+    name: z.string().min(1).max(LIMITS.entityNameChars),
+    age: z.number().int().min(0).max(100000),
+    soul: entityProse,
+    personality: entityProse,
+    voice: entityProse,
+    backstory: entityProse,
+    affiliations: entityProse,
+    description: entityProse,
+    atmosphere: entityProse,
+    geography: entityProse,
+    history: entityProse,
+    significance: entityProse,
+    content: entityProse,
+    tensionLevel: z.number().int().min(1).max(10),
+    pacing: z.enum(["slow", "moderate", "fast"]),
+    storyBeat: z.enum([
+      "exposition",
+      "inciting_incident",
+      "rising_action",
+      "midpoint",
+      "climax",
+      "falling_action",
+      "resolution",
+    ]),
+    emotionalTone: z.string().min(1).max(LIMITS.entityShortChars),
+    characterIds: z
+      .array(z.string().min(1).max(LIMITS.idChars))
+      .max(LIMITS.eventCharacters),
+    locationId: z.string().min(1).max(LIMITS.idChars),
+    notes: entityProse,
+  })
+  .partial()
+  .strict();
+
+export const storyChangeSchema = z
+  .object({
+    operation: z.enum(STORY_CHANGE_OPERATIONS),
+    entityId: z.string().min(1).max(LIMITS.idChars).optional(),
+    plotLineId: z.string().min(1).max(LIMITS.idChars).optional(),
+    fields: storyChangeFieldsSchema,
+    baseRevision: z.number().int().nonnegative().optional(),
+    label: z.string().min(1).max(LIMITS.entityNameChars),
+  })
+  .strict();
+
+export const proposeStoryChangesSchema = z
+  .object({
+    summary: z.string().min(1).max(LIMITS.summaryChars),
+    reason: z.string().min(1).max(LIMITS.summaryChars).optional(),
+    changes: z.array(storyChangeSchema).min(1).max(LIMITS.storyChanges),
+  })
+  .strict();
+
+export const storyChangeResultSchema = z
+  .object({
+    index: z.number().int().nonnegative(),
+    status: z.enum(["applied", "stale", "failed", "skipped"]),
+    entityId: z.string().min(1).max(LIMITS.idChars).optional(),
+  })
+  .strict();
+
+export const entityContinuationSchema = z
+  .object({
+    kind: z.literal("entity_approval"),
+    previousRunId: z.string().min(1).max(LIMITS.idChars),
+    approvalId: z.string().min(1).max(LIMITS.idChars),
+    toolCallId: z.string().min(1).max(LIMITS.idChars),
+    proposalId: z.string().min(1).max(LIMITS.idChars),
+    decision: z.enum([
+      "applied",
+      "rejected",
+      "revision_requested",
+      "apply_failed",
+    ]),
+    proposal: proposeStoryChangesSchema,
+    results: z
+      .array(storyChangeResultSchema)
+      .min(1)
+      .max(LIMITS.storyChanges)
+      .optional(),
+    feedback: z.string().min(1).max(LIMITS.summaryChars).optional(),
+  })
+  .strict();
+
 export const editorContextSchema = z
   .object({
     chapterId: z.string().min(1).max(LIMITS.idChars).nullable().optional(),
@@ -140,7 +240,11 @@ export const runRequestSchema = z
     clientMessageId: z.string().min(1).max(LIMITS.idChars),
     message: userMessageSchema,
     editorContext: editorContextSchema.nullable().optional(),
-    continuation: editorContinuationSchema.nullable().optional(),
+    // Entity first: the editor schema defaults a missing `kind`.
+    continuation: z
+      .union([entityContinuationSchema, editorContinuationSchema])
+      .nullable()
+      .optional(),
   })
   .strict();
 
@@ -151,6 +255,13 @@ export type ReplaceOperation = z.infer<typeof replaceOperationSchema>;
 export type ProposeEditorEditArgs = z.infer<typeof proposeEditorEditSchema>;
 export type EditorApplyResult = z.infer<typeof editorApplyResultSchema>;
 export type EditorContinuation = z.infer<typeof editorContinuationSchema>;
+export type StoryChangeOperation = (typeof STORY_CHANGE_OPERATIONS)[number];
+export type StoryChangeFields = z.infer<typeof storyChangeFieldsSchema>;
+export type StoryChange = z.infer<typeof storyChangeSchema>;
+export type ProposeStoryChangesArgs = z.infer<typeof proposeStoryChangesSchema>;
+export type StoryChangeResult = z.infer<typeof storyChangeResultSchema>;
+export type EntityContinuation = z.infer<typeof entityContinuationSchema>;
+export type AssistantContinuation = EditorContinuation | EntityContinuation;
 export type UserMessage = RunContract.UserMessage;
 export type RunRequest = GeneratedRunRequest;
 
@@ -161,7 +272,7 @@ export function buildRunRequest(input: {
   clientMessageId: string;
   threadId?: string;
   editorContext?: EditorContext;
-  continuation?: EditorContinuation;
+  continuation?: AssistantContinuation;
 }): RunRequest {
   return runRequestSchema.parse({
     v: ASSISTANT_PROTOCOL_VERSION,

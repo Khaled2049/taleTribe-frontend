@@ -163,7 +163,10 @@ describe("assistant-ui run conversion", () => {
     });
 
     const result = toAssistantRunResult(state);
-    expect(result.status).toMatchObject({ type: "incomplete", reason: "error" });
+    expect(result.status).toMatchObject({
+      type: "incomplete",
+      reason: "error",
+    });
     expect(result.content).toEqual([
       expect.objectContaining({
         type: "text",
@@ -198,5 +201,11 @@ describe("assistant-ui run conversion", () => {
     );
     expect(assistantFailureForStatus(403).code).toBe("story_access_denied");
     expect(assistantFailureForStatus(503).code).toBe("provider_unavailable");
+  });
+
+  it("names an oversized request instead of calling the assistant unavailable", () => {
+    const failure = assistantFailureForStatus(413);
+    expect(failure.code).toBe("request_too_large");
+    expect(failure.message).toMatch(/too much to send/);
   });
 });

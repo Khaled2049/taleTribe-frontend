@@ -28,6 +28,8 @@ export {
 
 export type CapabilityFlags = {
   editsEnabled: boolean;
+  /** Off unless the agent offers `propose_story_changes`; mirrors its flag. */
+  entityProposalsEnabled?: boolean;
   /**
    * Defaults to false to match the agent, which passes `research_enabled=False`
    * unconditionally. Listing web research while that holds would be a promise
@@ -41,6 +43,7 @@ export function capabilitiesFor(flags: CapabilityFlags): readonly Capability[] {
   const enabled: Record<CapabilityGate, boolean> = {
     always: true,
     edits: flags.editsEnabled,
+    entities: flags.entityProposalsEnabled ?? false,
     research: flags.researchEnabled ?? false,
   };
   return CAPABILITIES.filter((capability) => enabled[capability.gate]);

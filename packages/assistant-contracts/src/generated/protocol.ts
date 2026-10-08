@@ -22,6 +22,7 @@ export namespace RunContract {
   export type Text2 = string
   export type Truncated = boolean
   export type Dirty = boolean
+  export type Continuation = ((EditorContinuation | EntityContinuation) | null)
   export type Kind = "editor_approval"
   export type Previousrunid = string
   export type Approvalid = string
@@ -50,6 +51,55 @@ export namespace RunContract {
   export type Documentversion1 = number
   export type Persistedrevision1 = (number | null)
   export type Feedback = (string | null)
+  export type Kind1 = "entity_approval"
+  export type Previousrunid1 = string
+  export type Approvalid1 = string
+  export type Toolcallid1 = string
+  export type Proposalid1 = string
+  export type Decision1 = ("applied" | "rejected" | "revision_requested" | "apply_failed")
+  export type Summary1 = string
+  export type Reason = (string | null)
+  /**
+   * @minItems 1
+   * @maxItems 5
+   */
+  export type Changes = [StoryChange]|[StoryChange, StoryChange]|[StoryChange, StoryChange, StoryChange]|[StoryChange, StoryChange, StoryChange, StoryChange]|[StoryChange, StoryChange, StoryChange, StoryChange, StoryChange]
+  export type Operation = ("character.create" | "character.update" | "place.create" | "place.update" | "plot.create" | "plot.update" | "event.create" | "event.update")
+  /**
+   * Required for an update, as returned by a read tool. Omit for a create.
+   */
+  export type Entityid = (string | null)
+  /**
+   * Required for event.create and event.update: the plot line the event belongs to.
+   */
+  export type Plotlineid = (string | null)
+  export type Name = (string | null)
+  export type Age = (number | null)
+  export type Soul = (string | null)
+  export type Personality = (string | null)
+  export type Voice = (string | null)
+  export type Backstory = (string | null)
+  export type Affiliations = (string | null)
+  export type Description = (string | null)
+  export type Atmosphere = (string | null)
+  export type Geography = (string | null)
+  export type History = (string | null)
+  export type Significance = (string | null)
+  export type Content = (string | null)
+  export type Tensionlevel = (number | null)
+  export type Pacing = (("slow" | "moderate" | "fast") | null)
+  export type Storybeat = (("exposition" | "inciting_incident" | "rising_action" | "midpoint" | "climax" | "falling_action" | "resolution") | null)
+  export type Emotionaltone = (string | null)
+  export type Characterids = ([]|[string]|[string, string]|[string, string, string]|[string, string, string, string]|[string, string, string, string, string]|[string, string, string, string, string, string]|[string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string] | null)
+  export type Locationid = (string | null)
+  export type Notes = (string | null)
+  export type Baserevision1 = (number | null)
+  export type Label = string
+  export type Results = ([StoryChangeResult]|[StoryChangeResult, StoryChangeResult]|[StoryChangeResult, StoryChangeResult, StoryChangeResult]|[StoryChangeResult, StoryChangeResult, StoryChangeResult, StoryChangeResult]|[StoryChangeResult, StoryChangeResult, StoryChangeResult, StoryChangeResult, StoryChangeResult] | null)
+  export type Index = number
+  export type Status1 = ("applied" | "stale" | "failed" | "skipped")
+  export type Entityid1 = (string | null)
+  export type Feedback1 = (string | null)
 
   /**
    * What the browser sends. Carries no identity -- see the module docstring.
@@ -61,7 +111,7 @@ export namespace RunContract {
   clientMessageId: Clientmessageid
   message: UserMessage
   editorContext?: (EditorContext | null)
-  continuation?: (EditorContinuation | null)
+  continuation?: Continuation
   }
   /**
    * v1 user input is text-only; the list is for forward room, not features.
@@ -156,6 +206,69 @@ export namespace RunContract {
   chapterId: Chapterid2
   documentVersion: Documentversion1
   persistedRevision?: Persistedrevision1
+  }
+  /**
+   * Stateless second request after the writer decides on a story-change proposal.
+   */
+  export interface EntityContinuation {
+  kind: Kind1
+  previousRunId: Previousrunid1
+  approvalId: Approvalid1
+  toolCallId: Toolcallid1
+  proposalId: Proposalid1
+  decision: Decision1
+  proposal: ProposeStoryChangesArgs
+  results?: Results
+  feedback?: Feedback1
+  }
+  export interface ProposeStoryChangesArgs {
+  summary: Summary1
+  reason?: Reason
+  changes: Changes
+  }
+  /**
+   * A draft plus what the server bound: the target's revision and a label.
+   */
+  export interface StoryChange {
+  operation: Operation
+  entityId?: Entityid
+  plotLineId?: Plotlineid
+  fields: StoryChangeFields
+  baseRevision?: Baserevision1
+  label: Label
+  }
+  /**
+   * Only the fields being set. Which ones apply depends on the entity kind.
+   */
+  export interface StoryChangeFields {
+  name?: Name
+  age?: Age
+  soul?: Soul
+  personality?: Personality
+  voice?: Voice
+  backstory?: Backstory
+  affiliations?: Affiliations
+  description?: Description
+  atmosphere?: Atmosphere
+  geography?: Geography
+  history?: History
+  significance?: Significance
+  content?: Content
+  tensionLevel?: Tensionlevel
+  pacing?: Pacing
+  storyBeat?: Storybeat
+  emotionalTone?: Emotionaltone
+  characterIds?: Characterids
+  locationId?: Locationid
+  notes?: Notes
+  }
+  /**
+   * Bounded browser report for one change. It never authorizes a server write.
+   */
+  export interface StoryChangeResult {
+  index: Index
+  status: Status1
+  entityId?: Entityid1
   }
 }
 export type RunRequest = RunContract.RunRequest;
@@ -420,7 +533,7 @@ export type AssistantEvent = EventContract.AssistantEvent;
 export const ASSISTANT_PROTOCOL_VERSION = 1 as const;
 export const ERROR_CODES = ["unsupported_protocol_version","story_access_denied","quota_exceeded","rate_limited","provider_unavailable","provider_error","run_cancelled","stale_proposal","internal_error"] as const;
 export const TERMINAL_EVENT_TYPES = ["run.cancelled","run.completed","run.failed"] as const;
-export const APPROVAL_REQUIRED_TOOLS = ["apply_editor_edit"] as const;
+export const APPROVAL_REQUIRED_TOOLS = ["apply_editor_edit","apply_story_changes"] as const;
 export const LIMITS = {
   "contentChars": 100000,
   "idChars": 128,
@@ -435,10 +548,15 @@ export const LIMITS = {
   "toolResults": 20,
   "chapterWindowChars": 20000,
   "editOperations": 20,
-  "researchResults": 5
+  "researchResults": 5,
+  "storyChanges": 5,
+  "entityNameChars": 200,
+  "entityShortChars": 100,
+  "entityProseChars": 4000,
+  "eventCharacters": 20
 } as const;
 
-export type CapabilityGate = "always" | "edits" | "research";
+export type CapabilityGate = "always" | "edits" | "entities" | "research";
 export type Capability = {
   readonly id: string;
   readonly tools: readonly string[];
@@ -475,7 +593,7 @@ export const CAPABILITIES: readonly Capability[] = [
     "title": "List your cast, places and plot lines",
     "summary": "Pull the roster of characters, places or plot threads you have recorded for this story.",
     "example": "List the characters in this story.",
-    "limits": "Up to 20 at a time; I page through the rest, and I tell you when a roster is cut short."
+    "limits": "Up to 20 at a time; I tell you when a roster is cut short."
   },
   {
     "id": "entity_detail",
@@ -531,6 +649,18 @@ export const CAPABILITIES: readonly Capability[] = [
     "summary": "Draft a replacement for the text you have selected. You see it first and nothing changes until you accept it.",
     "example": "Suggest a tighter revision for the text I selected in the editor.",
     "limits": "One selection at a time, as plain text in a single paragraph."
+  },
+  {
+    "id": "propose_story_changes",
+    "tools": [
+      "propose_story_changes",
+      "apply_story_changes"
+    ],
+    "gate": "entities",
+    "title": "Suggest changes to your cast, places and plot",
+    "summary": "Draft a new character, place, plot line or plot event, or changes to one you have. You review each change and nothing is saved until you accept it.",
+    "example": "Add an abandoned hospital as a location.",
+    "limits": "Up to 5 changes at a time. I cannot delete anything."
   },
   {
     "id": "research_web",

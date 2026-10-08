@@ -18,6 +18,7 @@ export type AssistantFailureCode =
   | ErrorCode
   | "malformed_stream"
   | "network_error"
+  | "request_too_large"
   | "unauthenticated"
   | "unsupported_capability";
 
@@ -302,6 +303,12 @@ export function assistantFailureForStatus(status: number): AssistantFailure {
       return {
         code: "unsupported_protocol_version",
         message: "The assistant needs an update before it can respond safely.",
+      };
+    case 413:
+      return {
+        code: "request_too_large",
+        message:
+          "That was too much to send in one message. Try a shorter message or a smaller selection.",
       };
     case 429:
       return {

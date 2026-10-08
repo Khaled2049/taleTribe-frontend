@@ -6,8 +6,26 @@ test("every capability defaults off", () => {
   assert.deepEqual(assistantFlags({}), {
     api: false,
     edits: false,
+    entities: false,
     research: false,
   });
+});
+test("story-change proposals are opt-in and cannot outlive the api flag", () => {
+  assert.equal(
+    assistantFlags({ ASSISTANT_API_ENABLED: "true" }).entities,
+    false,
+  );
+  assert.equal(
+    assistantFlags({ ASSISTANT_ENTITY_PROPOSALS_ENABLED: "true" }).entities,
+    false,
+  );
+  assert.equal(
+    assistantFlags({
+      ASSISTANT_API_ENABLED: "true",
+      ASSISTANT_ENTITY_PROPOSALS_ENABLED: "true",
+    }).entities,
+    true,
+  );
 });
 test("client flags cannot enable server capabilities", () => {
   assert.equal(
