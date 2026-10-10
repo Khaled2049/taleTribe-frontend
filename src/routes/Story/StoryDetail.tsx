@@ -748,6 +748,7 @@ const StoryDetail: React.FC = () => {
         onBackToDetails={handleBackToDetails}
         onPrevChapter={handlePrevChapter}
         onNextChapter={handleNextChapter}
+        paragraphStyle={story.paragraphStyle}
         resumeScrollPercent={resumeScrollPercent}
         onScrollPersist={handleScrollPersist}
       />

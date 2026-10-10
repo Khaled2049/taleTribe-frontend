@@ -20,6 +20,9 @@ export interface SaveQueueOptions {
   debounceMs: number;
   onStateChange: (state: SaveState) => void;
   onDirtyChange: (dirty: boolean) => void;
+  /** Waits before each automatic retry of a failed save; none when omitted. */
+  retryDelaysMs?: readonly number[];
+  shouldRetry?: (error: unknown) => boolean;
 }
 
 interface Waiter {
@@ -39,6 +42,7 @@ export class SaveQueue {
   private latestContent = "";
   private saving = false;
   private queued = false;
+  private retryAttempt = 0;
   private lastPersistedRevision: number | undefined;
   private waiters: Waiter[] = [];
   // Bumped on every reset (e.g. chapter switch). A save started under one
@@ -71,6 +75,7 @@ export class SaveQueue {
     // chapter; the next chapter's first save must not queue behind it.
     this.saving = false;
     this.queued = false;
+    this.retryAttempt = 0;
     this.settleWaiters((waiter) => waiter.reject(new SaveCancelledError()));
     this.state = { status: "idle", lastSaved: null };
     this.options.onStateChange(this.state);
@@ -80,6 +85,7 @@ export class SaveQueue {
   trigger(content: string) {
     if (!this.options.isEnabled()) return;
     this.latestContent = content;
+    this.retryAttempt = 0;
     this.setDirty(true);
     this.setStatus("pending");
     this.cancelPending();
@@ -105,6 +111,13 @@ export class SaveQueue {
       return;
     }
     await this.run(this.latestContent);
+  }
+
+  /** Save unsaved content now if nothing is in flight (connection restored). */
+  retryNow() {
+    // A save forced without a preceding edit can fail without being dirty.
+    const unsaved = this.dirty || this.state.status === "error";
+    if (unsaved && !this.saving) void this.force();
   }
 
   /** Save a pending debounced edit now (blur, tab hide). No-op if none. */
@@ -149,6 +162,7 @@ export class SaveQueue {
           continue;
         }
 
+        this.retryAttempt = 0;
         this.state = { status: "saved", lastSaved: now };
         this.options.onStateChange(this.state);
         this.setDirty(false);
@@ -163,11 +177,24 @@ export class SaveQueue {
         };
         this.options.onStateChange(this.state);
         this.settleWaiters((waiter) => waiter.reject(error));
+        this.scheduleRetry(error);
         return;
       } finally {
         if (this.generation === myGeneration) this.saving = false;
       }
     }
+  }
+
+  // Shares the debounce timer, so a new edit, a flush or a reset replaces it.
+  private scheduleRetry(error: unknown) {
+    const delay = this.options.retryDelaysMs?.[this.retryAttempt];
+    if (delay === undefined || !this.options.shouldRetry?.(error)) return;
+    this.retryAttempt += 1;
+    this.cancelPending();
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      void this.force();
+    }, delay);
   }
 
   // Typing calls trigger on every keystroke; re-emitting an unchanged status

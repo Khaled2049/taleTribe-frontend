@@ -1,5 +1,6 @@
 // src/components/reader/ReaderContent.tsx
 
+import type { ParagraphStyle } from "@novelsync/story-data-client";
 import React, { useMemo } from "react";
 import { ChapterModel, RenderMark } from "@/types/IReader";
 import { READER_FONTS } from "../../constants/readerThemes";
@@ -16,6 +17,7 @@ interface ReaderContentProps {
   fontFamily: keyof typeof READER_FONTS;
   lineHeight: number;
   textAlign: "left" | "justify";
+  paragraphStyle?: ParagraphStyle;
   onWordClick: (word: string, x: number, y: number) => void;
   onHighlightClick: (id: string, x: number, y: number) => void;
 }
@@ -30,6 +32,7 @@ const ReaderContentBase: React.FC<ReaderContentProps> = ({
   fontFamily,
   lineHeight,
   textAlign,
+  paragraphStyle,
   onWordClick,
   onHighlightClick,
 }) => {
@@ -57,6 +60,7 @@ const ReaderContentBase: React.FC<ReaderContentProps> = ({
           <ChapterContentRenderer
             model={model}
             marks={marks}
+            paragraphStyle={paragraphStyle}
             activeMarkRef={activeMarkRef}
             onWordClick={onWordClick}
             onHighlightClick={onHighlightClick}

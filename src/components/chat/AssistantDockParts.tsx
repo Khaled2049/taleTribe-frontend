@@ -1,5 +1,6 @@
 import type { ComponentPropsWithRef } from "react";
 import { MessageCircle, PanelRightOpen } from "lucide-react";
+import { sidebarShortcutLabel } from "@/lib/sidebarShortcut";
 
 export function AssistantRail({ onOpen }: { onOpen: () => void }) {
   return (
@@ -9,7 +10,7 @@ export function AssistantRail({ onOpen }: { onOpen: () => void }) {
         data-cy="open-chat"
         onClick={onOpen}
         aria-label="Open story assistant"
-        title="Open story assistant"
+        title={`Open story assistant (${sidebarShortcutLabel("right")})`}
         className="group flex h-9 w-9 items-center justify-center rounded-ns-lg border border-ns-border bg-ns-elevated text-ns-accent shadow-ns-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-ns-accent hover:shadow-ns motion-reduce:transform-none"
       >
         <PanelRightOpen className="h-4 w-4" />

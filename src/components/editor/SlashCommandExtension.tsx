@@ -19,6 +19,7 @@ import {
   List,
   Code,
   ListChecks,
+  SeparatorHorizontal,
 } from "lucide-react";
 import SlashCommandMenu from "./SlashCommandMenu";
 
@@ -185,6 +186,14 @@ export const slashCommandSuggestion = (
             .deleteRange(range)
             .toggleHeading({ level: 2 })
             .run();
+        },
+      },
+      {
+        title: "Scene Break",
+        description: "Mark a jump in time, place or point of view",
+        icon: SeparatorHorizontal,
+        command: ({ editor, range }: CommandContext) => {
+          editor.chain().focus().deleteRange(range).setHorizontalRule().run();
         },
       },
       {

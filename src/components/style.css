@@ -43,6 +43,21 @@
   margin-top: 1em;
 }
 
+/*
+ * Manuscript paragraphs: no gap, first line indented. Only a paragraph that
+ * follows another is indented, so the one opening a chapter or following a
+ * heading or scene break sits flush, as in print.
+ */
+[data-paragraph-style="indented"] .ProseMirror > p + p {
+  margin-top: 0;
+  text-indent: 1.5em;
+}
+
+[data-paragraph-style="indented"] .ProseMirror > p[style*="text-align: center"],
+[data-paragraph-style="indented"] .ProseMirror > p[style*="text-align: right"] {
+  text-indent: 0;
+}
+
 /* Headings */
 .ProseMirror h1 {
   font-family:
@@ -154,6 +169,11 @@ p.is-editor-empty:first-child::before {
 }
 
 /* Blockquote */
+/* Highlights are pastel in both themes; dark-theme ink is unreadable on them. */
+.dark .ProseMirror span[style*="background-color"] {
+  color: #1f2937 !important;
+}
+
 .ProseMirror blockquote {
   border-left: 3px solid var(--ns-border-strong);
   padding-left: 1.25rem;
@@ -162,10 +182,26 @@ p.is-editor-empty:first-child::before {
   color: var(--ns-ink-secondary);
 }
 
+/* A scene break. The reader draws the same ornament (ChapterContentRenderer). */
 .ProseMirror hr {
-  margin: 1.2rem 0;
+  margin: 2rem 0;
   border: 0;
-  border-top: 1px solid var(--ns-border);
+  height: auto;
+  overflow: visible;
+  text-align: center;
+  color: var(--ns-ink-muted);
+  cursor: default;
+}
+
+.ProseMirror hr::after {
+  content: "* * *";
+  letter-spacing: 0.4em;
+}
+
+.ProseMirror hr.ProseMirror-selectednode {
+  outline: 2px solid var(--ns-accent);
+  outline-offset: 4px;
+  border-radius: 2px;
 }
 
 /* Links in editor */

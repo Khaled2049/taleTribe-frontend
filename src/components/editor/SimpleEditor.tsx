@@ -1,6 +1,5 @@
 import "../style.css";
 import {
-  type ComponentProps,
   lazy,
   Suspense,
   useCallback,
@@ -10,34 +9,17 @@ import {
   useState,
 } from "react";
 import {
-  AlignCenter,
-  AlignJustify,
-  AlignLeft,
-  AlignRight,
   BookPlus,
   ChevronLeft,
   ChevronRight,
   Copy,
-  Eraser,
-  Heading1,
-  Heading2,
-  IndentDecrease,
-  IndentIncrease,
-  Link2,
-  List,
-  ListOrdered,
   Loader,
   Maximize2,
   Minimize2,
   PenLine,
-  Pilcrow,
-  Quote,
-  Redo2,
-  RemoveFormatting,
   Save,
   ScrollText,
   Sparkles,
-  Undo2,
   Upload,
   X,
 } from "lucide-react";
@@ -49,8 +31,16 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useAuthContext } from "../../contexts/AuthContext";
-import { storyWorkspaceRepo } from "@novelsync/story-data-client";
-import { Chapter, ChapterSummary, Story } from "@novelsync/story-data-client";
+import {
+  StoryDataConflictError,
+  storyWorkspaceRepo,
+} from "@novelsync/story-data-client";
+import {
+  Chapter,
+  ChapterSummary,
+  ParagraphStyle,
+  Story,
+} from "@novelsync/story-data-client";
 import { useAuthIdentity } from "@novelsync/platform-auth";
 
 // Import components
@@ -69,12 +59,16 @@ import { useEditorState } from "@/hooks/useEditorState";
 import { useAutosave } from "@/hooks/useAutosave";
 import { SaveCancelledError } from "@/lib/saveQueue";
 import { SaveStatusIndicator } from "@/components/editor/SaveStatusIndicator";
-import { WritingStats } from "@/components/editor/WritingStats";
-import {
-  useDocumentStructure,
-  useFormatState,
-  useLiveWordCount,
-} from "@/components/editor/useLiveEditorState";
+import { useDocumentStructure } from "@/components/editor/useLiveEditorState";
+import { FormatToolbar } from "@/components/editor/FormatToolbar";
+import { loadEditorFonts } from "@/components/editor/editorFonts";
+import { useEditorZoom } from "@/components/editor/editorZoom";
+import { SaveConflictDialog } from "@/components/editor/SaveConflictDialog";
+import { isRetryableSaveError, saveStoryEdits } from "@/lib/storySave";
+import { WordCount } from "@/components/editor/WordCount";
+import { WritingGoal } from "@/components/editor/WritingGoal";
+import { useWritingGoalTracker } from "@/hooks/useWritingGoalTracker";
+import { sidebarShortcut, sidebarShortcutLabel } from "@/lib/sidebarShortcut";
 import {
   getDocumentOutline,
   jumpToOutlineEntry,
@@ -164,6 +158,10 @@ export function SimpleEditor() {
   const storyBaseRef = useRef<Story | null>(null);
   const chapterDirtyRef = useRef(false);
   const storyDirtyRef = useRef(false);
+  // A style the writer picked that the story row does not carry yet.
+  const paragraphStyleRef = useRef<ParagraphStyle | null>(null);
+  const [pendingParagraphStyle, setPendingParagraphStyle] =
+    useState<ParagraphStyle | null>(null);
   const chapterTitleRef = useRef("");
   const storyTitleRef = useRef("");
   const dirtyRef = useRef(false);
@@ -198,27 +196,14 @@ export function SimpleEditor() {
   const [summaryResult, setSummaryResult] = useState<string | null>(null);
   const [splitDialogOpen, setSplitDialogOpen] = useState(false);
   const [isSplitting, setIsSplitting] = useState(false);
-  const [fontSize, setFontSize] = useState("16px");
-  const [fontColor, setFontColor] = useState("#1f2937");
-  const [highlightColor, setHighlightColor] = useState("#fef3c7");
-  const [lineHeight, setLineHeight] = useState("1.8");
-  const [paragraphSpacing, setParagraphSpacing] = useState("0");
 
-  const fontFamilies = [
-    "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif",
-    "Georgia, serif",
-    "'Times New Roman', serif",
-    "'Courier New', monospace",
-  ];
-  const fontSizes = ["12px", "14px", "16px", "18px", "20px", "24px", "28px"];
-  const lineHeights = ["1.2", "1.4", "1.6", "1.8", "2"];
-  const paragraphSpacings = ["0", "0.5rem", "0.75rem", "1rem", "1.25rem"];
+  useEffect(loadEditorFonts, []);
+  const [canvas, setCanvas] = useState<HTMLDivElement | null>(null);
+  const { zoom, setZoom, zoomPercent } = useEditorZoom(canvas);
 
   const focusMode = useFocusModeStore((s) => s.focusMode);
   const setFocusMode = useFocusModeStore((s) => s.setFocusMode);
-  const sidebarsBeforeFocus = useRef<{ left: boolean; right: boolean } | null>(
-    null,
-  );
+  const leftSidebarBeforeFocus = useRef<boolean | null>(null);
   const {
     isFullscreen,
     isSupported: isFullscreenSupported,
@@ -227,30 +212,17 @@ export function SimpleEditor() {
   } = useFullscreen();
 
   const enterFocusMode = useCallback(() => {
-    sidebarsBeforeFocus.current = {
-      left: state.leftSidebarOpen,
-      right: state.rightSidebarOpen,
-    };
+    leftSidebarBeforeFocus.current = state.leftSidebarOpen;
     actions.setLeftSidebarOpen(false);
-    actions.setRightSidebarOpen(false);
     setFocusMode(true);
     void enterFullscreen();
-  }, [
-    state.leftSidebarOpen,
-    state.rightSidebarOpen,
-    actions,
-    enterFullscreen,
-    setFocusMode,
-  ]);
+  }, [state.leftSidebarOpen, actions, enterFullscreen, setFocusMode]);
 
   const exitFocusMode = useCallback(() => {
-    const previous = sidebarsBeforeFocus.current;
-    sidebarsBeforeFocus.current = null;
+    const previous = leftSidebarBeforeFocus.current;
+    leftSidebarBeforeFocus.current = null;
     setFocusMode(false);
-    if (previous) {
-      actions.setLeftSidebarOpen(previous.left);
-      actions.setRightSidebarOpen(previous.right);
-    }
+    if (previous !== null) actions.setLeftSidebarOpen(previous);
     void exitFullscreen();
   }, [actions, exitFullscreen, setFocusMode]);
 
@@ -298,7 +270,6 @@ export function SimpleEditor() {
       return;
     }
     actions.setLeftSidebarOpen(false);
-    actions.setRightSidebarOpen(false);
   }, [isLgUp, actions]);
 
   const cacheChapter = useCallback(
@@ -328,6 +299,11 @@ export function SimpleEditor() {
     [actions, queryClient, uid],
   );
 
+  const [conflictChapterId, setConflictChapterId] = useState<string | null>(
+    null,
+  );
+  const [resolvingConflict, setResolvingConflict] = useState(false);
+
   const adoptChapter = useCallback((chapter: Chapter | null) => {
     chapterBaseRef.current = chapter;
     chapterDirtyRef.current = false;
@@ -354,6 +330,11 @@ export function SimpleEditor() {
           bridgeRegistrationRef.current?.revisionChanged();
         } catch (error) {
           chapterDirtyRef.current = true;
+          // Retrying cannot succeed: the base revision stays stale until the
+          // writer picks a version.
+          if (error instanceof StoryDataConflictError) {
+            setConflictChapterId(base.id);
+          }
           throw error;
         }
       }
@@ -363,9 +344,11 @@ export function SimpleEditor() {
         storyDirtyRef.current = false;
         try {
           replaceStory(
-            await storyWorkspaceRepo.updateStory({
-              ...story,
+            await saveStoryEdits(storyWorkspaceRepo, story, {
               title: storyTitleRef.current,
+              ...(paragraphStyleRef.current
+                ? { paragraphStyle: paragraphStyleRef.current }
+                : {}),
             }),
           );
         } catch (error) {
@@ -391,7 +374,47 @@ export function SimpleEditor() {
     onSave: performSave,
     debounceMs: 3000,
     enabled: !!state.story,
+    shouldRetry: isRetryableSaveError,
   });
+
+  const resolveConflict = async (choice: "mine" | "theirs") => {
+    const chapterId = conflictChapterId;
+    if (!chapterId || !storyId || !uid) return;
+    setResolvingConflict(true);
+    try {
+      const latest = await storyWorkspaceRepo.getChapter(
+        storyId,
+        chapterId,
+        uid,
+      );
+      if (chapterBaseRef.current?.id !== chapterId) return;
+      if (!latest) {
+        toast.error(
+          "This chapter was deleted somewhere else. Copy your text before leaving.",
+        );
+        return;
+      }
+      if (choice === "mine") {
+        chapterBaseRef.current = latest;
+        chapterDirtyRef.current = true;
+        setConflictChapterId(null);
+        await forceSave();
+        return;
+      }
+      adoptChapter(latest);
+      editor?.commands.setContent(latest.content, { emitUpdate: false });
+      actions.selectChapter(latest);
+      actions.updateChapterInList(latest.id, { ...latest });
+      cacheChapter(latest);
+      resetSaveState();
+      bridgeRegistrationRef.current?.revisionChanged();
+      setConflictChapterId(null);
+    } catch {
+      toast.error("Couldn't load the latest version. Please try again.");
+    } finally {
+      setResolvingConflict(false);
+    }
+  };
 
   chapterTitleRef.current = state.chapterTitle;
   storyTitleRef.current = state.storyTitle;
@@ -399,6 +422,7 @@ export function SimpleEditor() {
   flushAndWaitRef.current = flushAndWait;
   const currentStoryId = state.story?.id;
   const currentChapterId = state.currentChapter?.id;
+  useWritingGoalTracker(editor, currentChapterId);
 
   useLayoutEffect(() => {
     if (!editorBridge || !editor || !currentStoryId || !currentChapterId) {
@@ -515,6 +539,8 @@ export function SimpleEditor() {
       if (cancelled) return;
       if (result.status === "loaded") {
         storyBaseRef.current = result.story;
+        paragraphStyleRef.current = null;
+        setPendingParagraphStyle(null);
         storyDirtyRef.current = false;
         adoptChapter(result.currentChapter);
         actions.loadStory(
@@ -885,11 +911,29 @@ export function SimpleEditor() {
     triggerSave(content);
   };
 
+  const storedParagraphStyle = () =>
+    storyBaseRef.current?.paragraphStyle ?? "spaced";
+
   const handleStoryTitleChange = (title: string) => {
     storyTitleRef.current = title;
-    storyDirtyRef.current = title !== storyBaseRef.current?.title;
+    const styleChanged =
+      paragraphStyleRef.current !== null &&
+      paragraphStyleRef.current !== storedParagraphStyle();
+    storyDirtyRef.current =
+      title !== storyBaseRef.current?.title || styleChanged;
     actions.updateStoryTitle(title);
   };
+
+  const handleParagraphStyleChange = (style: ParagraphStyle) => {
+    paragraphStyleRef.current = style;
+    setPendingParagraphStyle(style);
+    storyDirtyRef.current =
+      style !== storedParagraphStyle() ||
+      storyTitleRef.current !== storyBaseRef.current?.title;
+    triggerSave(editor?.getHTML() ?? state.currentChapter?.content ?? "");
+  };
+  const paragraphStyle =
+    pendingParagraphStyle ?? state.story?.paragraphStyle ?? "spaced";
 
   const handleChapterTitleChange = (title: string) => {
     chapterTitleRef.current = title;
@@ -948,413 +992,25 @@ export function SimpleEditor() {
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   };
 
-  const format = useFormatState(editor);
-  const activeTextAlign = format.textAlign;
+  useEffect(() => {
+    if (focusMode) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      // The right-hand shortcut belongs to the story assistant.
+      if (sidebarShortcut(event) !== "left") return;
+      event.preventDefault();
+      actions.toggleLeftSidebar();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [focusMode, actions]);
 
   const openChaptersPanel = () => {
-    if (!isLgUp) {
-      actions.setRightSidebarOpen(false);
-    }
     actions.setLeftSidebarOpen(true);
-  };
-
-  const openInspectorPanel = () => {
-    if (!isLgUp) {
-      actions.setLeftSidebarOpen(false);
-    }
-    actions.setRightSidebarOpen(true);
   };
 
   const closeChaptersPanel = () => {
     actions.setLeftSidebarOpen(false);
   };
-
-  const closeInspectorPanel = () => {
-    actions.setRightSidebarOpen(false);
-  };
-
-  const inspectorPanelContent = (
-    <>
-      <div className="flex border-b border-ns-border flex-shrink-0">
-        <button
-          onClick={() => actions.setRightTab("format")}
-          className={`flex-1 py-2.5 font-ui text-xs font-medium tracking-wide transition-all duration-150 ${
-            state.rightTab === "format"
-              ? "border-b-2 border-ns-accent text-ns-accent"
-              : "text-ns-ink-secondary hover:text-ns-ink hover:bg-ns-surface-hover"
-          }`}
-        >
-          Format
-        </button>
-        <button
-          onClick={() => actions.setRightTab("document")}
-          className={`flex-1 py-2.5 font-ui text-xs font-medium tracking-wide transition-all duration-150 ${
-            state.rightTab === "document"
-              ? "border-b-2 border-ns-accent text-ns-accent"
-              : "text-ns-ink-secondary hover:text-ns-ink hover:bg-ns-surface-hover"
-          }`}
-        >
-          Document
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 text-ns-ink">
-        {state.rightTab === "format" && editor && (
-          <div className="space-y-4">
-            <div>
-              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-secondary font-ui mb-2">
-                Text
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <select
-                  value={fontSize}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setFontSize(value);
-                    editor.chain().focus().setFontSize(value).run();
-                  }}
-                  className="rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink shadow-ns-sm focus:border-ns-accent focus:ring-2 focus:ring-[var(--ns-ring)] dark:[color-scheme:dark]"
-                >
-                  {fontSizes.map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  defaultValue={fontFamilies[0]}
-                  onChange={(event) => {
-                    editor
-                      .chain()
-                      .focus()
-                      .setFontFamily(event.target.value)
-                      .run();
-                  }}
-                  className="rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink shadow-ns-sm focus:border-ns-accent focus:ring-2 focus:ring-[var(--ns-ring)] dark:[color-scheme:dark]"
-                >
-                  {fontFamilies.map((family) => (
-                    <option key={family} value={family}>
-                      {family.includes("Helvetica Neue")
-                        ? "Helvetica Neue"
-                        : family.split(",")[0].replace(/'/g, "")}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => editor.chain().focus().undo().run()}
-                  className="p-2 rounded-ns border border-ns-border text-ns-ink hover:bg-ns-elevated"
-                  title="Undo"
-                >
-                  <Undo2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => editor.chain().focus().redo().run()}
-                  className="p-2 rounded-ns border border-ns-border text-ns-ink hover:bg-ns-elevated"
-                  title="Redo"
-                >
-                  <Redo2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() =>
-                    editor.chain().focus().setHorizontalRule().run()
-                  }
-                  className="p-2 rounded-ns border border-ns-border text-ns-ink hover:bg-ns-elevated"
-                  title="Divider"
-                >
-                  <RemoveFormatting className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() =>
-                    editor.chain().focus().clearTextFormatting().run()
-                  }
-                  className="p-2 rounded-ns border border-ns-border text-ns-ink hover:bg-ns-elevated"
-                  title="Clear formatting"
-                >
-                  <Eraser className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => editor.chain().focus().toggleBold().run()}
-                  className={`px-2 py-1.5 rounded-ns border text-xs font-semibold text-ns-ink ${format.bold ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Bold"
-                >
-                  B
-                </button>
-                <button
-                  onClick={() => editor.chain().focus().toggleItalic().run()}
-                  className={`px-2 py-1.5 rounded-ns border text-xs italic text-ns-ink ${format.italic ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Italic"
-                >
-                  I
-                </button>
-                <button
-                  onClick={() => editor.chain().focus().toggleUnderline().run()}
-                  className={`px-2 py-1.5 rounded-ns border text-xs underline text-ns-ink ${format.underline ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Underline"
-                >
-                  U
-                </button>
-                <button
-                  onClick={() => editor.chain().focus().toggleStrike().run()}
-                  className={`px-2 py-1.5 rounded-ns border text-xs line-through text-ns-ink ${format.strike ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Strikethrough"
-                >
-                  S
-                </button>
-                <button
-                  onClick={applyLink}
-                  className={`p-2 rounded-ns border text-ns-ink ${format.link ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Link"
-                >
-                  <Link2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-secondary font-ui mb-2">
-                Structure
-              </p>
-              <div className="flex items-center gap-1 flex-wrap">
-                <button
-                  onClick={() => editor.chain().focus().setParagraph().run()}
-                  className={`p-2 rounded-ns border text-ns-ink ${format.paragraph ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Paragraph"
-                >
-                  <Pilcrow className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() =>
-                    editor.chain().focus().toggleHeading({ level: 1 }).run()
-                  }
-                  className={`p-2 rounded-ns border text-ns-ink ${format.heading1 ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Heading 1"
-                >
-                  <Heading1 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() =>
-                    editor.chain().focus().toggleHeading({ level: 2 }).run()
-                  }
-                  className={`p-2 rounded-ns border text-ns-ink ${format.heading2 ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Heading 2"
-                >
-                  <Heading2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() =>
-                    editor.chain().focus().toggleBulletList().run()
-                  }
-                  className={`p-2 rounded-ns border text-ns-ink ${format.bulletList ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Bullet list"
-                >
-                  <List className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() =>
-                    editor.chain().focus().toggleOrderedList().run()
-                  }
-                  className={`p-2 rounded-ns border text-ns-ink ${format.orderedList ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Numbered list"
-                >
-                  <ListOrdered className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() =>
-                    editor.chain().focus().toggleBlockquote().run()
-                  }
-                  className={`p-2 rounded-ns border text-ns-ink ${format.blockquote ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Quote"
-                >
-                  <Quote className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-secondary font-ui mb-2">
-                Paragraph
-              </p>
-              <div className="flex items-center gap-1 flex-wrap mb-2">
-                <button
-                  onClick={() =>
-                    editor.chain().focus().setTextAlign("left").run()
-                  }
-                  className={`p-2 rounded-ns border text-ns-ink ${activeTextAlign === "left" ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Align left"
-                >
-                  <AlignLeft className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() =>
-                    editor.chain().focus().setTextAlign("center").run()
-                  }
-                  className={`p-2 rounded-ns border text-ns-ink ${activeTextAlign === "center" ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Align center"
-                >
-                  <AlignCenter className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() =>
-                    editor.chain().focus().setTextAlign("right").run()
-                  }
-                  className={`p-2 rounded-ns border text-ns-ink ${activeTextAlign === "right" ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Align right"
-                >
-                  <AlignRight className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() =>
-                    editor.chain().focus().setTextAlign("justify").run()
-                  }
-                  className={`p-2 rounded-ns border text-ns-ink ${activeTextAlign === "justify" ? "bg-ns-accent-subtle border-ns-accent" : "border-ns-border hover:bg-ns-elevated"}`}
-                  title="Justify"
-                >
-                  <AlignJustify className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => editor.chain().focus().decreaseIndent().run()}
-                  className="p-2 rounded-ns border border-ns-border text-ns-ink hover:bg-ns-elevated"
-                  title="Outdent"
-                >
-                  <IndentDecrease className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => editor.chain().focus().increaseIndent().run()}
-                  className="p-2 rounded-ns border border-ns-border text-ns-ink hover:bg-ns-elevated"
-                  title="Indent"
-                >
-                  <IndentIncrease className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <select
-                  value={lineHeight}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setLineHeight(value);
-                    editor.chain().focus().setLineHeight(value).run();
-                  }}
-                  className="rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink shadow-ns-sm focus:border-ns-accent focus:ring-2 focus:ring-[var(--ns-ring)] dark:[color-scheme:dark]"
-                >
-                  {lineHeights.map((value) => (
-                    <option key={value} value={value}>
-                      Line {value}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={paragraphSpacing}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setParagraphSpacing(value);
-                    editor.chain().focus().setParagraphSpacing(value).run();
-                  }}
-                  className="rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink shadow-ns-sm focus:border-ns-accent focus:ring-2 focus:ring-[var(--ns-ring)] dark:[color-scheme:dark]"
-                >
-                  {paragraphSpacings.map((value) => (
-                    <option key={value} value={value}>
-                      Space {value === "0" ? "none" : value}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-secondary font-ui mb-2">
-                Colors
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink flex items-center justify-between gap-2 shadow-ns-sm">
-                  Text
-                  <input
-                    type="color"
-                    value={fontColor}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setFontColor(value);
-                      editor.chain().focus().setColor(value).run();
-                    }}
-                    className="h-6 w-8 cursor-pointer border-0 bg-transparent"
-                  />
-                </label>
-                <label className="rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink flex items-center justify-between gap-2 shadow-ns-sm">
-                  Highlight
-                  <input
-                    type="color"
-                    value={highlightColor}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setHighlightColor(value);
-                      editor.chain().focus().setHighlightColor(value).run();
-                    }}
-                    className="h-6 w-8 cursor-pointer border-0 bg-transparent"
-                  />
-                </label>
-              </div>
-              <button
-                onClick={() =>
-                  editor.chain().focus().unsetHighlightColor().run()
-                }
-                className="mt-2 w-full rounded-ns border border-ns-border bg-ns-elevated px-2 py-1.5 text-xs font-ui text-ns-ink shadow-ns-sm hover:bg-ns-surface-hover"
-              >
-                Clear highlight
-              </button>
-            </div>
-          </div>
-        )}
-
-        {state.rightTab === "document" && (
-          <div className="space-y-4">
-            <div className="rounded-ns border border-ns-border bg-ns-elevated p-3 text-ns-ink shadow-ns-sm">
-              <LiveWritingStats
-                editor={editor}
-                currentChapter={state.currentChapter}
-                chaptersCount={state.chapters.length}
-                singleDocument={isSingleDocument}
-              />
-            </div>
-            <div className="rounded-ns border border-ns-border bg-ns-elevated p-3 text-ns-ink shadow-ns-sm">
-              <p className="text-[10px] tracking-[0.09em] uppercase text-ns-ink-secondary font-ui mb-2">
-                Defaults
-              </p>
-              <button
-                onClick={() => {
-                  if (!editor) return;
-                  setFontSize("16px");
-                  setLineHeight("1.8");
-                  setParagraphSpacing("0");
-                  setFontColor("#1f2937");
-                  setHighlightColor("#fef3c7");
-                  editor
-                    .chain()
-                    .focus()
-                    .setFontFamily(fontFamilies[0])
-                    .setFontSize("16px")
-                    .setColor("#1f2937")
-                    .unsetHighlightColor()
-                    .setLineHeight("1.8")
-                    .setParagraphSpacing("0")
-                    .unsetTextAlign()
-                    .run();
-                }}
-                className="w-full rounded-ns border border-ns-border bg-ns-surface px-2 py-1.5 text-xs font-ui text-ns-ink hover:bg-ns-surface-hover"
-              >
-                Reset document style
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </>
-  );
 
   const isPublished = !!state.story?.isPublished;
   const sidebarPanelProps = {
@@ -1428,6 +1084,7 @@ export function SimpleEditor() {
                 ? "Collapse chapters panel"
                 : "Expand chapters panel"
             }
+            title={`Chapters panel (${sidebarShortcutLabel("left")})`}
             className={`${
               focusMode ? "hidden" : "hidden lg:flex"
             } absolute top-1/2 -translate-y-1/2 z-20 bg-ns-elevated border border-ns-border rounded-r-ns py-4 w-5 items-center justify-center shadow-ns-sm hover:bg-ns-surface-hover hover:shadow-ns transition-all duration-200 group`}
@@ -1450,32 +1107,39 @@ export function SimpleEditor() {
               <p className="font-ui text-xs text-ns-ink-secondary truncate">
                 {state.currentChapter?.title || "No chapter selected"}
               </p>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={openChaptersPanel}
-                  className="inline-flex items-center gap-1 rounded-ns border border-ns-border px-2 py-1 text-[11px] font-ui text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
-                >
-                  <BookPlus className="h-3.5 w-3.5" />
-                  Chapters
-                </button>
-                <button
-                  type="button"
-                  onClick={openInspectorPanel}
-                  className="inline-flex items-center gap-1 rounded-ns border border-ns-border px-2 py-1 text-[11px] font-ui text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
-                >
-                  <AlignLeft className="h-3.5 w-3.5" />
-                  Format
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={openChaptersPanel}
+                className="inline-flex items-center gap-1 rounded-ns border border-ns-border px-2 py-1 text-[11px] font-ui text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
+              >
+                <BookPlus className="h-3.5 w-3.5" />
+                Chapters
+              </button>
             </div>
+
+            {state.currentChapter && editor && !focusMode && (
+              <FormatToolbar
+                editor={editor}
+                onLink={applyLink}
+                zoom={zoom}
+                zoomPercent={zoomPercent}
+                onZoomChange={setZoom}
+                paragraphStyle={paragraphStyle}
+                onParagraphStyleChange={handleParagraphStyleChange}
+              />
+            )}
 
             {/* Writing Canvas */}
             {state.currentChapter ? (
               <div className="relative flex-1 min-h-0 flex flex-col">
-                <div className="flex-1 overflow-y-auto bg-ns-bg">
+                <div
+                  ref={setCanvas}
+                  className="flex-1 overflow-y-auto bg-ns-bg"
+                >
                   <div className="mx-auto min-h-full flex flex-col">
                     <TipTapEditor
+                      zoom={zoomPercent}
+                      paragraphStyle={paragraphStyle}
                       initialContent={state.currentChapter.content}
                       onSave={handleEditorSave}
                       onBlur={flushSave}
@@ -1615,13 +1279,15 @@ export function SimpleEditor() {
                     </button>
                   </div>
 
-                  <div className="flex-1 flex items-center justify-center min-w-0">
+                  <div className="flex-1 flex items-center justify-center gap-4 min-w-0">
                     <SaveStatusIndicator
                       status={saveState.status}
                       lastSaved={saveState.lastSaved}
                       errorMessage={saveState.errorMessage}
                       isOnline={isOnline}
                     />
+                    <WordCount editor={editor} />
+                    <WritingGoal />
                   </div>
 
                   <div className="flex items-center justify-end flex-shrink-0">
@@ -1654,13 +1320,15 @@ export function SimpleEditor() {
                     focusMode ? "hidden" : "sm:hidden"
                   } border-t border-ns-border px-3 py-2 space-y-2`}
                 >
-                  <div className="flex items-center justify-center">
+                  <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
                     <SaveStatusIndicator
                       status={saveState.status}
                       lastSaved={saveState.lastSaved}
                       errorMessage={saveState.errorMessage}
                       isOnline={isOnline}
                     />
+                    <WordCount editor={editor} />
+                    <WritingGoal />
                   </div>
                   <div className="grid grid-cols-5 gap-2">
                     <button
@@ -1727,48 +1395,6 @@ export function SimpleEditor() {
             )}
           </div>
 
-          {/* ── Right Sidebar Toggle ── */}
-          <button
-            onClick={actions.toggleRightSidebar}
-            aria-label={
-              state.rightSidebarOpen
-                ? "Collapse inspector panel"
-                : "Expand inspector panel"
-            }
-            className={`${
-              focusMode ? "hidden" : "hidden lg:flex"
-            } absolute top-1/2 -translate-y-1/2 z-20 bg-ns-elevated border border-ns-border rounded-l-ns py-4 w-5 items-center justify-center shadow-ns-sm hover:bg-ns-surface-hover hover:shadow-ns transition-all duration-200 group`}
-            style={{ right: state.rightSidebarOpen ? "320px" : "0px" }}
-          >
-            {state.rightSidebarOpen ? (
-              <ChevronRight className="w-3 h-3 text-ns-ink-muted group-hover:text-ns-ink transition-colors" />
-            ) : (
-              <ChevronLeft className="w-3 h-3 text-ns-ink-muted group-hover:text-ns-ink transition-colors" />
-            )}
-          </button>
-
-          {/* ── Right Sidebar ── */}
-          <div
-            className={`hidden lg:block relative bg-ns-surface border-l border-ns-border transition-all duration-300 overflow-hidden flex-shrink-0 ${
-              state.rightSidebarOpen ? "w-80" : "w-0"
-            }`}
-            style={{
-              transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
-            }}
-          >
-            <button
-              type="button"
-              onClick={actions.toggleRightSidebar}
-              aria-label="Close format and document panel"
-              className="absolute top-2 right-2 z-30 rounded-ns p-1.5 text-ns-ink-muted hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <div className="w-80 h-full flex flex-col overflow-hidden">
-              {inspectorPanelContent}
-            </div>
-          </div>
-
           {focusMode && (
             <div className="absolute top-3 right-3 z-40 flex items-center gap-2 rounded-ns border border-ns-border bg-ns-surface/85 px-2 py-1 shadow-ns-sm backdrop-blur opacity-40 hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300">
               <SaveStatusIndicator
@@ -1799,17 +1425,6 @@ export function SimpleEditor() {
             title={isSingleDocument ? "Outline" : "Chapters"}
           >
             <SidebarPanel {...sidebarPanelProps} />
-          </SlideOverPanel>
-
-          <SlideOverPanel
-            open={!isLgUp && state.rightSidebarOpen}
-            onClose={closeInspectorPanel}
-            side="right"
-            title="Format & Document"
-          >
-            <div className="h-full flex flex-col overflow-hidden">
-              {inspectorPanelContent}
-            </div>
           </SlideOverPanel>
 
           <ConfirmDialog
@@ -1847,6 +1462,19 @@ export function SimpleEditor() {
             cancelLabel={isPublished ? "Keep published" : "Cancel"}
             isLoading={isPublishing}
             onConfirm={handlePublish}
+          />
+
+          <SaveConflictDialog
+            open={
+              conflictChapterId !== null &&
+              conflictChapterId === state.currentChapter?.id
+            }
+            onOpenChange={(open) => {
+              if (!open) setConflictChapterId(null);
+            }}
+            onKeepMine={() => void resolveConflict("mine")}
+            onLoadTheirs={() => void resolveConflict("theirs")}
+            resolving={resolvingConflict}
           />
 
           {/* ── Unsaved Changes Dialog ── */}
@@ -1946,24 +1574,5 @@ function ChapterOpening({
         Opening {title || "chapter"}…
       </p>
     </div>
-  );
-}
-
-/** Subscribes to every edit, so it is mounted only on the Document tab. */
-function LiveWritingStats({
-  editor,
-  ...props
-}: { editor: Editor | null } & Omit<
-  ComponentProps<typeof WritingStats>,
-  "storedWordCount" | "textCharacterCount" | "textWordCount"
->) {
-  const live = useLiveWordCount(editor);
-  return (
-    <WritingStats
-      {...props}
-      storedWordCount={live?.storedWords}
-      textCharacterCount={live?.characters}
-      textWordCount={live?.words}
-    />
   );
 }

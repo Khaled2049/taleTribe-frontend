@@ -7,7 +7,11 @@ interface UseAutosaveOptions {
   onSave: (content: string) => Promise<number | undefined>;
   debounceMs?: number;
   enabled?: boolean;
+  /** Which failures are worth retrying unattended; none when omitted. */
+  shouldRetry?: (error: unknown) => boolean;
 }
+
+const RETRY_DELAYS_MS = [5_000, 15_000, 30_000, 60_000, 60_000];
 
 interface UseAutosaveReturn {
   triggerSave: (content: string) => void;
@@ -35,6 +39,7 @@ export function useAutosave({
   onSave,
   debounceMs = 3000,
   enabled = true,
+  shouldRetry,
 }: UseAutosaveOptions): UseAutosaveReturn {
   const [saveState, setSaveState] = useState<SaveState>({
     status: "idle",
@@ -43,8 +48,10 @@ export function useAutosave({
   const [isDirty, setIsDirty] = useState(false);
   const onSaveRef = useRef(onSave);
   const enabledRef = useRef(enabled);
+  const shouldRetryRef = useRef(shouldRetry);
   onSaveRef.current = onSave;
   enabledRef.current = enabled;
+  shouldRetryRef.current = shouldRetry;
 
   const [queue] = useState(
     () =>
@@ -54,6 +61,8 @@ export function useAutosave({
         debounceMs,
         onStateChange: setSaveState,
         onDirtyChange: setIsDirty,
+        retryDelaysMs: RETRY_DELAYS_MS,
+        shouldRetry: (error) => shouldRetryRef.current?.(error) ?? false,
       }),
   );
 
@@ -80,6 +89,12 @@ export function useAutosave({
     return () =>
       document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [flushSave]);
+
+  useEffect(() => {
+    const handleOnline = () => queue.retryNow();
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [queue]);
 
   // Warn before the tab is closed/reloaded while there are unsaved or in-flight
   // changes. Covers the cases the in-app "unsaved changes" dialog can't (tab

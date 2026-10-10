@@ -238,3 +238,91 @@ describe("SaveQueue change notifications", () => {
     expect(dirtyChanges).toEqual([true, false]);
   });
 });
+
+describe("automatic retry", () => {
+  function setupRetrying(shouldRetry: (error: unknown) => boolean) {
+    const calls: Deferred[] = [];
+    const states: SaveState[] = [];
+    const queue = new SaveQueue({
+      getOnSave: () => (content) =>
+        new Promise<number | undefined>((resolve, reject) => {
+          calls.push({ content, resolve, reject });
+        }),
+      isEnabled: () => true,
+      debounceMs: 3000,
+      onStateChange: (state) => states.push(state),
+      onDirtyChange: () => {},
+      retryDelaysMs: [5000, 15000],
+      shouldRetry,
+    });
+    return { queue, calls, states };
+  }
+
+  it("retries a retryable failure with the latest content, then stops", async () => {
+    const { queue, calls, states } = setupRetrying(() => true);
+    queue.trigger("draft");
+    await vi.advanceTimersByTimeAsync(3000);
+    calls[0].reject(new Error("offline"));
+    await settle();
+    expect(states.at(-1)?.status).toBe("error");
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].content).toBe("draft");
+    calls[1].reject(new Error("offline"));
+    await settle();
+
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(calls).toHaveLength(3);
+    calls[2].reject(new Error("offline"));
+    await settle();
+
+    await vi.advanceTimersByTimeAsync(120000);
+    expect(calls).toHaveLength(3);
+    expect(queue.isDirty).toBe(true);
+  });
+
+  it("clears the error once a retry succeeds", async () => {
+    const { queue, calls, states } = setupRetrying(() => true);
+    void queue.force("draft");
+    calls[0].reject(new Error("offline"));
+    await settle();
+    await vi.advanceTimersByTimeAsync(5000);
+    calls[1].resolve(7);
+    await settle();
+    expect(states.at(-1)?.status).toBe("saved");
+    expect(queue.isDirty).toBe(false);
+  });
+
+  it("does not retry a failure that would repeat", async () => {
+    const { queue, calls } = setupRetrying(() => false);
+    void queue.force("draft");
+    calls[0].reject(new Error("conflict"));
+    await settle();
+    await vi.advanceTimersByTimeAsync(120000);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("retryNow saves unsaved content at once and is a no-op when clean", async () => {
+    const { queue, calls } = setupRetrying(() => false);
+    queue.retryNow();
+    expect(calls).toHaveLength(0);
+
+    void queue.force("draft");
+    calls[0].reject(new Error("offline"));
+    await settle();
+    queue.retryNow();
+    expect(calls).toHaveLength(2);
+    expect(calls[1].content).toBe("draft");
+  });
+
+  it("drops a scheduled retry when the chapter is reset", async () => {
+    const { queue, calls } = setupRetrying(() => true);
+    void queue.force("draft");
+    calls[0].reject(new Error("offline"));
+    await settle();
+    queue.reset();
+    await vi.advanceTimersByTimeAsync(120000);
+    expect(calls).toHaveLength(1);
+  });
+});

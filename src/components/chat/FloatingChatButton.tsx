@@ -9,6 +9,7 @@ import { useMatch, useParams } from "react-router-dom";
 import { ASSISTANT_UI_ENABLED } from "@/config/featureFlags";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useEditorBridge } from "@/components/editor/EditorBridge";
+import { sidebarShortcut } from "@/lib/sidebarShortcut";
 import {
   ASSISTANT_DOCK_OPEN_KEY,
   assistantWanted,
@@ -79,6 +80,23 @@ export const FloatingChatButton: React.FC<FloatingChatButtonProps> = ({
   useEffect(() => {
     window.localStorage.setItem(ASSISTANT_DOCK_OPEN_KEY, String(desktopOpen));
   }, [desktopOpen]);
+
+  const available = Boolean(currentStoryId) && ASSISTANT_UI_ENABLED;
+  useEffect(() => {
+    if (!available) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (sidebarShortcut(event) !== "right") return;
+      event.preventDefault();
+      if (isLgUp) {
+        setOpenedByWriter(true);
+        setDesktopOpen((open) => !open);
+      } else {
+        setMobileOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [available, isLgUp]);
 
   if (!currentStoryId || !ASSISTANT_UI_ENABLED) return null;
 

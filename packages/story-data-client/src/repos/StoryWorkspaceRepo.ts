@@ -1,6 +1,6 @@
 import { isNotFound } from "../errors";
 import { request } from "../request";
-import type { Chapter, ChapterSummary, Story, StoryMetadata } from "../types/IStory";
+import type { Chapter, ChapterSummary, ParagraphStyle, Story, StoryMetadata } from "../types/IStory";
 
 interface ApiStory {
     id: string;
@@ -15,11 +15,16 @@ interface ApiStory {
     coverImageUrl: string;
     thumbnailUrl: string;
     tags: string[];
+    paragraphStyle?: string;
     published: boolean;
     revision: number;
     createdAt: string;
     updatedAt: string;
 }
+
+/** Unknown or missing reads as undefined, which an update sends as "keep the stored value". */
+export const toParagraphStyle = (value: string | undefined): ParagraphStyle | undefined =>
+    value === "spaced" || value === "indented" ? value : undefined;
 
 /**
  * The list endpoint returns each story with the aggregates the shelf renders.
@@ -93,6 +98,7 @@ export class StoryWorkspaceRepo {
             coverImageUrl: api.coverImageUrl || undefined,
             thumbnailUrl: api.thumbnailUrl || undefined,
             revision: api.revision,
+            paragraphStyle: toParagraphStyle(api.paragraphStyle),
         };
     }
 
@@ -146,6 +152,8 @@ export class StoryWorkspaceRepo {
             title: story.title, description: story.description, authorName: story.author,
             category: story.category || "", tags: story.tags || [], targetAudience: story.targetAudience || "", language: story.language || "", copyright: story.copyright || "",
             coverImageUrl: story.coverImageUrl || "", thumbnailUrl: story.thumbnailUrl || "", published: story.isPublished,
+            // Omitted when unknown: story-data rejects unknown fields, so a build that predates this one would refuse the whole save.
+            ...(story.paragraphStyle ? { paragraphStyle: story.paragraphStyle } : {}),
         }, revision));
     }
     async updateStoryByID(storyId: string, updates: Partial<Story>): Promise<Story> {

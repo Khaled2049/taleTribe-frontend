@@ -1,3 +1,4 @@
+import { toParagraphStyle } from "./StoryWorkspaceRepo";
 import { isNotFound } from "../errors";
 import { request } from "../request";
 import type { Chapter, Story, StoryMetadata } from "../types/IStory";
@@ -17,6 +18,7 @@ interface ApiPublicStory {
     coverImageUrl: string;
     thumbnailUrl: string;
     tags: string[];
+    paragraphStyle?: string;
     chapterCount: number;
     views: number;
     likeCount: number;
@@ -84,6 +86,7 @@ class PublicStoryRepo {
             copyright: api.copyright || undefined,
             coverImageUrl: api.coverImageUrl || undefined,
             thumbnailUrl: api.thumbnailUrl || undefined,
+            paragraphStyle: toParagraphStyle(api.paragraphStyle),
         };
     }
 

@@ -30,6 +30,7 @@ export type {
   Chapter,
   ChapterSummary,
   ILikes,
+  ParagraphStyle,
   Story,
   StoryMetadata,
 } from "./types/IStory";
@@ -51,7 +52,11 @@ export {
   type PublicProfile,
   type RecentFollower,
 } from "./repos/ProfileRepo";
-export { publicStoryRepo, type PublicStoryAuthor, type PublicStoryPage } from "./repos/PublicStoryRepo";
+export {
+  publicStoryRepo,
+  type PublicStoryAuthor,
+  type PublicStoryPage,
+} from "./repos/PublicStoryRepo";
 export { readingHistoryRepo } from "./repos/ReadingHistoryRepo";
 export {
   storySocialRepo,

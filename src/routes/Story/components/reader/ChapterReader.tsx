@@ -1,5 +1,6 @@
 // src/components/reader/ChapterReader.tsx
 
+import type { ParagraphStyle } from "@novelsync/story-data-client";
 import React, {
   useCallback,
   useEffect,
@@ -39,6 +40,7 @@ interface ChapterReaderProps {
   onBackToDetails: () => void;
   onPrevChapter: () => void;
   onNextChapter: () => void;
+  paragraphStyle?: ParagraphStyle;
   /** Scroll fraction to restore on entry (only for the resumed chapter). */
   resumeScrollPercent?: number | null;
   /** Persist the current scroll fraction (throttled). */
@@ -59,6 +61,7 @@ export const ChapterReader: React.FC<ChapterReaderProps> = ({
   onBackToDetails,
   onPrevChapter,
   onNextChapter,
+  paragraphStyle,
   resumeScrollPercent = null,
   onScrollPersist,
 }) => {
@@ -410,6 +413,7 @@ export const ChapterReader: React.FC<ChapterReaderProps> = ({
         fontFamily={settings.fontFamily}
         lineHeight={settings.lineHeight}
         textAlign={settings.textAlign}
+        paragraphStyle={paragraphStyle}
         onWordClick={lookupWord}
         onHighlightClick={handleHighlightClick}
       />
