@@ -14,6 +14,12 @@ export interface Chapter {
  */
 export type ChapterSummary = Omit<Chapter, "content">;
 
+/**
+ * How the author sets paragraphs apart, in the editor and for readers: a gap
+ * between them, or no gap and an indented first line.
+ */
+export type ParagraphStyle = "spaced" | "indented";
+
 export interface Story {
   id: string;
   title: string;
@@ -36,6 +42,8 @@ export interface Story {
   averageRating?: number;
   ratingsCount?: number;
   revision?: number;
+  /** Absent on a story from an endpoint that does not carry it. */
+  paragraphStyle?: ParagraphStyle;
 }
 
 export interface StoryMetadata {

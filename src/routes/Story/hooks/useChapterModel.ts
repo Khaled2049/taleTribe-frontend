@@ -1,5 +1,11 @@
 import { useMemo } from "react";
-import { ChapterBlock, ChapterBlockKind, ChapterModel } from "@/types/IReader";
+import {
+  ChapterBlock,
+  ChapterBlockKind,
+  ChapterModel,
+  FormatSpan,
+} from "@/types/IReader";
+import { extractFormattedText } from "@/lib/readerFormatting";
 
 const ALLOWED_IMAGE_HOSTS = [
   "firebasestorage.googleapis.com",
@@ -28,9 +34,9 @@ export function cleanWord(raw: string): string {
   return raw.trim().replace(/[^\p{L}\p{M}'-]/gu, "");
 }
 
-/** Collapse whitespace runs to single spaces and trim — applied to every block. */
-function normalizeBlockText(raw: string | null): string {
-  return (raw ?? "").replace(/\s+/g, " ").trim();
+function blockAlign(node: Node): ChapterBlock["align"] {
+  const align = (node as HTMLElement).style?.textAlign;
+  return align === "center" || align === "right" ? align : undefined;
 }
 
 function countWords(text: string): number {
@@ -67,9 +73,10 @@ export function buildChapterModel(content: string): ChapterModel {
   const doc = parser.parseFromString(content ?? "", "text/html");
   const nodes = Array.from(doc.body.childNodes);
 
-  const pushText = (kind: ChapterBlockKind, raw: string | null) => {
-    const text = normalizeBlockText(raw);
+  const pushText = (kind: ChapterBlockKind, node: Node) => {
+    const { text, spans } = extractFormattedText(node);
     if (!text) return;
+    const align = blockAlign(node);
     const start = cursor;
     parts.push(text);
     cursor += text.length;
@@ -79,6 +86,8 @@ export function buildChapterModel(content: string): ChapterModel {
       start,
       end: cursor,
       text,
+      ...(spans.length ? { spans } : {}),
+      ...(align ? { align } : {}),
     });
     wordCount += countWords(text);
   };
@@ -101,16 +110,36 @@ export function buildChapterModel(content: string): ChapterModel {
       continue;
     }
 
+    if (name === "HR") {
+      blocks.push({
+        key: `block-${blocks.length}`,
+        kind: "hr",
+        start: cursor,
+        end: cursor,
+      });
+      continue;
+    }
+
     if (name === "UL" || name === "OL") {
-      const items: { text: string; start: number; end: number }[] = [];
+      const items: {
+        text: string;
+        start: number;
+        end: number;
+        spans?: FormatSpan[];
+      }[] = [];
       const listStart = cursor;
       for (const li of Array.from((node as HTMLElement).children)) {
-        const text = normalizeBlockText(li.textContent);
+        const { text, spans } = extractFormattedText(li);
         if (!text) continue;
         const start = cursor;
         parts.push(text);
         cursor += text.length;
-        items.push({ text, start, end: cursor });
+        items.push({
+          text,
+          start,
+          end: cursor,
+          ...(spans.length ? { spans } : {}),
+        });
         wordCount += countWords(text);
       }
       if (items.length === 0) continue;
@@ -124,7 +153,7 @@ export function buildChapterModel(content: string): ChapterModel {
       continue;
     }
 
-    pushText(TEXT_BLOCK_KINDS[name] ?? "div", node.textContent);
+    pushText(TEXT_BLOCK_KINDS[name] ?? "div", node);
   }
 
   return { blocks, plainText: parts.join(""), wordCount };

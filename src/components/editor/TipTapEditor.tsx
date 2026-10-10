@@ -35,6 +35,7 @@ import Blockquote from "@tiptap/extension-blockquote";
 import HorizontalRule from "@tiptap/extension-horizontal-rule";
 import Link from "@tiptap/extension-link";
 import { TextStyle } from "@tiptap/extension-text-style";
+import Typography from "@tiptap/extension-typography";
 import Color from "@tiptap/extension-color";
 import { Extension } from "@tiptap/core";
 import Suggestion from "@tiptap/suggestion";
@@ -49,6 +50,8 @@ import {
   MessageSquare,
   Sparkles,
 } from "lucide-react";
+import { EDITOR_PAGE_WIDTH } from "@/components/editor/editorZoom";
+import type { ParagraphStyle } from "@novelsync/story-data-client";
 import {
   FontFamilyExtension,
   FontSizeExtension,
@@ -62,8 +65,10 @@ import {
   useImageGeneration,
   MAX_CHAPTER_IMAGES,
   countEditorImages,
-  validateImageFile,
 } from "@/hooks/useImageGeneration";
+import { ALLOWED_IMAGE_TYPES } from "@/utils/imageUpload";
+import { ApiError } from "@/cloudFunctions";
+import { toast } from "sonner";
 import { MarkdownHeadingInputRule } from "@/components/editor/markdownHeadingInputRule";
 import Code from "@tiptap/extension-code";
 import { CodeBlockExtension } from "@/components/editor/CodeBlockExtension";
@@ -79,9 +84,14 @@ import {
 import { useAssistantProposal } from "@/components/chat/AssistantProposalContext";
 
 const CHARACTER_LIMIT = 50000;
-const ChapterWordCeiling = Extension.create({
+const WORD_LIMIT_MESSAGE = `Chapters are limited to ${CHAPTER_WORD_LIMIT.toLocaleString()} words. Trim this one or start a new chapter to keep writing.`;
+const ChapterWordCeiling = Extension.create<{ onRefused: () => void }>({
   name: "chapterWordCeiling",
+  addOptions() {
+    return { onRefused: () => {} };
+  },
   addProseMirrorPlugins() {
+    const { onRefused } = this.options;
     return [
       new Plugin({
         key: new PluginKey("chapterWordCeiling"),
@@ -89,11 +99,43 @@ const ChapterWordCeiling = Extension.create({
           if (!tr.docChanged) return true;
           const next = docWordCount(tr.doc);
           if (next <= CHAPTER_WORD_LIMIT) return true;
-          return next <= docWordCount(state.doc);
+          if (next <= docWordCount(state.doc)) return true;
+          onRefused();
+          return false;
         },
       }),
     ];
   },
+});
+
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    imagePaste: {
+      /** Uploads a local image file and inserts it at the cursor. */
+      uploadImageFile: (file: File) => ReturnType;
+    };
+  }
+}
+
+// Curly quotes, em dashes and ellipses only. The arrow, fraction, maths and
+// trademark rules are off: in prose they rewrite text the writer meant.
+const SmartTypography = Typography.configure({
+  leftArrow: false,
+  rightArrow: false,
+  copyright: false,
+  trademark: false,
+  servicemark: false,
+  registeredTrademark: false,
+  oneHalf: false,
+  oneQuarter: false,
+  threeQuarters: false,
+  plusMinus: false,
+  notEqual: false,
+  laquo: false,
+  raquo: false,
+  multiplication: false,
+  superscriptTwo: false,
+  superscriptThree: false,
 });
 const HeadingWithoutInputRules = Heading.extend({
   addInputRules() {
@@ -112,6 +154,9 @@ interface TipTapEditorProps {
   onEditorReady?: (editor: Editor | null) => void;
   onTransaction?: (transaction: Transaction) => void;
   onOpenCoWrite?: () => void;
+  /** Page scale in percent. */
+  zoom?: number;
+  paragraphStyle?: ParagraphStyle;
 }
 
 export const TipTapEditor: React.FC<TipTapEditorProps> = ({
@@ -124,6 +169,8 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   onEditorReady,
   onTransaction,
   onOpenCoWrite,
+  zoom = 100,
+  paragraphStyle = "spaced",
 }) => {
   const assistantProposal = useAssistantProposal();
   // Keep a ref so plugins always read the current ids without stale closure
@@ -150,6 +197,58 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   }, []);
 
   pasteErrorRef.current = showError;
+
+  const uploadImageFileRef = useRef<(file: File, pos?: number) => void>(
+    () => {},
+  );
+  uploadImageFileRef.current = (file, pos) => {
+    const target = editorRef.current;
+    if (!target) return;
+    const {
+      userId: uid,
+      storyId: sid,
+      chapterId: cid,
+    } = uploadContextRef.current;
+    if (!uid) return showError("Sign in to upload images.");
+    // Size is not checked here: the storage service compresses large images.
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      return showError("Unsupported format. Use JPEG, PNG, or WebP.");
+    }
+    if (countEditorImages(target) >= MAX_CHAPTER_IMAGES) {
+      return showError(`Maximum ${MAX_CHAPTER_IMAGES} images per chapter.`);
+    }
+    const upload = loadStorageService().then((storage) =>
+      storage.uploadChapterImage(file, uid, sid, cid ?? ""),
+    );
+    toast.promise(upload, {
+      loading: "Uploading image…",
+      success: "Image added",
+      error: (error) =>
+        error instanceof ApiError
+          ? error.message
+          : "Couldn't upload the image. Please try again.",
+    });
+    upload
+      .then((src) => {
+        // The writer may have opened another chapter while it uploaded.
+        if (target.isDestroyed || uploadContextRef.current.chapterId !== cid) {
+          return;
+        }
+        if (pos === undefined) {
+          target.chain().focus().setImage({ src }).run();
+          return;
+        }
+        target
+          .chain()
+          .focus()
+          .insertContentAt(Math.min(pos, target.state.doc.content.size), {
+            type: "image",
+            attrs: { src },
+          })
+          .run();
+      })
+      .catch((error) => console.error("Image upload failed:", error));
+  };
 
   // ── Feature hooks ──────────────────────────────────────────────────────────
 
@@ -189,67 +288,42 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const ImagePasteExtension = useMemo(() => {
     return Extension.create({
       name: "imagePaste",
+      addCommands() {
+        return {
+          uploadImageFile: (file) => () => {
+            uploadImageFileRef.current(file);
+            return true;
+          },
+        };
+      },
       addProseMirrorPlugins() {
-        const editorInstance = this.editor;
+        const imageFile = (files: FileList | undefined) =>
+          Array.from(files ?? []).find((file) =>
+            file.type.startsWith("image/"),
+          );
         return [
           new Plugin({
             key: new PluginKey("imagePaste"),
             props: {
               handlePaste(_view, event) {
-                const items = event.clipboardData?.items;
-                if (!items) return false;
-                for (const item of Array.from(items)) {
-                  if (item.type.startsWith("image/")) {
-                    event.preventDefault();
-                    if (!uploadContextRef.current.userId) {
-                      pasteErrorRef.current?.("Sign in to upload images.");
-                      return true;
-                    }
-                    const file = item.getAsFile();
-                    if (!file) continue;
-
-                    const validationError = validateImageFile(file);
-                    if (validationError) {
-                      pasteErrorRef.current?.(validationError);
-                      return true;
-                    }
-
-                    if (
-                      countEditorImages(editorInstance) >= MAX_CHAPTER_IMAGES
-                    ) {
-                      pasteErrorRef.current?.(
-                        `Maximum ${MAX_CHAPTER_IMAGES} images per chapter.`,
-                      );
-                      return true;
-                    }
-
-                    const {
-                      userId: uid,
-                      storyId: sid,
-                      chapterId: cid,
-                    } = uploadContextRef.current;
-                    void (async () => {
-                      try {
-                        const storageService = await loadStorageService();
-                        const url = await storageService.uploadChapterImage(
-                          file,
-                          uid ?? "",
-                          sid,
-                          cid ?? "",
-                        );
-                        editorInstance
-                          .chain()
-                          .focus()
-                          .setImage({ src: url })
-                          .run();
-                      } catch (err) {
-                        console.error("Image upload failed:", err);
-                      }
-                    })();
-                    return true;
-                  }
-                }
-                return false;
+                const file = imageFile(event.clipboardData?.files);
+                if (!file) return false;
+                event.preventDefault();
+                uploadImageFileRef.current(file);
+                return true;
+              },
+              handleDrop(view, event, _slice, moved) {
+                // `moved` is a drag of existing content within the page.
+                if (moved) return false;
+                const file = imageFile(event.dataTransfer?.files);
+                if (!file) return false;
+                event.preventDefault();
+                const drop = view.posAtCoords({
+                  left: event.clientX,
+                  top: event.clientY,
+                });
+                uploadImageFileRef.current(file, drop?.pos);
+                return true;
               },
             },
           }),
@@ -303,7 +377,9 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       ParagraphStyleExtension,
       SlashCommandsExtension,
       CharacterCount.configure({ limit: CHARACTER_LIMIT }),
-      ChapterWordCeiling,
+      ChapterWordCeiling.configure({
+        onRefused: () => pasteErrorRef.current?.(WORD_LIMIT_MESSAGE),
+      }),
       HeadingWithoutInputRules.configure({
         levels: [1, 2, 3],
         HTMLAttributes: {
@@ -313,6 +389,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         },
       }),
       MarkdownHeadingInputRule,
+      SmartTypography,
       Placeholder.configure({
         placeholder:
           "Write something already ya silly goose… or type / for commands",
@@ -502,7 +579,11 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       )}
 
       <div className="w-full flex-1 bg-ns-elevated text-ns-ink transition-colors">
-        <div className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-10 lg:px-16">
+        <div
+          className="mx-auto w-full px-4 py-10 sm:px-10 lg:px-16"
+          data-paragraph-style={paragraphStyle}
+          style={{ maxWidth: EDITOR_PAGE_WIDTH, zoom: zoom / 100 }}
+        >
           <EditorContent
             onClick={() => editor.commands.focus()}
             className="w-full focus:outline-none max-w-none"

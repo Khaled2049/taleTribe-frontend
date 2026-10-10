@@ -1175,6 +1175,10 @@ export default function AssistantPanel({
 }) {
   const [target, setTarget] = useState<ConversationTarget>({ mode: "latest" });
   const [composerAutoFocus, setComposerAutoFocus] = useState(!restored);
+  // The keyboard shortcut opens the dock from outside this component.
+  useEffect(() => {
+    if (!restored) setComposerAutoFocus(true);
+  }, [restored]);
   const openDesktop = useCallback(
     (open: boolean) => {
       setComposerAutoFocus(true);

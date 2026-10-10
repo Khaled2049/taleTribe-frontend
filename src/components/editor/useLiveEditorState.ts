@@ -5,7 +5,6 @@ import {
   getDocumentOutline,
   type OutlineEntry,
 } from "@/utils/documentOutline";
-import { docWordCount } from "@/components/editor/docWordCount";
 
 // Each hook re-renders its caller only when its selected value changes, so
 // ordinary typing does not re-render the editor page.
@@ -25,10 +24,19 @@ export interface FormatState {
   paragraph: boolean;
   heading1: boolean;
   heading2: boolean;
+  heading3: boolean;
   bulletList: boolean;
   orderedList: boolean;
   blockquote: boolean;
   textAlign: TextAlign;
+  fontFamily: string | null;
+  fontSize: string | null;
+  color: string | null;
+  highlightColor: string | null;
+  lineHeight: string | null;
+  paragraphSpacing: string | null;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 const NO_FORMAT: FormatState = {
@@ -40,10 +48,19 @@ const NO_FORMAT: FormatState = {
   paragraph: false,
   heading1: false,
   heading2: false,
+  heading3: false,
   bulletList: false,
   orderedList: false,
   blockquote: false,
   textAlign: "left",
+  fontFamily: null,
+  fontSize: null,
+  color: null,
+  highlightColor: null,
+  lineHeight: null,
+  paragraphSpacing: null,
+  canUndo: false,
+  canRedo: false,
 };
 
 export function useFormatState(editor: Editor | null): FormatState {
@@ -53,6 +70,8 @@ export function useFormatState(editor: Editor | null): FormatState {
       selector: () => {
         const current = editor;
         if (!current) return NO_FORMAT;
+        const textStyle = current.getAttributes("textStyle");
+        const block = current.state.selection.$from.parent.attrs;
         return {
           bold: current.isActive("bold"),
           italic: current.isActive("italic"),
@@ -62,6 +81,7 @@ export function useFormatState(editor: Editor | null): FormatState {
           paragraph: current.isActive("paragraph"),
           heading1: current.isActive("heading", { level: 1 }),
           heading2: current.isActive("heading", { level: 2 }),
+          heading3: current.isActive("heading", { level: 3 }),
           bulletList: current.isActive("bulletList"),
           orderedList: current.isActive("orderedList"),
           blockquote: current.isActive("blockquote"),
@@ -72,6 +92,14 @@ export function useFormatState(editor: Editor | null): FormatState {
               : current.isActive({ textAlign: "justify" })
                 ? "justify"
                 : "left",
+          fontFamily: textStyle.fontFamily ?? null,
+          fontSize: textStyle.fontSize ?? null,
+          color: textStyle.color ?? null,
+          highlightColor: textStyle.backgroundColor ?? null,
+          lineHeight: block.lineHeight ?? null,
+          paragraphSpacing: block.paragraphSpacing ?? null,
+          canUndo: current.can().undo(),
+          canRedo: current.can().redo(),
         };
       },
     }) ?? NO_FORMAT
@@ -129,21 +157,4 @@ export function useDocumentStructure(
       equalityFn: sameStructure,
     }) ?? EMPTY_STRUCTURE
   );
-}
-
-/** Mount only where shown: it re-renders its caller on every edit. */
-export function useLiveWordCount(editor: Editor | null) {
-  return useEditorState({
-    editor,
-    selector: () =>
-      editor
-        ? {
-            storedWords: docWordCount(editor.state.doc),
-            characters: editor.storage.characterCount?.characters?.() as
-              number | undefined,
-            words: editor.storage.characterCount?.words?.() as
-              number | undefined,
-          }
-        : null,
-  });
 }

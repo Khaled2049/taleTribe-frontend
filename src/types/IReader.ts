@@ -65,12 +65,24 @@ export type ChapterBlockKind =
   | "ul"
   | "ol"
   | "img"
+  | "hr"
   | "div";
+
+/** Inline formatting over [start, end) of one block's or list item's text. */
+export interface FormatSpan {
+  start: number;
+  end: number;
+  bold?: true;
+  italic?: true;
+  underline?: true;
+  strike?: true;
+}
 
 /**
  * One top-level block of a parsed chapter. `start`/`end` are global offsets
  * into the chapter's `plainText`. Text blocks carry normalized `text`; lists
- * carry `items`; images carry `imgSrc`/`imgAlt` and an empty [start, end) range.
+ * carry `items`; images carry `imgSrc`/`imgAlt` and an empty [start, end) range,
+ * as do dividers (`hr`). `spans` are local to the block's or item's own text.
  */
 export interface ChapterBlock {
   key: string;
@@ -78,7 +90,10 @@ export interface ChapterBlock {
   start: number;
   end: number;
   text?: string;
-  items?: { text: string; start: number; end: number }[];
+  spans?: FormatSpan[];
+  /** Set only where the writer overrode the reader's own alignment. */
+  align?: "center" | "right";
+  items?: { text: string; start: number; end: number; spans?: FormatSpan[] }[];
   imgSrc?: string;
   imgAlt?: string;
 }

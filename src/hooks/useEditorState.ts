@@ -15,8 +15,6 @@ export interface EditorState {
   isLoading: boolean;
   loadError: "missing" | "error" | null;
   leftSidebarOpen: boolean;
-  rightSidebarOpen: boolean;
-  rightTab: "format" | "document";
 }
 
 // Action types
@@ -46,10 +44,7 @@ type EditorAction =
       payload: { id: string; updates: Partial<Chapter> };
     }
   | { type: "TOGGLE_LEFT_SIDEBAR" }
-  | { type: "TOGGLE_RIGHT_SIDEBAR" }
   | { type: "SET_LEFT_SIDEBAR"; payload: boolean }
-  | { type: "SET_RIGHT_SIDEBAR"; payload: boolean }
-  | { type: "SET_RIGHT_TAB"; payload: "format" | "document" }
   | { type: "SET_STORY_PUBLISHED"; payload: boolean }
   | { type: "RESET" };
 
@@ -64,8 +59,6 @@ export const initialEditorState: EditorState = {
   isLoading: true,
   loadError: null,
   leftSidebarOpen: true,
-  rightSidebarOpen: false,
-  rightTab: "format",
 };
 
 export function editorReducer(
@@ -94,7 +87,6 @@ export function editorReducer(
         storyDescription: action.payload.story.description,
         chapterTitle: action.payload.currentChapter?.title || "",
         leftSidebarOpen: action.payload.leftSidebarOpen,
-        rightSidebarOpen: false,
         isLoading: false,
         loadError: null,
       };
@@ -175,17 +167,8 @@ export function editorReducer(
     case "TOGGLE_LEFT_SIDEBAR":
       return { ...state, leftSidebarOpen: !state.leftSidebarOpen };
 
-    case "TOGGLE_RIGHT_SIDEBAR":
-      return { ...state, rightSidebarOpen: !state.rightSidebarOpen };
-
     case "SET_LEFT_SIDEBAR":
       return { ...state, leftSidebarOpen: action.payload };
-
-    case "SET_RIGHT_SIDEBAR":
-      return { ...state, rightSidebarOpen: action.payload };
-
-    case "SET_RIGHT_TAB":
-      return { ...state, rightTab: action.payload };
 
     case "SET_STORY_PUBLISHED":
       if (!state.story) return state;
@@ -262,16 +245,8 @@ export function useEditorState() {
 
       toggleLeftSidebar: () => dispatch({ type: "TOGGLE_LEFT_SIDEBAR" }),
 
-      toggleRightSidebar: () => dispatch({ type: "TOGGLE_RIGHT_SIDEBAR" }),
-
       setLeftSidebarOpen: (isOpen: boolean) =>
         dispatch({ type: "SET_LEFT_SIDEBAR", payload: isOpen }),
-
-      setRightSidebarOpen: (isOpen: boolean) =>
-        dispatch({ type: "SET_RIGHT_SIDEBAR", payload: isOpen }),
-
-      setRightTab: (tab: "format" | "document") =>
-        dispatch({ type: "SET_RIGHT_TAB", payload: tab }),
 
       setStoryPublished: (isPublished: boolean) =>
         dispatch({ type: "SET_STORY_PUBLISHED", payload: isPublished }),

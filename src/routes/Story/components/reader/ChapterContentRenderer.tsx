@@ -1,13 +1,25 @@
 // src/components/reader/ChapterContentRenderer.tsx
 
 import React, { JSX, useCallback } from "react";
-import { ChapterBlock, ChapterModel, RenderMark } from "@/types/IReader";
+import {
+  ChapterBlock,
+  ChapterModel,
+  FormatSpan,
+  RenderMark,
+} from "@/types/IReader";
+import {
+  buildSegments,
+  formatClassName,
+  paragraphClassName,
+} from "@/lib/readerFormatting";
+import type { ParagraphStyle } from "@novelsync/story-data-client";
 import { HIGHLIGHT_COLORS } from "../../constants/readerThemes";
 import { cleanWord } from "../../hooks/useChapterModel";
 
 interface ChapterContentRendererProps {
   model: ChapterModel;
   marks: RenderMark[];
+  paragraphStyle?: ParagraphStyle;
   /** Ref attached to the active search match for scrollIntoView. */
   activeMarkRef: React.RefObject<HTMLElement | null>;
   onWordClick: (word: string, x: number, y: number) => void;
@@ -18,99 +30,10 @@ const SEARCH_CLASS = "bg-amber-300/70 text-black rounded-[2px]";
 const SEARCH_ACTIVE_CLASS =
   "bg-amber-400 text-black ring-2 ring-amber-500 rounded-[2px] scroll-mt-24";
 
-type Segment =
-  | { kind: "text"; key: string; text: string }
-  | {
-      kind: "search";
-      key: string;
-      text: string;
-      active: boolean;
-    }
-  | {
-      kind: "highlight";
-      key: string;
-      text: string;
-      color: NonNullable<RenderMark["color"]>;
-      id: string;
-    };
-
-/**
- * Split a block's local text into consecutive styled segments based on the
- * global `marks` that overlap it. Search marks win visually over highlights.
- */
-function buildSegments(
-  text: string,
-  blockStart: number,
-  marks: RenderMark[],
-  blockKey: string,
-): Segment[] {
-  const blockEnd = blockStart + text.length;
-
-  // Clip marks to this block, in local coordinates.
-  const local = marks
-    .map((m) => ({
-      lo: Math.max(m.start, blockStart) - blockStart,
-      hi: Math.min(m.end, blockEnd) - blockStart,
-      mark: m,
-    }))
-    .filter((m) => m.hi > m.lo);
-
-  if (local.length === 0) {
-    return [{ kind: "text", key: `seg-${blockKey}-0`, text }];
-  }
-
-  // Boundary points partition [0, text.length) into atomic intervals.
-  const points = new Set<number>([0, text.length]);
-  for (const m of local) {
-    points.add(m.lo);
-    points.add(m.hi);
-  }
-  const sorted = [...points].sort((a, b) => a - b);
-
-  const segments: Segment[] = [];
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const a = sorted[i];
-    const b = sorted[i + 1];
-    if (b <= a) continue;
-    const slice = text.slice(a, b);
-    const key = `seg-${blockKey}-${a}`;
-    const covering = local.filter((m) => m.lo <= a && m.hi >= b);
-
-    const searchMark = covering.find((m) => m.mark.kind === "search");
-    if (searchMark) {
-      segments.push({
-        kind: "search",
-        key,
-        text: slice,
-        active: covering.some((m) => m.mark.kind === "search" && m.mark.active),
-      });
-      continue;
-    }
-
-    // Topmost highlight = last in array order (search is appended after).
-    const highlightMark = [...covering]
-      .reverse()
-      .find((m) => m.mark.kind === "highlight");
-    if (highlightMark && highlightMark.mark.color && highlightMark.mark.id) {
-      segments.push({
-        kind: "highlight",
-        key,
-        text: slice,
-        color: highlightMark.mark.color,
-        id: highlightMark.mark.id,
-      });
-      continue;
-    }
-
-    segments.push({ kind: "text", key, text: slice });
-  }
-
-  return segments;
-}
-
 const ChapterContentRendererBase: React.FC<ChapterContentRendererProps> = ({
   model,
   marks,
+  paragraphStyle = "spaced",
   activeMarkRef,
   onWordClick,
   onHighlightClick,
@@ -127,9 +50,15 @@ const ChapterContentRendererBase: React.FC<ChapterContentRendererProps> = ({
   }, [onWordClick]);
 
   const renderSegments = useCallback(
-    (text: string, blockStart: number, blockKey: string) => {
-      const segments = buildSegments(text, blockStart, marks, blockKey);
+    (
+      text: string,
+      blockStart: number,
+      blockKey: string,
+      spans?: FormatSpan[],
+    ) => {
+      const segments = buildSegments(text, blockStart, marks, blockKey, spans);
       return segments.map((seg) => {
+        const formatClass = formatClassName(seg.format);
         if (seg.kind === "search") {
           return (
             <mark
@@ -140,7 +69,7 @@ const ChapterContentRendererBase: React.FC<ChapterContentRendererProps> = ({
                   : undefined
               }
               data-active={seg.active ? "true" : undefined}
-              className={seg.active ? SEARCH_ACTIVE_CLASS : SEARCH_CLASS}
+              className={`${seg.active ? SEARCH_ACTIVE_CLASS : SEARCH_CLASS} ${formatClass}`}
             >
               {seg.text}
             </mark>
@@ -157,10 +86,17 @@ const ChapterContentRendererBase: React.FC<ChapterContentRendererProps> = ({
                 e.stopPropagation();
                 onHighlightClick(seg.id, e.clientX, e.clientY);
               }}
-              className={`${HIGHLIGHT_COLORS[seg.color]} text-black rounded-[2px] cursor-pointer`}
+              className={`${HIGHLIGHT_COLORS[seg.color]} text-black rounded-[2px] cursor-pointer ${formatClass}`}
             >
               {seg.text}
             </mark>
+          );
+        }
+        if (formatClass) {
+          return (
+            <span key={seg.key} className={formatClass}>
+              {seg.text}
+            </span>
           );
         }
         return <React.Fragment key={seg.key}>{seg.text}</React.Fragment>;
@@ -169,9 +105,20 @@ const ChapterContentRendererBase: React.FC<ChapterContentRendererProps> = ({
     [marks, activeMarkRef, onHighlightClick],
   );
 
-  const renderBlock = (block: ChapterBlock) => {
+  const renderBlock = (block: ChapterBlock, index: number) => {
     const { key } = block;
+    const style = block.align ? { textAlign: block.align } : undefined;
     switch (block.kind) {
+      // The ornament is generated content, not text: selection offsets are
+      // measured over rendered text and must not see it.
+      case "hr":
+        return (
+          <hr
+            key={key}
+            className="my-10 h-auto overflow-visible border-0 text-center opacity-60 after:tracking-[0.4em] after:content-['*_*_*']"
+          />
+        );
+
       case "img":
         return block.imgSrc ? (
           <div key={key} className="flex justify-center my-8">
@@ -194,7 +141,12 @@ const ChapterContentRendererBase: React.FC<ChapterContentRendererProps> = ({
                 key={`${key}-li-${i}`}
                 className={`ml-6 mb-2 text-current ${block.kind === "ul" ? "list-disc" : "list-decimal"}`}
               >
-                {renderSegments(item.text, item.start, `${key}-li-${i}`)}
+                {renderSegments(
+                  item.text,
+                  item.start,
+                  `${key}-li-${i}`,
+                  item.spans,
+                )}
               </li>
             ))}
           </ListTag>
@@ -206,30 +158,35 @@ const ChapterContentRendererBase: React.FC<ChapterContentRendererProps> = ({
           <blockquote
             key={key}
             className="border-l-4 border-current opacity-70 pl-4 italic my-6 text-current"
+            style={style}
           >
-            {renderSegments(block.text ?? "", block.start, key)}
+            {renderSegments(block.text ?? "", block.start, key, block.spans)}
           </blockquote>
         );
 
       case "p":
         return (
-          <p key={key} className="mb-6">
-            {renderSegments(block.text ?? "", block.start, key)}
+          <p
+            key={key}
+            className={paragraphClassName(model.blocks, index, paragraphStyle)}
+            style={style}
+          >
+            {renderSegments(block.text ?? "", block.start, key, block.spans)}
           </p>
         );
 
       case "div":
         return (
-          <div key={key} className="mb-2">
-            {renderSegments(block.text ?? "", block.start, key)}
+          <div key={key} className="mb-2" style={style}>
+            {renderSegments(block.text ?? "", block.start, key, block.spans)}
           </div>
         );
 
       default:
         return React.createElement(
           block.kind as keyof JSX.IntrinsicElements,
-          { key, className: "font-bold mb-4 mt-8 text-current" },
-          renderSegments(block.text ?? "", block.start, key),
+          { key, className: "font-bold mb-4 mt-8 text-current", style },
+          renderSegments(block.text ?? "", block.start, key, block.spans),
         );
     }
   };
