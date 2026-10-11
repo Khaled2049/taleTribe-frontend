@@ -17,3 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v4
+        with:
+          # Tauri's Linux-only GTK3 stack requires glib 0.18; the fix needs
+          # GTK4/glib >=0.20 upstream. glib is not built for the iOS reader.
+          # Remove when Tauri migrates, and reassess before shipping Linux.
+          # See docs/mobile.md and https://github.com/advisories/GHSA-wrw7-89jp-8q8g
+          allow-ghsas: GHSA-wrw7-89jp-8q8g

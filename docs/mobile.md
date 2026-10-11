@@ -82,6 +82,29 @@ so the emulator addresses hardcoded to `127.0.0.1` in `platform-auth` and
 `cloudFunctions` work. A physical phone cannot reach those; test it against
 production config with `VITE_USE_EMULATORS=false`.
 
+## Dependency review exception
+
+`src-tauri/Cargo.lock` includes `glib 0.18.5` through Tauri's Linux GTK3
+dependencies, even though the reader ships on iOS. Cargo lockfiles include
+dependencies for other targets; `glib` is absent from the iOS build graph.
+
+Dependency review allows only
+[GHSA-wrw7-89jp-8q8g](https://github.com/advisories/GHSA-wrw7-89jp-8q8g)
+(RUSTSEC-2024-0429), the `VariantStrIter` unsoundness advisory. Its fix is in
+`glib >=0.20`, which cannot replace `0.18` in Tauri's GTK3 stack. Tauri 2.12.3
+[tracks the same exception upstream](https://github.com/tauri-apps/tauri/blob/tauri-v2.12.3/.cargo/audit.toml).
+This exception does not patch the Linux dependency. Reassess it before shipping
+a Linux build, and remove `allow-ghsas` from `.github/workflows/security.yml`
+when Tauri's GTK4 migration provides a compatible patched dependency.
+
+Verify the iOS target graph with:
+
+```bash
+cargo tree --manifest-path src-tauri/Cargo.toml --locked --target aarch64-apple-ios -i glib
+```
+
+Cargo should report nothing to print. All other advisories remain blocking.
+
 ## Not done yet
 
 - **iOS coverage so far:** the app builds, launches in the iPhone Simulator
