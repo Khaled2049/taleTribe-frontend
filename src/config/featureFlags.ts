@@ -3,8 +3,9 @@
 export const WEB3_ENABLED = false;
 
 // Read-aloud (client-side Kokoro TTS) in the story reader. Kill switch for a
-// feature with a heavy first-use model download (~90–300 MB, cached).
-export const READ_ALOUD_ENABLED = true;
+// feature with a heavy first-use model download (~90–300 MB, cached). Off in
+// the mobile app: that model is too large for a phone webview.
+export const READ_ALOUD_ENABLED = import.meta.env.VITE_PLATFORM !== "mobile";
 
 // The story assistant. Presentation only: the gateway independently enforces
 // ASSISTANT_API_ENABLED, story ownership and quota, so turning this on in a

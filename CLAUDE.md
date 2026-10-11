@@ -54,6 +54,15 @@ brings up the whole stack via `scripts/e2e-stack.sh`, or `yarn cy:open` /
 `yarn cy:run` against an already-running stack. Nothing covers competitions yet;
 that path is verified by seeding (see below).
 
+## Mobile app
+
+`src/mobile/`, `mobile.html`, `vite.mobile.config.ts` and `src-tauri/` are a
+reader-only Tauri 2 app built as a second Vite entry over this same `src/`.
+Read `docs/mobile.md` before touching them, or before changing the reader,
+`StoryDetail` or `AllStories`, which the app mounts unchanged. Run its browser
+test with `yarn cy:mobile`, never through the main Cypress config, whose
+support file resets the emulators.
+
 ## Path Aliases
 
 `@/` maps to `./src/`. Two workspace packages resolve by name:

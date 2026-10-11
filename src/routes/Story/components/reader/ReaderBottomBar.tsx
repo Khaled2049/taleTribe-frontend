@@ -43,7 +43,7 @@ export const ReaderBottomBar: React.FC<ReaderBottomBarProps> = ({
 
   return (
     <div
-      className={`fixed bottom-0 left-0 w-full ${theme.bg} border-t ${theme.border} shadow-lg transition-colors duration-300`}
+      className={`fixed bottom-0 left-0 w-full pb-[env(safe-area-inset-bottom)] ${theme.bg} border-t ${theme.border} shadow-lg transition-colors duration-300`}
     >
       <div className="max-w-4xl mx-auto px-4 py-3">
         <div className="flex items-center justify-center gap-4">

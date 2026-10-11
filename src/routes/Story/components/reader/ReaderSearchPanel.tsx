@@ -30,7 +30,7 @@ export const ReaderSearchPanel: React.FC<ReaderSearchPanelProps> = ({
   }, []);
 
   return (
-    <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-96 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 p-4">
+    <div className="fixed top-[calc(4rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-50 w-96 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 p-4">
       <div className="flex items-center gap-2 mb-2">
         <input
           ref={inputRef}

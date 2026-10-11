@@ -28,7 +28,7 @@ export const ReaderTopBar: React.FC<ReaderTopBarProps> = ({
 }) => {
   return (
     <div
-      className={`fixed top-0 left-0 w-full z-50 ${theme.bg} border-b ${theme.border} shadow-sm transition-colors duration-300`}
+      className={`fixed top-0 left-0 w-full z-50 pt-[env(safe-area-inset-top)] ${theme.bg} border-b ${theme.border} shadow-sm transition-colors duration-300`}
     >
       <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
         <button

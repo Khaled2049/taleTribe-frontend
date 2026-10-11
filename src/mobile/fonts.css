@@ -1,0 +1,40 @@
+/* The web app loads these from Google Fonts. The app bundles them so the first
+   screen renders in the right typefaces with no network. */
+@import "@fontsource-variable/cormorant/wght.css";
+@import "@fontsource-variable/cormorant/wght-italic.css";
+@import "@fontsource-variable/crimson-pro/wght.css";
+@import "@fontsource-variable/crimson-pro/wght-italic.css";
+@import "@fontsource-variable/hanken-grotesk/wght.css";
+
+/* fontsource names the families "<Name> Variable"; map them onto the names
+   tailwind.config.js already uses. */
+:root {
+  --mobile-font-heading: "Cormorant Variable", "Cormorant", serif;
+  --mobile-font-body: "Crimson Pro Variable", "Crimson Pro", Georgia, serif;
+  --mobile-font-ui:
+    "Hanken Grotesk Variable", "Hanken Grotesk", system-ui, sans-serif;
+}
+
+.font-heading {
+  font-family: var(--mobile-font-heading);
+}
+.font-body,
+body {
+  font-family: var(--mobile-font-body);
+}
+.font-ui {
+  font-family: var(--mobile-font-ui);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  /* No rubber-band on the shell; the scroll container inside still bounces. */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}

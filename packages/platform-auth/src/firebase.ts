@@ -1,5 +1,11 @@
 import { initializeApp } from "firebase/app";
-import { connectAuthEmulator, getAuth } from "firebase/auth";
+import {
+  browserLocalPersistence,
+  connectAuthEmulator,
+  getAuth,
+  indexedDBLocalPersistence,
+  initializeAuth,
+} from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -12,7 +18,15 @@ const firebaseConfig = {
 };
 
 export const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+// getAuth() also installs the popup/redirect resolver, whose start-up never
+// settles inside the mobile app's embedded webview, so the first auth callback
+// never fires. The app signs in with email and password only and needs none of it.
+export const auth =
+  import.meta.env.VITE_PLATFORM === "mobile"
+    ? initializeAuth(app, {
+        persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+      })
+    : getAuth(app);
 
 const usesEmulators =
   import.meta.env.MODE === "development" &&
