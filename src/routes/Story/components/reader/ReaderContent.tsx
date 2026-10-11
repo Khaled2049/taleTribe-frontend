@@ -50,7 +50,7 @@ const ReaderContentBase: React.FC<ReaderContentProps> = ({
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-[calc(5rem_+_env(safe-area-inset-top))] pb-[calc(8rem_+_env(safe-area-inset-bottom))]">
       <div className="py-8">
         {title && (
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-8 text-center">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-8 text-center text-current">
             {title}
           </h1>
         )}
