@@ -27,6 +27,13 @@ yarn kill-ports       # Delegates to ../../kill-ports at the workspace root,
 yarn test             # Vitest unit suite (tests/, excludes tests/rules/)
 yarn test:watch       # Vitest in watch mode
 yarn test:rules       # Firestore rules tests — needs a running emulator
+
+# Mobile reader app (see "Mobile app" below)
+yarn mobile:dev       # The app in a browser: http://localhost:5174/mobile.html
+yarn mobile:build     # TypeScript check + bundle into dist-mobile/
+yarn cy:mobile        # Its browser test — needs mobile:dev and the dev stack
+yarn tauri dev        # The app in a desktop Tauri window
+yarn ios:dev          # The app in the iOS Simulator
 ```
 
 `yarn lint` currently reports 89 pre-existing errors. Every file under
@@ -63,12 +70,32 @@ Read `docs/mobile.md` before touching them, or before changing the reader,
 test with `yarn cy:mobile`, never through the main Cypress config, whose
 support file resets the emulators.
 
+What a change to shared code has to keep true for the app:
+
+- **Route paths are shared.** The app mounts the same `/stories` and
+  `/story/:id/read/:chapterId?` shapes under a hash router, and sends every
+  path it has no screen for to the website. Renaming a public route breaks it.
+- **`import.meta.env.VITE_PLATFORM === "mobile"`** is defined only by
+  `vite.mobile.config.ts`. It turns read-aloud off (`config/featureFlags.ts`)
+  and switches how Auth is created (below). Branch on it rather than sniffing
+  the user agent.
+- **Never build a user-facing URL from `window.location.origin` in code the app
+  reaches.** Inside the app the origin is `tauri://localhost`, in dev too.
+  `config/seo.ts` falls back to the origin in dev, which is why
+  `src/mobile/openExternal.ts` has its own site URL.
+- **The page scrolls in `main[data-app-scroll]`** there as well, so anything
+  that works against `NavbarWrapper`'s scroll container works in the app.
+- Fixed bars in the reader pad themselves with `env(safe-area-inset-*)`. A new
+  `fixed top-0` or `fixed bottom-0` element in the reader needs the same.
+
 ## Path Aliases
 
 `@/` maps to `./src/`. Two workspace packages resolve by name:
 `@novelsync/story-data-client` and `@novelsync/platform-auth`. All three are
 declared in `tsconfig.app.json`, `tsconfig.json`, `vite.config.ts` and
 `vitest.config.ts` — adding a package means adding it in all four.
+`vite.mobile.config.ts` takes its aliases from `vite.config.ts`, so it is not a
+fifth.
 
 Always use `@/` for app imports — never deep relative paths like `../../../`.
 
@@ -202,6 +229,13 @@ emulator wiring, and exports `auth` plus
 `getAuthContext()` (async token), `getCurrentUid()` (sync uid) and
 `useAuthIdentity()` (`{ uid, email, isAdmin, loading, isSignedIn }`, read straight
 off the SDK via `useSyncExternalStore`). Never call `initializeApp` anywhere else.
+
+`auth` is created with `getAuth` on the web and `initializeAuth` on the mobile
+build. `getAuth` installs the popup/redirect resolver, which never finishes
+starting inside the Tauri webview: `onAuthStateChanged` never fires and
+`useAuthIdentity().loading` stays true forever. Sign-in is email and password
+only, so nothing needs that resolver; adding a popup or redirect provider would
+have to solve this for mobile first.
 
 Firestore and Storage are **subpath** entries, not part of the barrel:
 `@novelsync/platform-auth/firestore` and `@novelsync/platform-auth/storage`. The
