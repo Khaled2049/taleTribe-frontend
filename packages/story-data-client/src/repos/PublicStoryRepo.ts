@@ -1,7 +1,7 @@
-import { toParagraphStyle } from "./StoryWorkspaceRepo";
+import { readerUpdateFields, toParagraphStyle } from "./StoryWorkspaceRepo";
 import { isNotFound } from "../errors";
 import { request } from "../request";
-import type { Chapter, Story, StoryMetadata } from "../types/IStory";
+import type { Chapter, CompletionStatus, Story, StoryMetadata } from "../types/IStory";
 
 const STORIES_PAGE_SIZE = 24;
 
@@ -26,6 +26,10 @@ interface ApiPublicStory {
     ratingsCount: number;
     createdAt: string;
     updatedAt: string;
+    completionStatus?: string;
+    nextChapterOn?: string;
+    readerNote?: string;
+    readerNoteUpdatedAt?: string;
 }
 
 interface ApiPublicChapter {
@@ -35,6 +39,7 @@ interface ApiPublicChapter {
     content?: string;
     position: number;
     wordCount: number;
+    publishedAt?: string;
 }
 
 export interface PublicStoryAuthor {
@@ -87,6 +92,7 @@ class PublicStoryRepo {
             coverImageUrl: api.coverImageUrl || undefined,
             thumbnailUrl: api.thumbnailUrl || undefined,
             paragraphStyle: toParagraphStyle(api.paragraphStyle),
+            ...readerUpdateFields(api),
         };
     }
 
@@ -98,6 +104,7 @@ class PublicStoryRepo {
             order: api.position,
             wordCount: api.wordCount,
             userId: authorId,
+            publishedAt: api.publishedAt ? new Date(api.publishedAt) : undefined,
         };
     }
 
@@ -105,7 +112,7 @@ class PublicStoryRepo {
         cursor: string | null,
         category?: string,
         search?: string,
-        filter: { tag?: string; author?: string } = {},
+        filter: { tag?: string; author?: string; status?: CompletionStatus } = {},
     ): Promise<PublicStoryPage> {
         const params = new URLSearchParams({ limit: String(STORIES_PAGE_SIZE) });
         if (cursor) params.set("cursor", cursor);
@@ -113,6 +120,7 @@ class PublicStoryRepo {
         if (search?.trim()) params.set("q", search.trim());
         if (filter.tag) params.set("tag", filter.tag);
         if (filter.author) params.set("author", filter.author);
+        if (filter.status) params.set("status", filter.status);
         const page = await this.request<ApiPublicStoryPage>(`/v1/public/stories?${params}`);
         return { stories: page.stories.map((story) => this.story(story)), cursor: page.nextCursor || null };
     }

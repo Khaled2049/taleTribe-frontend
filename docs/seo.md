@@ -72,11 +72,16 @@ server 301s every link the app renders.
 
 | Indexed | Not indexed |
 |---|---|
-| Home, `/stories`, genre pages | Search results (`/stories?q=`) |
+| Home, `/stories`, genre pages | Search results (`/stories?q=`) and status-filtered listings (`?status=`) |
 | Published stories and their chapters | Drafts and unpublished stories (404) |
 | Profiles of members with a published story | Profiles of members with none |
 | Tag pages with three or more stories | Thinner tag pages |
 | Competitions list and detail, book clubs list, help, legal | Editor, dashboard, auth, guestbooks, book club rooms, MCP consent |
+
+The Ongoing / Completed filter is a query parameter on purpose. A genre or tag
+is a page with its own URL; a status filter is a view of one, so it gets no
+route, `SEOHead` marks it `noindex`, and `seoRender` does the same for
+`/stories?status=`.
 
 Private routes are excluded two ways: an `X-Robots-Tag: noindex` header in
 `firebase.json`, which works without JavaScript, and `<SEOHead noindex />`.

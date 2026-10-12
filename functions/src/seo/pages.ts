@@ -92,6 +92,15 @@ const storyCrumbs = (story: PublicStory): schema.Crumb[] => [
   { name: story.title, path: storyPath(story.id, story.title) },
 ];
 
+/** "Completed · 12 chapters". Empty for a story-data that predates the status. */
+function completionLine(story: PublicStory, chapterCount: number): string {
+  const status = story.completionStatus === "completed"
+    ? "Completed"
+    : story.completionStatus === "ongoing" ? "Ongoing" : "";
+  if (!status) return "";
+  return `<p>${status} · ${chapterCount} ${chapterCount === 1 ? "chapter" : "chapters"}</p>`;
+}
+
 async function storyPage(param: string, rest: string[]): Promise<Resolution> {
   const storyId = storyIdFromParam(param);
   if (!storyId) return notFoundPage("Story");
@@ -197,6 +206,7 @@ async function storyPage(param: string, rest: string[]): Promise<Resolution> {
       snapshot: snapshot(
         crumbs,
         `<article><h1>${escapeHtml(story.title)}</h1><p>${byline}</p>` +
+          `${completionLine(story, chapters.length)}` +
           `${story.description ? `<p>${escapeHtml(story.description)}</p>` : ""}` +
           `${chapterLinks ? `<h2>Chapters</h2><ol>${chapterLinks}</ol>` : ""}` +
           `${tagLinks ? `<p>Tags: ${tagLinks}</p>` : ""}</article>`,
@@ -349,6 +359,7 @@ export async function resolvePage(pathname: string, query: URLSearchParams): Pro
   const [root, ...rest] = segments;
   if (root === "story" && rest.length > 0) return storyPage(rest[0], rest.slice(1));
   if (root === "profile" && rest.length === 1) return profilePageFor(rest[0]);
-  if (root === "stories") return storiesPage(rest, query.has("q"));
+  // A search or a status filter is a view of a listing, not a page to index.
+  if (root === "stories") return storiesPage(rest, query.has("q") || query.has("status"));
   return null;
 }

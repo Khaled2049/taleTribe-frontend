@@ -1,7 +1,7 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -10,7 +10,8 @@ interface ConfirmDialogProps {
   description: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  onConfirm: () => void | Promise<void>;
+  onConfirm: () => void | boolean | Promise<void | boolean>;
+  children?: ReactNode;
   variant?: "danger" | "default";
   isLoading?: boolean;
   /** Single-button mode for notices that aren't really a confirm/cancel choice. */
@@ -28,6 +29,7 @@ export function ConfirmDialog({
   variant = "default",
   isLoading = false,
   hideCancel = false,
+  children,
 }: ConfirmDialogProps) {
   const [isPending, setIsPending] = useState(false);
   const loading = isLoading || isPending;
@@ -36,8 +38,8 @@ export function ConfirmDialog({
     if (loading) return;
     setIsPending(true);
     try {
-      await onConfirm();
-      onOpenChange(false);
+      const result = await onConfirm();
+      if (result !== false) onOpenChange(false);
     } finally {
       setIsPending(false);
     }
@@ -87,6 +89,12 @@ export function ConfirmDialog({
               </DialogPrimitive.Description>
             </div>
           </div>
+
+          {children && (
+            <fieldset disabled={loading} className="mt-4 min-w-0">
+              {children}
+            </fieldset>
+          )}
 
           {/* Footer with buttons */}
           <div className="flex justify-end gap-3 mt-6">

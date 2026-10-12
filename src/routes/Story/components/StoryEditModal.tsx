@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, KeyboardEvent } from "react";
 import { X } from "lucide-react";
-import { StoryMetadata } from "@novelsync/story-data-client";
+import type {
+  ReaderUpdate,
+  Story,
+  StoryMetadata,
+} from "@novelsync/story-data-client";
 import {
   STORY_CATEGORIES,
   COPYRIGHT_OPTIONS,
@@ -10,6 +14,13 @@ import {
   LANGUAGES,
 } from "@/constants/storyOptions";
 import { TagMultiSelect } from "@/components/common";
+import { StoryCompletionPicker } from "@/components/story/StoryCompletionPicker";
+import {
+  READER_NOTE_MAX,
+  localToday,
+  normalizeReaderUpdate,
+  readerUpdateOf,
+} from "@/lib/readerUpdate";
 
 interface StoryEditModalProps {
   story: Pick<
@@ -22,7 +33,8 @@ interface StoryEditModalProps {
     | "targetAudience"
     | "language"
     | "copyright"
-  >;
+  > &
+    Pick<Story, "completionStatus" | "nextChapterOn" | "readerNote">;
   onSave: (
     id: string,
     data: {
@@ -33,6 +45,7 @@ interface StoryEditModalProps {
       targetAudience?: string;
       language?: string;
       copyright?: string;
+      readerUpdate: ReaderUpdate;
     },
   ) => Promise<void>;
   onClose: () => void;
@@ -57,6 +70,8 @@ export const StoryEditModal = ({
   );
   const [language, setLanguage] = useState(story.language ?? "");
   const [copyright, setCopyright] = useState(story.copyright ?? "");
+  const [readerUpdate, setReaderUpdate] = useState(() => readerUpdateOf(story));
+  const completed = readerUpdate.completionStatus === "completed";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,6 +109,7 @@ export const StoryEditModal = ({
         targetAudience: targetAudience.trim(),
         language: language.trim(),
         copyright: copyright.trim(),
+        readerUpdate: normalizeReaderUpdate(readerUpdate),
       });
       onClose();
     } catch {
@@ -264,6 +280,76 @@ export const StoryEditModal = ({
               max={MAX_STORY_TAGS}
               placeholder="Select tags…"
             />
+          </div>
+
+          {/* Reader update */}
+          <div className="space-y-4 border-t border-ns-border pt-5">
+            <div>
+              <h3 className="font-heading text-lg text-ns-ink">
+                For your readers
+              </h3>
+              <p className="font-ui text-xs text-ns-ink-muted">
+                Visible on your published story.
+              </p>
+            </div>
+
+            <StoryCompletionPicker
+              value={readerUpdate.completionStatus}
+              onChange={(completionStatus) =>
+                setReaderUpdate((current) => ({ ...current, completionStatus }))
+              }
+            />
+
+            <div>
+              <label htmlFor="next-chapter-on" className={labelClass}>
+                Next chapter expected{" "}
+                <span className="normal-case font-normal tracking-normal opacity-60">
+                  (optional)
+                </span>
+              </label>
+              <input
+                id="next-chapter-on"
+                type="date"
+                min={localToday()}
+                disabled={completed}
+                value={completed ? "" : readerUpdate.nextChapterOn}
+                onChange={(e) =>
+                  setReaderUpdate((current) => ({
+                    ...current,
+                    nextChapterOn: e.target.value,
+                  }))
+                }
+                className={`${fieldClass} disabled:opacity-50`}
+              />
+              <p className="mt-1.5 font-ui text-xs text-ns-ink-muted">
+                {completed
+                  ? "No next chapter for completed stories."
+                  : "Cleared when you release a chapter."}
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="reader-note" className={labelClass}>
+                Note to readers{" "}
+                <span className="normal-case font-normal tracking-normal opacity-60">
+                  ({readerUpdate.readerNote.length}/{READER_NOTE_MAX})
+                </span>
+              </label>
+              <textarea
+                id="reader-note"
+                value={readerUpdate.readerNote}
+                onChange={(e) =>
+                  setReaderUpdate((current) => ({
+                    ...current,
+                    readerNote: e.target.value,
+                  }))
+                }
+                rows={2}
+                maxLength={READER_NOTE_MAX}
+                className={`${fieldClass} resize-none`}
+                placeholder="New chapters every Friday."
+              />
+            </div>
           </div>
 
           {/* Error */}

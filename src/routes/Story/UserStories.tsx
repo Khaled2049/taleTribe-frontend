@@ -5,7 +5,11 @@ import { Plus, Eye, BookOpen, PenLine } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuthIdentity } from "@novelsync/platform-auth";
-import { StoryDataError, type Story } from "@novelsync/story-data-client";
+import {
+  StoryDataError,
+  type ReaderUpdate,
+  type Story,
+} from "@novelsync/story-data-client";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ApiError } from "@/cloudFunctions";
 import { StoryRow } from "./components/StoryRow";
@@ -140,6 +144,7 @@ const UserStories = () => {
       targetAudience?: string;
       language?: string;
       copyright?: string;
+      readerUpdate?: ReaderUpdate;
     },
   ) => {
     await updateMetadata.mutateAsync({ storyId, data });

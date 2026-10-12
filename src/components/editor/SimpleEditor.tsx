@@ -38,6 +38,7 @@ import {
 import {
   Chapter,
   ChapterSummary,
+  CompletionStatus,
   ParagraphStyle,
   Story,
 } from "@novelsync/story-data-client";
@@ -66,8 +67,6 @@ import { useEditorZoom } from "@/components/editor/editorZoom";
 import { SaveConflictDialog } from "@/components/editor/SaveConflictDialog";
 import { isRetryableSaveError, saveStoryEdits } from "@/lib/storySave";
 import { WordCount } from "@/components/editor/WordCount";
-import { WritingGoal } from "@/components/editor/WritingGoal";
-import { useWritingGoalTracker } from "@/hooks/useWritingGoalTracker";
 import { sidebarShortcut, sidebarShortcutLabel } from "@/lib/sidebarShortcut";
 import {
   getDocumentOutline,
@@ -109,6 +108,9 @@ import {
   workspaceStoryQuery,
 } from "@/hooks/queries/workspaceStory";
 import { neighbourChapterIds } from "@/lib/chapterIndex";
+import { isReleased, publishDescription } from "@/lib/chapterRelease";
+import { publishStory } from "@/lib/storyPublication";
+import { StoryCompletionPicker } from "@/components/story/StoryCompletionPicker";
 import { useEditorBridge } from "@/components/editor/EditorBridge";
 
 function splitValidationError(sections: DocumentSection[]): string | null {
@@ -186,6 +188,8 @@ export function SimpleEditor() {
   // Dialog states
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [publishCompletionStatus, setPublishCompletionStatus] =
+    useState<CompletionStatus>("ongoing");
   const [chapterToDelete, setChapterToDelete] = useState<string | null>(null);
   const [unsavedChangesDialogOpen, setUnsavedChangesDialogOpen] =
     useState(false);
@@ -195,6 +199,11 @@ export function SimpleEditor() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryResult, setSummaryResult] = useState<string | null>(null);
   const [splitDialogOpen, setSplitDialogOpen] = useState(false);
+  const [releaseRequest, setReleaseRequest] = useState<{
+    chapterId: string;
+    title: string;
+    published: boolean;
+  } | null>(null);
   const [isSplitting, setIsSplitting] = useState(false);
 
   useEffect(loadEditorFonts, []);
@@ -247,6 +256,7 @@ export function SimpleEditor() {
       if (
         deleteDialogOpen ||
         publishDialogOpen ||
+        releaseRequest ||
         unsavedChangesDialogOpen ||
         summaryResult
       ) {
@@ -260,6 +270,7 @@ export function SimpleEditor() {
     focusMode,
     deleteDialogOpen,
     publishDialogOpen,
+    releaseRequest,
     unsavedChangesDialogOpen,
     summaryResult,
     exitFocusMode,
@@ -422,7 +433,6 @@ export function SimpleEditor() {
   flushAndWaitRef.current = flushAndWait;
   const currentStoryId = state.story?.id;
   const currentChapterId = state.currentChapter?.id;
-  useWritingGoalTracker(editor, currentChapterId);
 
   useLayoutEffect(() => {
     if (!editorBridge || !editor || !currentStoryId || !currentChapterId) {
@@ -698,7 +708,17 @@ export function SimpleEditor() {
           section.title || `Chapter ${i + 2}`,
           section.html,
         );
-        createdChapters.push(saved);
+        // Text readers could already see must not turn private by being
+        // moved into a new chapter, which would otherwise start as a draft.
+        createdChapters.push(
+          base.publishedAt
+            ? await storyWorkspaceRepo.setChapterPublication(
+                state.story,
+                saved,
+                true,
+              )
+            : saved,
+        );
       }
 
       const savedFirst = await storyWorkspaceRepo.updateChapter(
@@ -717,6 +737,9 @@ export function SimpleEditor() {
       editor.commands.setContent(first.html, { emitUpdate: false });
       resetSaveState();
       invalidateShelf();
+      if (base.publishedAt) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.stories.all() });
+      }
       toast.success(`Split into ${sections.length} chapters.`);
     } catch (error) {
       try {
@@ -766,11 +789,13 @@ export function SimpleEditor() {
 
   // Summarize the current chapter and persist the summary.
   const handleSummarizeChapter = async () => {
-    if (!state.story || !state.currentChapter) return;
-    if (!(await saveBeforeContinuing())) return;
+    if (!state.story || !state.currentChapter || isSummarizing) return;
 
     setIsSummarizing(true);
+    let loadingToast: string | number | undefined;
     try {
+      if (!(await saveBeforeContinuing())) return;
+      loadingToast = toast.loading("Summarizing chapter…");
       const result = await summarizeChapter({
         storyId: state.story.id,
         chapterId: state.currentChapter.id,
@@ -781,6 +806,7 @@ export function SimpleEditor() {
         error instanceof Error ? error.message : "Failed to summarize chapter.",
       );
     } finally {
+      if (loadingToast !== undefined) toast.dismiss(loadingToast);
       setIsSummarizing(false);
     }
   };
@@ -797,34 +823,110 @@ export function SimpleEditor() {
   };
 
   // Handle publishing
+  const openPublishDialog = () => {
+    setPublishCompletionStatus(
+      storyBaseRef.current?.completionStatus ?? "ongoing",
+    );
+    setPublishDialogOpen(true);
+  };
+
   const handlePublish = async () => {
-    if (!state.story) return;
-    if (!(await saveBeforeContinuing())) return;
+    if (!state.story) return false;
+    if (!(await saveBeforeContinuing())) return false;
     const story = storyBaseRef.current;
-    if (!story) return;
+    if (!story) return false;
 
     const wasPublished = story.isPublished;
 
     try {
       setIsPublishing(true);
-      const savedStory = await storyWorkspaceRepo.updateStory({
-        ...story,
-        isPublished: !wasPublished,
-      });
+      const savedStory = wasPublished
+        ? await storyWorkspaceRepo.updateStory({ ...story, isPublished: false })
+        : await publishStory(
+            storyWorkspaceRepo,
+            story,
+            publishCompletionStatus,
+            (saved) => {
+              replaceStory(saved);
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.stories.all(),
+              });
+            },
+          );
       replaceStory(savedStory);
+      queryClient.invalidateQueries({ queryKey: queryKeys.stories.all() });
 
       if (!wasPublished) {
-        toast.success(
-          "Story marked published. Public discovery will be available after its migration.",
-        );
+        toast.success("Story published.");
+        // A first publish releases the written chapters server-side. If this
+        // read fails the story is still published; only the markers are stale.
+        try {
+          const index = await storyWorkspaceRepo.getChapterIndex(
+            savedStory.id,
+            savedStory.userId,
+          );
+          for (const chapter of index) {
+            actions.updateChapterInList(chapter.id, {
+              publishedAt: chapter.publishedAt,
+            });
+          }
+        } catch {
+          toast.error("Reload to see which chapters were released.");
+        }
       } else {
         // Just unpublished — stay in editor
         toast.success("Story unpublished.");
       }
     } catch {
       toast.error("Failed to update publish status. Please try again.");
+      return false;
     } finally {
       setIsPublishing(false);
+    }
+  };
+
+  const confirmChapterRelease = async () => {
+    const request = releaseRequest;
+    if (!state.story || !request) return;
+    if (!(await saveBeforeContinuing())) return;
+    // Read after the save: it is what moved the revision this call must send.
+    const chapter = chapterBaseRef.current;
+    if (!chapter || chapter.id !== request.chapterId) return;
+    if (request.published && chapter.wordCount === 0) {
+      toast.error("Add chapter text before releasing.");
+      return;
+    }
+    try {
+      const saved = await storyWorkspaceRepo.setChapterPublication(
+        state.story,
+        chapter,
+        request.published,
+      );
+      if (chapterBaseRef.current?.id === saved.id) {
+        chapterBaseRef.current = saved;
+      }
+      actions.updateChapterInList(saved.id, { publishedAt: saved.publishedAt });
+      cacheChapter(saved);
+      // story-data clears the promised date when a chapter is released.
+      const story = storyBaseRef.current;
+      if (request.published && story?.nextChapterOn) {
+        replaceStory({ ...story, nextChapterOn: undefined });
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.stories.all() });
+      const name = request.title || "Untitled";
+      toast.success(
+        !request.published
+          ? `"${name}" moved to draft.`
+          : state.story.isPublished
+            ? `"${name}" is live.`
+            : `"${name}" released. Publish the story to go live.`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof StoryDataConflictError
+          ? "This chapter changed somewhere else. Reload it and try again."
+          : "Couldn't update the chapter. Please try again.",
+      );
     }
   };
 
@@ -1013,6 +1115,27 @@ export function SimpleEditor() {
   };
 
   const isPublished = !!state.story?.isPublished;
+  const chapterToRelease = state.chapters.find(
+    (chapter) => chapter.id === state.currentChapter?.id,
+  );
+  const chapterReleaseButton = chapterToRelease && (
+    <button
+      type="button"
+      data-cy="chapter-release"
+      disabled={isPublishing || !!state.openingChapter}
+      onClick={() =>
+        setReleaseRequest({
+          chapterId: chapterToRelease.id,
+          title: chapterToRelease.title,
+          published: !isReleased(chapterToRelease),
+        })
+      }
+      title={`${isReleased(chapterToRelease) ? "Move to draft" : "Release"}: ${chapterToRelease.title || "Untitled chapter"}`}
+      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs font-medium text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink active:scale-[0.97] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+    >
+      {isReleased(chapterToRelease) ? "Move to draft" : "Release chapter"}
+    </button>
+  );
   const sidebarPanelProps = {
     chapters: state.chapters,
     currentChapterId: state.currentChapter?.id || "",
@@ -1029,6 +1152,7 @@ export function SimpleEditor() {
     onOutlineSelect: handleOutlineSelect,
     canSplitIntoChapters,
     onSplitIntoChapters: handleSplitRequest,
+    storyPublished: isPublished,
   };
 
   return (
@@ -1151,6 +1275,8 @@ export function SimpleEditor() {
                         bridgeRegistrationRef.current?.transaction(transaction)
                       }
                       onOpenCoWrite={openCoWrite}
+                      onSummarize={handleSummarizeChapter}
+                      onLink={applyLink}
                     />
                   </div>
                 </div>
@@ -1223,7 +1349,7 @@ export function SimpleEditor() {
                 <div
                   className={`${
                     focusMode ? "hidden" : "hidden sm:flex"
-                  } items-center gap-3 px-4 py-2`}
+                  } flex-wrap items-center gap-3 px-4 py-2`}
                 >
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button
@@ -1262,24 +1388,9 @@ export function SimpleEditor() {
                       <Save className="w-3.5 h-3.5 flex-shrink-0" />
                       <span className="hidden lg:inline">Save</span>
                     </button>
-                    <button
-                      onClick={handleSummarizeChapter}
-                      disabled={isSummarizing}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink hover:border-ns-border-strong active:scale-[0.97] transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                      title="Summarize this chapter and save the summary"
-                    >
-                      {isSummarizing ? (
-                        <Loader className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
-                      ) : (
-                        <ScrollText className="w-3.5 h-3.5 flex-shrink-0" />
-                      )}
-                      <span className="hidden lg:inline">
-                        {isSummarizing ? "Summarizing…" : "Summarize"}
-                      </span>
-                    </button>
                   </div>
 
-                  <div className="flex-1 flex items-center justify-center gap-4 min-w-0">
+                  <div className="order-last basis-full lg:order-none lg:basis-auto flex-1 flex items-center justify-center gap-4 min-w-0">
                     <SaveStatusIndicator
                       status={saveState.status}
                       lastSaved={saveState.lastSaved}
@@ -1287,12 +1398,16 @@ export function SimpleEditor() {
                       isOnline={isOnline}
                     />
                     <WordCount editor={editor} />
-                    <WritingGoal />
                   </div>
 
-                  <div className="flex items-center justify-end flex-shrink-0">
+                  <div
+                    data-cy="publication-controls"
+                    className="ml-auto flex items-center justify-end gap-2 flex-shrink-0"
+                  >
+                    {chapterReleaseButton}
                     <button
-                      onClick={() => setPublishDialogOpen(true)}
+                      title={isPublished ? "Unpublish story" : "Publish story"}
+                      onClick={openPublishDialog}
                       disabled={isPublishing}
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns font-ui text-xs font-medium active:scale-[0.97] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap ${
                         isPublished
@@ -1328,9 +1443,8 @@ export function SimpleEditor() {
                       isOnline={isOnline}
                     />
                     <WordCount editor={editor} />
-                    <WritingGoal />
                   </div>
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       onClick={enterFocusMode}
                       className="inline-flex justify-center rounded-ns border border-ns-border px-2 py-1.5 text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
@@ -1359,22 +1473,16 @@ export function SimpleEditor() {
                     >
                       <Save className="w-3.5 h-3.5" />
                     </button>
+                  </div>
+                  <div
+                    data-cy="publication-controls"
+                    className="flex items-center justify-end gap-2"
+                  >
+                    {chapterReleaseButton}
                     <button
-                      onClick={handleSummarizeChapter}
-                      disabled={isSummarizing}
-                      className="inline-flex justify-center rounded-ns border border-ns-border px-2 py-1.5 text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      aria-label="Summarize chapter"
-                    >
-                      {isSummarizing ? (
-                        <Loader className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <ScrollText className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setPublishDialogOpen(true)}
+                      onClick={openPublishDialog}
                       disabled={isPublishing}
-                      className={`inline-flex justify-center rounded-ns px-2 py-1.5 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+                      className={`inline-flex items-center justify-center gap-1.5 rounded-ns px-3 py-1.5 font-ui text-xs font-medium text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                         isPublished
                           ? "bg-ns-destructive hover:bg-ns-destructive-hover"
                           : "bg-ns-accent hover:bg-ns-accent-hover"
@@ -1388,6 +1496,7 @@ export function SimpleEditor() {
                       ) : (
                         <Upload className="w-3.5 h-3.5" />
                       )}
+                      {isPublished ? "Unpublish" : "Publish"}
                     </button>
                   </div>
                 </div>
@@ -1455,13 +1564,43 @@ export function SimpleEditor() {
             title={isPublished ? "Unpublish story?" : "Publish story?"}
             description={
               isPublished
-                ? `"${state.story?.title}" will be hidden from readers and returned to draft. You can publish it again at any time.`
-                : `"${state.story?.title}" will become visible to readers. You can unpublish it again at any time.`
+                ? `Hide "${state.story?.title}" from readers?`
+                : publishDescription(state.story?.title ?? "", state.chapters)
             }
             confirmLabel={isPublished ? "Unpublish" : "Publish"}
             cancelLabel={isPublished ? "Keep published" : "Cancel"}
             isLoading={isPublishing}
             onConfirm={handlePublish}
+          >
+            {!isPublished && (
+              <StoryCompletionPicker
+                value={publishCompletionStatus}
+                onChange={setPublishCompletionStatus}
+              />
+            )}
+          </ConfirmDialog>
+
+          <ConfirmDialog
+            open={releaseRequest !== null}
+            onOpenChange={(open) => {
+              if (!open) setReleaseRequest(null);
+            }}
+            title={
+              releaseRequest?.published
+                ? "Release this chapter?"
+                : "Move chapter to draft?"
+            }
+            description={
+              releaseRequest?.published
+                ? isPublished
+                  ? `"${releaseRequest.title || "Untitled"}" will go live now.`
+                  : `"${releaseRequest.title || "Untitled"}" will go live when you publish the story.`
+                : `Hide "${releaseRequest?.title || "Untitled"}"? Readers in this chapter will restart the story.`
+            }
+            confirmLabel={
+              releaseRequest?.published ? "Release" : "Move to draft"
+            }
+            onConfirm={confirmChapterRelease}
           />
 
           <SaveConflictDialog

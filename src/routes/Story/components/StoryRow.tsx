@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { StoryMetadata } from "@novelsync/story-data-client";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { publishDescription } from "@/lib/chapterRelease";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 
@@ -588,7 +589,7 @@ export const StoryRow = ({
         open={showPublishConfirm}
         onOpenChange={setShowPublishConfirm}
         title="Publish story?"
-        description={`"${story.title}" will become visible to readers. You can unpublish it again at any time.`}
+        description={publishDescription(story.title)}
         confirmLabel="Publish"
         cancelLabel="Cancel"
         onConfirm={() => onPublish(story.id)}

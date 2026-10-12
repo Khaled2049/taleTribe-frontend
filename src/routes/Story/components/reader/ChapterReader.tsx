@@ -1,6 +1,7 @@
 // src/components/reader/ChapterReader.tsx
 
-import type { ParagraphStyle } from "@novelsync/story-data-client";
+import type { ParagraphStyle, Story } from "@novelsync/story-data-client";
+import { readerUpdateView } from "@/lib/storyStatus";
 import React, {
   useCallback,
   useEffect,
@@ -41,6 +42,8 @@ interface ChapterReaderProps {
   onPrevChapter: () => void;
   onNextChapter: () => void;
   paragraphStyle?: ParagraphStyle;
+  /** Decides how the last chapter ends: an ongoing story is not over. */
+  story?: Pick<Story, "completionStatus" | "nextChapterOn" | "readerNote">;
   /** Scroll fraction to restore on entry (only for the resumed chapter). */
   resumeScrollPercent?: number | null;
   /** Persist the current scroll fraction (throttled). */
@@ -62,6 +65,7 @@ export const ChapterReader: React.FC<ChapterReaderProps> = ({
   onPrevChapter,
   onNextChapter,
   paragraphStyle,
+  story,
   resumeScrollPercent = null,
   onScrollPersist,
 }) => {
@@ -136,6 +140,7 @@ export const ChapterReader: React.FC<ChapterReaderProps> = ({
   const currentTheme = READER_THEMES[settings.theme];
   const isFirstChapter = currentChapterIndex === 0;
   const isLastChapter = currentChapterIndex === totalChapters - 1;
+  const caughtUp = story ? readerUpdateView(story) : null;
 
   // Compose marks: highlights first so search renders visually on top.
   const highlightMarks = useMemo<RenderMark[]>(
@@ -430,8 +435,23 @@ export const ChapterReader: React.FC<ChapterReaderProps> = ({
             <div className="flex-1 h-px bg-current" style={{ opacity: 0.3 }} />
           </div>
           <p className={`font-heading italic text-3xl ${currentTheme.text}`}>
-            The End
+            {story?.completionStatus === "ongoing"
+              ? "To be continued"
+              : "The End"}
           </p>
+          {caughtUp && (
+            <div
+              data-cy="reader-caught-up"
+              className={`max-w-sm px-6 text-center font-ui text-sm ${currentTheme.text}`}
+            >
+              {caughtUp.nextChapter && (
+                <p>Next chapter expected {caughtUp.nextChapter}</p>
+              )}
+              {caughtUp.note && (
+                <p className="mt-1 whitespace-pre-line">{caughtUp.note}</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

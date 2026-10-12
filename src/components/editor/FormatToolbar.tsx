@@ -1,26 +1,22 @@
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import {
   AlignCenter,
   AlignJustify,
   AlignLeft,
   AlignRight,
-  Baseline,
   ChevronDown,
-  Highlighter,
   ImagePlus,
   IndentDecrease,
   IndentIncrease,
   Link2,
   List,
   ListOrdered,
-  Minus,
-  Plus,
+  MoreHorizontal,
   Quote,
   Redo2,
   RemoveFormatting,
   SeparatorHorizontal,
-  UnfoldVertical,
   Undo2,
 } from "lucide-react";
 import {
@@ -31,9 +27,16 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuPortal,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useFormatState } from "@/components/editor/useLiveEditorState";
+import {
+  useFormatState,
+  type TextAlign,
+} from "@/components/editor/useLiveEditorState";
 import { EDITOR_FONTS, findEditorFont } from "@/components/editor/editorFonts";
 import { ZOOM_LEVELS, type EditorZoom } from "@/components/editor/editorZoom";
 import type { ParagraphStyle } from "@novelsync/story-data-client";
@@ -121,7 +124,7 @@ function toHex(color: string | null, fallback: string): string {
 }
 
 const controlClass =
-  "inline-flex h-7 items-center justify-center gap-1 rounded-ns px-1.5 font-ui text-xs text-ns-ink-secondary transition-colors hover:bg-ns-surface-hover hover:text-ns-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ns-ring)] disabled:opacity-40 disabled:pointer-events-none";
+  "inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-ns px-1.5 font-ui text-xs text-ns-ink-secondary transition-colors hover:bg-ns-surface-hover hover:text-ns-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ns-ring)] disabled:opacity-40 disabled:pointer-events-none";
 
 function ToolbarButton({
   label,
@@ -146,7 +149,7 @@ function ToolbarButton({
       // Keeps the selection in the manuscript while the button is pressed.
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
-      className={`${controlClass} min-w-7 ${
+      className={`${controlClass} min-w-8 ${
         active ? "bg-ns-accent-subtle !text-ns-accent" : ""
       }`}
     >
@@ -156,7 +159,35 @@ function ToolbarButton({
 }
 
 function Divider() {
-  return <span aria-hidden className="mx-1 h-5 w-px bg-ns-border" />;
+  return <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-ns-border" />;
+}
+
+function MoreSubmenu({
+  label,
+  value,
+  children,
+}: {
+  label: string;
+  value?: string;
+  children: ReactNode;
+}) {
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className="gap-2 font-ui text-xs">
+        {label}
+        {value && (
+          <span className="ml-auto max-w-24 truncate text-ns-ink-muted">
+            {value}
+          </span>
+        )}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuPortal>
+        <DropdownMenuSubContent className="max-h-[var(--radix-dropdown-menu-content-available-height)] w-56 overflow-y-auto">
+          {children}
+        </DropdownMenuSubContent>
+      </DropdownMenuPortal>
+    </DropdownMenuSub>
+  );
 }
 
 function Swatches({
@@ -200,6 +231,19 @@ export function FormatToolbar({
 }) {
   const format = useFormatState(editor);
   const imageInput = useRef<HTMLInputElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(true);
+
+  useEffect(() => {
+    const toolbar = toolbarRef.current;
+    if (!toolbar) return;
+    // Side panels can narrow the editor even on a large screen.
+    const observer = new ResizeObserver(([entry]) => {
+      setCompact(entry.contentRect.width < 560);
+    });
+    observer.observe(toolbar);
+    return () => observer.disconnect();
+  }, []);
 
   const blockStyle =
     BLOCK_STYLES.find(
@@ -231,7 +275,6 @@ export function FormatToolbar({
     editor.chain().focus().setFontSize(`${clamped}px`).run();
   };
 
-  // Radix returns focus to the trigger on close; send it back to the page.
   const menuProps = {
     align: "start" as const,
     onCloseAutoFocus: (event: Event) => {
@@ -240,11 +283,65 @@ export function FormatToolbar({
     },
   };
 
+  const styleChoices = (
+    <DropdownMenuRadioGroup
+      value={blockStyle.value}
+      onValueChange={setBlockStyle}
+    >
+      {BLOCK_STYLES.map((style) => (
+        <DropdownMenuRadioItem key={style.value} value={style.value}>
+          <span className={style.className}>{style.label}</span>
+        </DropdownMenuRadioItem>
+      ))}
+    </DropdownMenuRadioGroup>
+  );
+  const zoomLabel = zoom === "fit" ? "Fit" : `${zoomPercent}%`;
+  const zoomChoices = (
+    <DropdownMenuRadioGroup
+      value={String(zoom)}
+      onValueChange={(value) =>
+        onZoomChange(value === "fit" ? "fit" : Number(value))
+      }
+    >
+      <DropdownMenuRadioItem value="fit">Fit</DropdownMenuRadioItem>
+      <DropdownMenuSeparator />
+      {ZOOM_LEVELS.map((level) => (
+        <DropdownMenuRadioItem key={level} value={String(level)}>
+          {level}%
+        </DropdownMenuRadioItem>
+      ))}
+    </DropdownMenuRadioGroup>
+  );
+  const moreActions = [
+    { label: "Link", icon: Link2, run: onLink },
+    {
+      label: "Insert image",
+      icon: ImagePlus,
+      run: () => imageInput.current?.click(),
+    },
+    {
+      label: "Bullet list",
+      icon: List,
+      run: () => editor.chain().focus().toggleBulletList().run(),
+    },
+    {
+      label: "Numbered list",
+      icon: ListOrdered,
+      run: () => editor.chain().focus().toggleOrderedList().run(),
+    },
+    {
+      label: "Quote",
+      icon: Quote,
+      run: () => editor.chain().focus().toggleBlockquote().run(),
+    },
+  ];
+
   return (
     <div
+      ref={toolbarRef}
       role="toolbar"
       aria-label="Formatting"
-      className="flex flex-shrink-0 flex-wrap items-center justify-center gap-0.5 border-b border-ns-border bg-ns-surface px-3 py-1.5"
+      className="flex min-w-0 flex-shrink-0 items-center gap-1 border-b border-ns-border bg-ns-surface px-2 py-1.5"
     >
       <ToolbarButton
         label="Undo"
@@ -261,133 +358,26 @@ export function FormatToolbar({
         <Redo2 className="h-4 w-4" />
       </ToolbarButton>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          title="Zoom"
-          aria-label="Zoom"
-          className={`${controlClass} w-16 justify-between tabular-nums`}
-        >
-          <span>{zoom === "fit" ? "Fit" : `${zoomPercent}%`}</span>
-          <ChevronDown className="h-3 w-3 flex-shrink-0" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent {...menuProps} className="min-w-24">
-          <DropdownMenuRadioGroup
-            value={String(zoom)}
-            onValueChange={(value) =>
-              onZoomChange(value === "fit" ? "fit" : Number(value))
-            }
-          >
-            <DropdownMenuRadioItem value="fit">Fit</DropdownMenuRadioItem>
-            <DropdownMenuSeparator />
-            {ZOOM_LEVELS.map((level) => (
-              <DropdownMenuRadioItem
-                key={level}
-                value={String(level)}
-                className="tabular-nums"
-              >
-                {level}%
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Divider />
-
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          title="Text style"
-          aria-label="Text style"
-          className={`${controlClass} w-28 justify-between`}
-        >
-          <span className="truncate">{blockStyle.label}</span>
-          <ChevronDown className="h-3 w-3 flex-shrink-0" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent {...menuProps} className="w-48">
-          <DropdownMenuRadioGroup
-            value={blockStyle.value}
-            onValueChange={setBlockStyle}
-          >
-            {BLOCK_STYLES.map((style) => (
-              <DropdownMenuRadioItem key={style.value} value={style.value}>
-                <span className={style.className}>{style.label}</span>
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Divider />
-
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          title="Font"
-          aria-label="Font"
-          className={`${controlClass} w-32 justify-between`}
-        >
-          <span className="truncate">{font.label}</span>
-          <ChevronDown className="h-3 w-3 flex-shrink-0" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          {...menuProps}
-          className="max-h-80 w-52 overflow-y-auto"
-        >
-          <DropdownMenuRadioGroup value={font.label} onValueChange={setFont}>
-            {EDITOR_FONTS.map((option) => (
-              <DropdownMenuRadioItem key={option.label} value={option.label}>
-                <span
-                  className="text-sm"
-                  style={
-                    option.value ? { fontFamily: option.value } : undefined
-                  }
-                >
-                  {option.label}
-                </span>
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Divider />
-
-      <ToolbarButton
-        label="Decrease font size"
-        disabled={fontSize <= MIN_FONT_SIZE}
-        onClick={() => setFontSize(fontSize - 1)}
-      >
-        <Minus className="h-3.5 w-3.5" />
-      </ToolbarButton>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          title="Font size"
-          aria-label="Font size"
-          className={`${controlClass} w-9 border border-ns-border tabular-nums`}
-        >
-          {fontSize}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent {...menuProps} align="center" className="min-w-16">
-          {FONT_SIZES.map((size) => (
-            <DropdownMenuItem
-              key={size}
-              onSelect={() => setFontSize(size)}
-              className="justify-center tabular-nums"
+      {!compact && (
+        <>
+          <Divider />
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              title="Text style"
+              aria-label="Text style"
+              className={`${controlClass} w-28 justify-between`}
             >
-              {size}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <ToolbarButton
-        label="Increase font size"
-        disabled={fontSize >= MAX_FONT_SIZE}
-        onClick={() => setFontSize(fontSize + 1)}
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </ToolbarButton>
+              <span className="truncate">{blockStyle.label}</span>
+              <ChevronDown className="h-3 w-3 shrink-0" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent {...menuProps} className="w-48">
+              {styleChoices}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      )}
 
       <Divider />
-
       <ToolbarButton
         label="Bold"
         active={format.bold}
@@ -403,113 +393,283 @@ export function FormatToolbar({
         <span className="font-body text-sm italic">I</span>
       </ToolbarButton>
       <ToolbarButton
-        label="Underline"
-        active={format.underline}
-        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        label="Scene break"
+        onClick={() => editor.chain().focus().setHorizontalRule().run()}
       >
-        <span className="text-sm underline">U</span>
-      </ToolbarButton>
-      <ToolbarButton
-        label="Strikethrough"
-        active={format.strike}
-        onClick={() => editor.chain().focus().toggleStrike().run()}
-      >
-        <span className="text-sm line-through">S</span>
+        <SeparatorHorizontal className="h-4 w-4" />
       </ToolbarButton>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          title="Text colour"
-          aria-label="Text colour"
-          className={`${controlClass} min-w-7 flex-col !gap-0`}
-        >
-          <Baseline className="h-3.5 w-3.5" />
-          <span
-            className="h-[3px] w-4 rounded-full bg-ns-ink"
-            style={format.color ? { backgroundColor: format.color } : undefined}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent {...menuProps} className="w-44">
-          <DropdownMenuItem
-            onSelect={() => editor.chain().focus().unsetColor().run()}
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        {!compact && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              title="Zoom"
+              aria-label="Zoom"
+              className={`${controlClass} w-16 justify-between tabular-nums`}
+            >
+              {zoomLabel}
+              <ChevronDown className="h-3 w-3 shrink-0" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent {...menuProps} className="min-w-24">
+              {zoomChoices}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger
+            title="More formatting"
+            aria-label="More formatting"
+            className={`${controlClass} gap-1.5 border border-ns-border px-2`}
           >
-            Default
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <Swatches
-            colors={TEXT_COLORS}
-            onPick={(color) => editor.chain().focus().setColor(color).run()}
-          />
-          <DropdownMenuSeparator />
-          <label className="flex items-center justify-between gap-2 px-2 py-1.5 font-ui text-xs text-ns-ink-secondary">
-            Custom
-            <input
-              type="color"
-              value={toHex(format.color, TEXT_COLORS[0])}
-              onChange={(event) =>
-                editor.chain().setColor(event.target.value).run()
-              }
-              className="h-6 w-8 cursor-pointer border-0 bg-transparent"
-            />
-          </label>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          title="Highlight colour"
-          aria-label="Highlight colour"
-          className={`${controlClass} min-w-7 flex-col !gap-0`}
-        >
-          <Highlighter className="h-3.5 w-3.5" />
-          <span
-            className="h-[3px] w-4 rounded-full bg-ns-border"
-            style={
-              format.highlightColor
-                ? { backgroundColor: format.highlightColor }
-                : undefined
-            }
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent {...menuProps} className="w-44">
-          <DropdownMenuItem
-            onSelect={() => editor.chain().focus().unsetHighlightColor().run()}
+            <MoreHorizontal className="h-4 w-4" />
+            More
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            {...menuProps}
+            align="end"
+            collisionPadding={8}
+            className="max-h-[var(--radix-dropdown-menu-content-available-height)] w-60 overflow-y-auto"
           >
-            None
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <Swatches
-            colors={HIGHLIGHT_COLORS}
-            onPick={(color) =>
-              editor.chain().focus().setHighlightColor(color).run()
-            }
-          />
-          <DropdownMenuSeparator />
-          <label className="flex items-center justify-between gap-2 px-2 py-1.5 font-ui text-xs text-ns-ink-secondary">
-            Custom
-            <input
-              type="color"
-              value={toHex(format.highlightColor, HIGHLIGHT_COLORS[0])}
-              onChange={(event) =>
-                editor.chain().setHighlightColor(event.target.value).run()
+            {compact && (
+              <>
+                <MoreSubmenu label="Text style" value={blockStyle.label}>
+                  {styleChoices}
+                </MoreSubmenu>
+                <MoreSubmenu label="Zoom" value={zoomLabel}>
+                  {zoomChoices}
+                </MoreSubmenu>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuLabel className="font-ui text-xs text-ns-ink-muted">
+              Text
+            </DropdownMenuLabel>
+            <MoreSubmenu label="Font" value={font.label}>
+              <DropdownMenuRadioGroup
+                value={font.label}
+                onValueChange={setFont}
+              >
+                {EDITOR_FONTS.map((option) => (
+                  <DropdownMenuRadioItem
+                    key={option.label}
+                    value={option.label}
+                  >
+                    <span
+                      className="text-sm"
+                      style={
+                        option.value ? { fontFamily: option.value } : undefined
+                      }
+                    >
+                      {option.label}
+                    </span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </MoreSubmenu>
+            <MoreSubmenu label="Font size" value={String(fontSize)}>
+              <DropdownMenuItem
+                disabled={fontSize <= MIN_FONT_SIZE}
+                onSelect={() => setFontSize(fontSize - 1)}
+              >
+                Decrease size
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={fontSize >= MAX_FONT_SIZE}
+                onSelect={() => setFontSize(fontSize + 1)}
+              >
+                Increase size
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuRadioGroup
+                value={String(fontSize)}
+                onValueChange={(value) => setFontSize(Number(value))}
+              >
+                {FONT_SIZES.map((size) => (
+                  <DropdownMenuRadioItem key={size} value={String(size)}>
+                    {size}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </MoreSubmenu>
+            <MoreSubmenu label="Text formatting">
+              <DropdownMenuItem
+                onSelect={() => editor.chain().focus().toggleUnderline().run()}
+              >
+                {format.underline ? "Remove underline" : "Underline"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => editor.chain().focus().toggleStrike().run()}
+              >
+                {format.strike ? "Remove strikethrough" : "Strikethrough"}
+              </DropdownMenuItem>
+            </MoreSubmenu>
+            <MoreSubmenu label="Text colour">
+              <DropdownMenuItem
+                onSelect={() => editor.chain().focus().unsetColor().run()}
+              >
+                Default
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <Swatches
+                colors={TEXT_COLORS}
+                onPick={(color) => editor.chain().focus().setColor(color).run()}
+              />
+              <DropdownMenuSeparator />
+              <label className="flex items-center justify-between gap-2 px-2 py-1.5 font-ui text-xs text-ns-ink-secondary">
+                Custom
+                <input
+                  type="color"
+                  value={toHex(format.color, TEXT_COLORS[0])}
+                  onChange={(event) =>
+                    editor.chain().setColor(event.target.value).run()
+                  }
+                  className="h-6 w-8 cursor-pointer border-0 bg-transparent"
+                />
+              </label>
+            </MoreSubmenu>
+            <MoreSubmenu label="Highlight colour">
+              <DropdownMenuItem
+                onSelect={() =>
+                  editor.chain().focus().unsetHighlightColor().run()
+                }
+              >
+                None
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <Swatches
+                colors={HIGHLIGHT_COLORS}
+                onPick={(color) =>
+                  editor.chain().focus().setHighlightColor(color).run()
+                }
+              />
+              <DropdownMenuSeparator />
+              <label className="flex items-center justify-between gap-2 px-2 py-1.5 font-ui text-xs text-ns-ink-secondary">
+                Custom
+                <input
+                  type="color"
+                  value={toHex(format.highlightColor, HIGHLIGHT_COLORS[0])}
+                  onChange={(event) =>
+                    editor.chain().setHighlightColor(event.target.value).run()
+                  }
+                  className="h-6 w-8 cursor-pointer border-0 bg-transparent"
+                />
+              </label>
+            </MoreSubmenu>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="font-ui text-xs text-ns-ink-muted">
+              Paragraph
+            </DropdownMenuLabel>
+            <MoreSubmenu label="Alignment">
+              <DropdownMenuRadioGroup
+                value={format.textAlign}
+                onValueChange={(value) =>
+                  editor
+                    .chain()
+                    .focus()
+                    .setTextAlign(value as TextAlign)
+                    .run()
+                }
+              >
+                {[
+                  { value: "left", label: "Left", icon: AlignLeft },
+                  { value: "center", label: "Center", icon: AlignCenter },
+                  { value: "right", label: "Right", icon: AlignRight },
+                  { value: "justify", label: "Justify", icon: AlignJustify },
+                ].map(({ value, label, icon: Icon }) => (
+                  <DropdownMenuRadioItem key={value} value={value}>
+                    <Icon className="mr-2 h-4 w-4" />
+                    {label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </MoreSubmenu>
+            <MoreSubmenu label="Spacing">
+              <DropdownMenuLabel className="font-ui text-xs">
+                Line spacing
+              </DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={format.lineHeight ?? DEFAULT_LINE_HEIGHT}
+                onValueChange={(value) =>
+                  editor.chain().focus().setLineHeight(value).run()
+                }
+              >
+                {LINE_HEIGHTS.map((value) => (
+                  <DropdownMenuRadioItem key={value} value={value}>
+                    {value}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="font-ui text-xs">
+                Space after paragraph
+              </DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={format.paragraphSpacing ?? DEFAULT_PARAGRAPH_SPACING}
+                onValueChange={(value) =>
+                  editor.chain().focus().setParagraphSpacing(value).run()
+                }
+              >
+                {PARAGRAPH_SPACINGS.map((spacing) => (
+                  <DropdownMenuRadioItem
+                    key={spacing.value}
+                    value={spacing.value}
+                  >
+                    {spacing.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </MoreSubmenu>
+            <MoreSubmenu label="Paragraph style">
+              <DropdownMenuLabel className="font-ui text-xs">
+                Whole story
+              </DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={paragraphStyle}
+                onValueChange={(value) =>
+                  onParagraphStyleChange(value as ParagraphStyle)
+                }
+              >
+                <DropdownMenuRadioItem value="spaced">
+                  Space between paragraphs
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="indented">
+                  First-line indent
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </MoreSubmenu>
+            <MoreSubmenu label="Indent">
+              <DropdownMenuItem
+                onSelect={() => editor.chain().focus().decreaseIndent().run()}
+              >
+                <IndentDecrease className="mr-2 h-4 w-4" />
+                Decrease indent
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => editor.chain().focus().increaseIndent().run()}
+              >
+                <IndentIncrease className="mr-2 h-4 w-4" />
+                Increase indent
+              </DropdownMenuItem>
+            </MoreSubmenu>
+            <DropdownMenuSeparator />
+            {moreActions.map(({ label, icon: Icon, run }) => (
+              <DropdownMenuItem key={label} onSelect={run}>
+                <Icon className="mr-2 h-4 w-4" />
+                {label}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() =>
+                editor.chain().focus().clearTextFormatting().run()
               }
-              className="h-6 w-8 cursor-pointer border-0 bg-transparent"
-            />
-          </label>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Divider />
-
-      <ToolbarButton label="Link" active={format.link} onClick={onLink}>
-        <Link2 className="h-4 w-4" />
-      </ToolbarButton>
-      <ToolbarButton
-        label="Insert image"
-        onClick={() => imageInput.current?.click()}
-      >
-        <ImagePlus className="h-4 w-4" />
-      </ToolbarButton>
+            >
+              <RemoveFormatting className="mr-2 h-4 w-4" />
+              Clear formatting
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       <input
         ref={imageInput}
         type="file"
@@ -517,153 +677,10 @@ export function FormatToolbar({
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
-          // Cleared so picking the same file twice still fires a change.
           event.target.value = "";
           if (file) editor.commands.uploadImageFile(file);
         }}
       />
-
-      <Divider />
-
-      <ToolbarButton
-        label="Align left"
-        active={format.textAlign === "left"}
-        onClick={() => editor.chain().focus().setTextAlign("left").run()}
-      >
-        <AlignLeft className="h-4 w-4" />
-      </ToolbarButton>
-      <ToolbarButton
-        label="Align center"
-        active={format.textAlign === "center"}
-        onClick={() => editor.chain().focus().setTextAlign("center").run()}
-      >
-        <AlignCenter className="h-4 w-4" />
-      </ToolbarButton>
-      <ToolbarButton
-        label="Align right"
-        active={format.textAlign === "right"}
-        onClick={() => editor.chain().focus().setTextAlign("right").run()}
-      >
-        <AlignRight className="h-4 w-4" />
-      </ToolbarButton>
-      <ToolbarButton
-        label="Justify"
-        active={format.textAlign === "justify"}
-        onClick={() => editor.chain().focus().setTextAlign("justify").run()}
-      >
-        <AlignJustify className="h-4 w-4" />
-      </ToolbarButton>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          title="Line & paragraph spacing"
-          aria-label="Line and paragraph spacing"
-          className={`${controlClass} min-w-7`}
-        >
-          <UnfoldVertical className="h-4 w-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent {...menuProps} className="w-56">
-          <DropdownMenuLabel className="font-ui text-xs font-medium text-ns-ink-secondary">
-            Line spacing
-          </DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={format.lineHeight ?? DEFAULT_LINE_HEIGHT}
-            onValueChange={(value) =>
-              editor.chain().focus().setLineHeight(value).run()
-            }
-          >
-            {LINE_HEIGHTS.map((value) => (
-              <DropdownMenuRadioItem key={value} value={value}>
-                {value}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel className="font-ui text-xs font-medium text-ns-ink-secondary">
-            Space after paragraph
-          </DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={format.paragraphSpacing ?? DEFAULT_PARAGRAPH_SPACING}
-            onValueChange={(value) =>
-              editor.chain().focus().setParagraphSpacing(value).run()
-            }
-          >
-            {PARAGRAPH_SPACINGS.map((spacing) => (
-              <DropdownMenuRadioItem key={spacing.value} value={spacing.value}>
-                {spacing.label}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel className="font-ui text-xs font-medium text-ns-ink-secondary">
-            Paragraph style, whole story
-          </DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={paragraphStyle}
-            onValueChange={(value) =>
-              onParagraphStyleChange(value as ParagraphStyle)
-            }
-          >
-            <DropdownMenuRadioItem value="spaced">
-              Space between paragraphs
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="indented">
-              First-line indent
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Divider />
-
-      <ToolbarButton
-        label="Bullet list"
-        active={format.bulletList}
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-      >
-        <List className="h-4 w-4" />
-      </ToolbarButton>
-      <ToolbarButton
-        label="Numbered list"
-        active={format.orderedList}
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-      >
-        <ListOrdered className="h-4 w-4" />
-      </ToolbarButton>
-      <ToolbarButton
-        label="Decrease indent"
-        onClick={() => editor.chain().focus().decreaseIndent().run()}
-      >
-        <IndentDecrease className="h-4 w-4" />
-      </ToolbarButton>
-      <ToolbarButton
-        label="Increase indent"
-        onClick={() => editor.chain().focus().increaseIndent().run()}
-      >
-        <IndentIncrease className="h-4 w-4" />
-      </ToolbarButton>
-      <ToolbarButton
-        label="Quote"
-        active={format.blockquote}
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}
-      >
-        <Quote className="h-4 w-4" />
-      </ToolbarButton>
-      <ToolbarButton
-        label="Scene break"
-        onClick={() => editor.chain().focus().setHorizontalRule().run()}
-      >
-        <SeparatorHorizontal className="h-4 w-4" />
-      </ToolbarButton>
-
-      <Divider />
-
-      <ToolbarButton
-        label="Clear formatting"
-        onClick={() => editor.chain().focus().clearTextFormatting().run()}
-      >
-        <RemoveFormatting className="h-4 w-4" />
-      </ToolbarButton>
     </div>
   );
 }

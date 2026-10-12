@@ -20,6 +20,7 @@ export interface PublicStory {
   ratingsCount: number;
   createdAt: string;
   updatedAt: string;
+  completionStatus?: string;
 }
 
 export interface PublicChapter {

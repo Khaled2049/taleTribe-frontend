@@ -1,6 +1,6 @@
 import { isNotFound } from "../errors";
 import { request } from "../request";
-import type { Chapter, ChapterSummary, ParagraphStyle, Story, StoryMetadata } from "../types/IStory";
+import type { Chapter, ChapterSummary, CompletionStatus, ParagraphStyle, ReaderUpdate, Story, StoryMetadata } from "../types/IStory";
 
 interface ApiStory {
     id: string;
@@ -20,11 +20,26 @@ interface ApiStory {
     revision: number;
     createdAt: string;
     updatedAt: string;
+    completionStatus?: string;
+    nextChapterOn?: string;
+    readerNote?: string;
+    readerNoteUpdatedAt?: string;
 }
 
 /** Unknown or missing reads as undefined, which an update sends as "keep the stored value". */
 export const toParagraphStyle = (value: string | undefined): ParagraphStyle | undefined =>
     value === "spaced" || value === "indented" ? value : undefined;
+
+export const toCompletionStatus = (value: string | undefined): CompletionStatus | undefined =>
+    value === "ongoing" || value === "completed" ? value : undefined;
+
+/** The reader-update fields as every story endpoint returns them, owner or public. */
+export const readerUpdateFields = (api: { completionStatus?: string; nextChapterOn?: string; readerNote?: string; readerNoteUpdatedAt?: string }) => ({
+    completionStatus: toCompletionStatus(api.completionStatus),
+    nextChapterOn: api.nextChapterOn || undefined,
+    readerNote: api.readerNote || undefined,
+    readerNoteUpdatedAt: api.readerNoteUpdatedAt ? new Date(api.readerNoteUpdatedAt) : undefined,
+});
 
 /**
  * The list endpoint returns each story with the aggregates the shelf renders.
@@ -59,11 +74,14 @@ interface ApiChapter {
     position: number;
     wordCount: number;
     revision: number;
+    publishedAt?: string;
 }
+
+const toPublishedAt = (value: string | undefined) => (value ? new Date(value) : undefined);
 
 export class StoryWorkspaceRepo {
     private request<T>(
-        method: "GET" | "POST" | "PATCH" | "DELETE",
+        method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
         path: string,
         body?: unknown,
         revision?: number,
@@ -99,11 +117,12 @@ export class StoryWorkspaceRepo {
             thumbnailUrl: api.thumbnailUrl || undefined,
             revision: api.revision,
             paragraphStyle: toParagraphStyle(api.paragraphStyle),
+            ...readerUpdateFields(api),
         };
     }
 
     private chapter(api: ApiChapter, ownerId: string): Chapter {
-        return { id: api.id, title: api.title, content: api.content, order: api.position, wordCount: api.wordCount, userId: ownerId, revision: api.revision };
+        return { id: api.id, title: api.title, content: api.content, order: api.position, wordCount: api.wordCount, userId: ownerId, revision: api.revision, publishedAt: toPublishedAt(api.publishedAt) };
     }
 
     async getStory(storyId: string): Promise<Story | null> {
@@ -156,6 +175,10 @@ export class StoryWorkspaceRepo {
             ...(story.paragraphStyle ? { paragraphStyle: story.paragraphStyle } : {}),
         }, revision));
     }
+    /** Takes no revision and bumps none, so it never conflicts with a story edit open elsewhere. */
+    async updateReaderUpdate(storyId: string, update: ReaderUpdate): Promise<Story> {
+        return this.story(await this.request<ApiStory>("PUT", `/v1/stories/${storyId}/reader-update`, update));
+    }
     async updateStoryByID(storyId: string, updates: Partial<Story>): Promise<Story> {
         const story = await this.getStory(storyId);
         if (!story) throw new Error("Story not found");
@@ -166,7 +189,7 @@ export class StoryWorkspaceRepo {
     async getChapters(story: Story): Promise<Chapter[]> { return this.getChaptersByStoryId(story.id, story.userId); }
     async getChapterIndex(storyId: string, ownerId = ""): Promise<ChapterSummary[]> {
         const chapters = await this.request<ApiChapter[]>("GET", `/v1/stories/${storyId}/chapters?content=false`);
-        return chapters.map((api) => ({ id: api.id, title: api.title, order: api.position, wordCount: api.wordCount, userId: ownerId, revision: api.revision }));
+        return chapters.map((api) => ({ id: api.id, title: api.title, order: api.position, wordCount: api.wordCount, userId: ownerId, revision: api.revision, publishedAt: toPublishedAt(api.publishedAt) }));
     }
     async getChapter(storyId: string, chapterId: string, ownerId = ""): Promise<Chapter | null> {
         try { return this.chapter(await this.request<ApiChapter>("GET", `/v1/stories/${storyId}/chapters/${chapterId}`), ownerId); } catch (error) { if (isNotFound(error)) return null; throw error; }
@@ -175,6 +198,8 @@ export class StoryWorkspaceRepo {
     async getChaptersByStoryId(storyId: string, ownerId = ""): Promise<Chapter[]> { const chapters = await this.request<ApiChapter[]>("GET", `/v1/stories/${storyId}/chapters`); return chapters.map((chapter) => this.chapter(chapter, ownerId)); }
     async createChapter(story: Story, title: string, position: number): Promise<Chapter> { return this.chapter(await this.request<ApiChapter>("POST", `/v1/stories/${story.id}/chapters`, { title, content: "", position }), story.userId); }
     async updateChapter(story: Story, chapter: Chapter, title: string, content: string): Promise<Chapter> { const revision = chapter.revision; if (!revision) throw new Error("Chapter revision is missing. Reload the story."); return this.chapter(await this.request<ApiChapter>("PATCH", `/v1/stories/${story.id}/chapters/${chapter.id}`, { title, content, position: chapter.order }, revision), story.userId); }
+    /** Releases a draft to readers or pulls it back. Sends the revision so text saved elsewhere is not released unseen; the revision itself does not change. */
+    async setChapterPublication(story: Pick<Story, "id" | "userId">, chapter: Pick<Chapter, "id" | "revision">, published: boolean): Promise<Chapter> { const revision = chapter.revision; if (!revision) throw new Error("Chapter revision is missing. Reload the story."); return this.chapter(await this.request<ApiChapter>("PUT", `/v1/stories/${story.id}/chapters/${chapter.id}/publication`, { published }, revision), story.userId); }
     async deleteChapter(story: Story, chapter: Pick<Chapter, "id" | "revision">): Promise<void> { const revision = chapter.revision; if (!revision) throw new Error("Chapter revision is missing. Reload the story."); await this.request<void>("DELETE", `/v1/stories/${story.id}/chapters/${chapter.id}`, undefined, revision); }
 }
 
