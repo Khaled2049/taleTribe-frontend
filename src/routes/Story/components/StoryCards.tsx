@@ -4,6 +4,7 @@ import { ChevronRight, Compass } from "lucide-react";
 import { FaEye, FaThumbsUp } from "react-icons/fa";
 import type { StoryMetadata } from "@novelsync/story-data-client";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
+import { StoryStatusBadge } from "@/components/story/StoryStatus";
 import { prefetchStoryDetail } from "@/routes/Story/prefetchStoryDetail";
 import { profilePath, storyPath } from "@/lib/seoPaths";
 
@@ -81,6 +82,10 @@ export const StoryGridCard = memo(function StoryGridCard({
             title={story.title}
             author={story.author}
             priority={priority}
+          />
+          <StoryStatusBadge
+            status={story.completionStatus}
+            className="absolute left-1 top-1 shadow-ns-sm"
           />
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors duration-300 flex flex-col justify-between p-2 opacity-0 group-hover:opacity-100">
             <p className="text-white text-[10px] line-clamp-3 leading-relaxed font-body">
@@ -204,6 +209,7 @@ export const StoryListRow = memo(function StoryListRow({
               {story.category}
             </span>
           )}
+          <StoryStatusBadge status={story.completionStatus} />
         </div>
       </div>
 

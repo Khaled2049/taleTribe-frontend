@@ -1,7 +1,12 @@
 import { useAuthContext } from "../../contexts/AuthContext";
 import { FaBook } from "react-icons/fa";
 import { ChevronDown, Check, Search, Sparkles, X } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { APP_NAME } from "@/config/seo";
@@ -9,6 +14,7 @@ import { genreName, genrePath, storyPath, tagSlug } from "@/lib/seoPaths";
 import StoriesHeader from "@/components/story/StoriesHeader";
 import { StoryMetadata } from "@novelsync/story-data-client";
 import { usePublishedStories } from "@/hooks/queries/publishedStories";
+import { STATUS_LABELS, statusFromParam } from "@/lib/storyStatus";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { findScrollParent } from "@/lib/scrollParent";
@@ -76,6 +82,11 @@ const AllStories: React.FC = () => {
   const selectedCategory = knownGenre ? (params.genre as string) : "all";
   const tag = params.tag ? tagSlug(params.tag) : "";
   const tagLabel = tag.replace(/-/g, " ");
+  // A query parameter, not a route: unlike a genre, a status filter is a view
+  // of a page that already exists, so it must not become a page to index.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const status = statusFromParam(searchParams.get("status"));
+  const statusQuery = status ? `?status=${status}` : "";
   const [searchInput, setSearchInput] = useState("");
   const [genreMenuOpen, setGenreMenuOpen] = useState(false);
   const [discoveryTitle, setDiscoveryTitle] = useState("");
@@ -101,7 +112,7 @@ const AllStories: React.FC = () => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = usePublishedStories(selectedCategory, search, tag);
+  } = usePublishedStories(selectedCategory, search, tag, status);
 
   const stories = useMemo(
     () => data?.pages.flatMap((page) => page.stories) ?? [],
@@ -166,7 +177,19 @@ const AllStories: React.FC = () => {
 
   const handleCategoryChange = (category: string) => {
     resetForCategory();
-    navigate(genrePath(category));
+    navigate(`${genrePath(category)}${statusQuery}`);
+  };
+
+  const handleStatusChange = (next: typeof status) => {
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        if (next) params.set("status", next);
+        else params.delete("status");
+        return params;
+      },
+      { replace: true },
+    );
   };
 
   const handleSearchChange = (value: string) => {
@@ -271,20 +294,24 @@ const AllStories: React.FC = () => {
           description={`Stories tagged ${tagLabel} on ${APP_NAME}, written by independent authors and free to read online.`}
           // The server indexes a tag once enough stories carry it; until the
           // first page has loaded the client cannot know, so it says nothing.
-          noindex={!loading && stories.length < 3}
+          noindex={status !== "" || (!loading && stories.length < 3)}
         />
       ) : genreName(selectedCategory) ? (
         <SEOHead
           title={`${genreName(selectedCategory)} Stories`}
           description={`Read ${genreName(selectedCategory)?.toLowerCase()} stories by independent writers on ${APP_NAME}. New chapters and new voices, free to read online.`}
+          noindex={status !== ""}
         />
       ) : (
         <SEOHead
           title="Discover Stories"
           description={`Browse original fiction from independent writers on ${APP_NAME} — fantasy, romance, science fiction, mystery, horror and more, free to read.`}
           url="/stories"
-          // An unknown genre in the URL, or a search, is not a page of its own.
-          noindex={(!!params.genre && !knownGenre) || search !== ""}
+          // An unknown genre in the URL, a search, or a status filter is not a
+          // page of its own.
+          noindex={
+            (!!params.genre && !knownGenre) || search !== "" || status !== ""
+          }
         />
       )}
 
@@ -480,6 +507,32 @@ const AllStories: React.FC = () => {
             {/* Story grid */}
             {!discoveryActive && (
               <>
+                <div
+                  role="radiogroup"
+                  aria-label="Filter by story status"
+                  className="mb-5 inline-flex overflow-hidden rounded-ns border border-ns-border"
+                >
+                  {(["", "ongoing", "completed"] as const).map((value) => {
+                    const selected = status === value;
+                    return (
+                      <button
+                        key={value || "all"}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        data-cy={`status-filter-${value || "all"}`}
+                        onClick={() => handleStatusChange(value)}
+                        className={`px-3.5 py-1.5 font-ui text-xs transition-colors ${
+                          selected
+                            ? "bg-ns-accent text-white font-medium"
+                            : "bg-ns-surface text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink"
+                        }`}
+                      >
+                        {value ? STATUS_LABELS[value] : "All"}
+                      </button>
+                    );
+                  })}
+                </div>
                 {isError && (
                   <div className="mb-6 px-4 py-3 rounded-ns border border-ns-destructive/20 bg-ns-accent-subtle text-ns-destructive font-ui text-sm">
                     {error instanceof Error
@@ -500,11 +553,13 @@ const AllStories: React.FC = () => {
                         ? `Nothing matches “${search}”${
                             selectedCategory === "all" ? "" : " in this genre"
                           }.`
-                        : tag
-                          ? `No stories are tagged “${tagLabel}” yet.`
-                          : selectedCategory === "all"
-                            ? "No stories have been published yet."
-                            : "No stories found in this category yet."}
+                        : status
+                          ? `No ${STATUS_LABELS[status].toLowerCase()} stories here yet.`
+                          : tag
+                            ? `No stories are tagged “${tagLabel}” yet.`
+                            : selectedCategory === "all"
+                              ? "No stories have been published yet."
+                              : "No stories found in this category yet."}
                     </p>
                   </div>
                 ) : (
@@ -577,7 +632,7 @@ const AllStories: React.FC = () => {
                 return (
                   <Link
                     key={category.id}
-                    to={genrePath(category.value)}
+                    to={`${genrePath(category.value)}${statusQuery}`}
                     onClick={resetForCategory}
                     aria-current={isActive ? "page" : undefined}
                     className={`

@@ -35,6 +35,10 @@ import { ChapterReader } from "./components/reader/ChapterReader";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { BookCoverFallback } from "@/components/story/BookCoverFallback";
 import {
+  StoryReaderUpdate,
+  StoryStatusBadge,
+} from "@/components/story/StoryStatus";
+import {
   chapterPath,
   storyIdFromParam,
   storyPath,
@@ -599,6 +603,7 @@ const StoryDetail: React.FC = () => {
                   <span className="font-ui text-xs text-ns-ink-muted">
                     {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"}
                   </span>
+                  <StoryStatusBadge status={story.completionStatus} />
                 </div>
 
                 {/* Actions */}
@@ -650,6 +655,7 @@ const StoryDetail: React.FC = () => {
           {/* ── Content ── */}
           <div className="max-w-5xl mx-auto px-6 py-12">
             <main className="max-w-2xl mx-auto">
+              <StoryReaderUpdate story={story} className="mb-8" />
               <StorySynopsis description={story.description} />
 
               {/* Ornamental divider */}
@@ -749,6 +755,7 @@ const StoryDetail: React.FC = () => {
         onPrevChapter={handlePrevChapter}
         onNextChapter={handleNextChapter}
         paragraphStyle={story.paragraphStyle}
+        story={story}
         resumeScrollPercent={resumeScrollPercent}
         onScrollPersist={handleScrollPersist}
       />

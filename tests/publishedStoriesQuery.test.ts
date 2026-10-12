@@ -34,6 +34,24 @@ afterEach(() => {
 });
 
 describe("publishedStoriesQuery", () => {
+  it("sends the status filter and caches it under its own key", async () => {
+    const client = new QueryClient();
+
+    await client.prefetchInfiniteQuery(
+      publishedStoriesQuery("all", "", "", "completed"),
+    );
+
+    expect(urls[0]).toContain("status=completed");
+    expect(
+      client.getQueryData(
+        queryKeys.stories.byCategory("all", "", "", "completed"),
+      ),
+    ).toBeDefined();
+    expect(
+      client.getQueryData(queryKeys.stories.byCategory("all", "")),
+    ).toBeUndefined();
+  });
+
   it("prefetches the first page under the key the stories page reads", async () => {
     const client = new QueryClient();
 

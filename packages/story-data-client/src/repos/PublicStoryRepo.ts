@@ -1,7 +1,7 @@
 import { readerUpdateFields, toParagraphStyle } from "./StoryWorkspaceRepo";
 import { isNotFound } from "../errors";
 import { request } from "../request";
-import type { Chapter, Story, StoryMetadata } from "../types/IStory";
+import type { Chapter, CompletionStatus, Story, StoryMetadata } from "../types/IStory";
 
 const STORIES_PAGE_SIZE = 24;
 
@@ -112,7 +112,7 @@ class PublicStoryRepo {
         cursor: string | null,
         category?: string,
         search?: string,
-        filter: { tag?: string; author?: string } = {},
+        filter: { tag?: string; author?: string; status?: CompletionStatus } = {},
     ): Promise<PublicStoryPage> {
         const params = new URLSearchParams({ limit: String(STORIES_PAGE_SIZE) });
         if (cursor) params.set("cursor", cursor);
@@ -120,6 +120,7 @@ class PublicStoryRepo {
         if (search?.trim()) params.set("q", search.trim());
         if (filter.tag) params.set("tag", filter.tag);
         if (filter.author) params.set("author", filter.author);
+        if (filter.status) params.set("status", filter.status);
         const page = await this.request<ApiPublicStoryPage>(`/v1/public/stories?${params}`);
         return { stories: page.stories.map((story) => this.story(story)), cursor: page.nextCursor || null };
     }

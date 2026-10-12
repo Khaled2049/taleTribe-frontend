@@ -214,6 +214,27 @@ describe("resolvePage", () => {
     assert.ok(page.snapshot.includes("href=\"/profile/author-uid\""));
   });
 
+  it("says whether a story is finished, and nothing when story-data does not", async () => {
+    stubFetch({
+      [`/v1/public/stories/${STORY_ID}`]: { story: story({ completionStatus: "completed" }), chapters: [chapterMeta] },
+    });
+    const finished = ((await resolvePage(canonical, noQuery)) as { page: Page }).page;
+    assert.ok(finished.snapshot.includes("<p>Completed · 1 chapter</p>"));
+
+    stubFetch({ [`/v1/public/stories/${STORY_ID}`]: { story: story(), chapters: [chapterMeta] } });
+    const unknown = ((await resolvePage(canonical, noQuery)) as { page: Page }).page;
+    assert.ok(!unknown.snapshot.includes("Ongoing"));
+    assert.ok(!unknown.snapshot.includes("Completed"));
+  });
+
+  it("does not index a status-filtered listing", async () => {
+    stubFetch({ "/v1/public/stories": { stories: [story()] } });
+    const filtered = ((await resolvePage("/stories", new URLSearchParams("status=completed"))) as { page: Page }).page;
+    assert.equal(filtered.index, false);
+    const plain = ((await resolvePage("/stories", noQuery)) as { page: Page }).page;
+    assert.equal(plain.index, true);
+  });
+
   it("omits aggregateRating when nobody has rated", async () => {
     stubFetch({
       [`/v1/public/stories/${STORY_ID}`]: {
