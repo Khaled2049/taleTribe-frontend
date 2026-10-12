@@ -1,8 +1,10 @@
 import { connectStorageEmulator, getStorage } from "firebase/storage";
-import { app, connectEmulatorOnce } from "./firebase";
-
+import { getPlatformAuth, connectEmulatorOnce } from "./firebase.js";
+const { app, options } = getPlatformAuth();
 export const storage = getStorage(app);
-
-connectEmulatorOnce("storage", () =>
-  connectStorageEmulator(storage, "127.0.0.1", 9199),
-);
+if (options.emulators?.storage) {
+  const { host, port } = options.emulators.storage;
+  connectEmulatorOnce("storage", () =>
+    connectStorageEmulator(storage, host, port),
+  );
+}

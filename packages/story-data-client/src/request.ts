@@ -1,9 +1,9 @@
-import { getStoryDataConfig } from "./config";
+import { getStoryDataConfig } from "./config.js";
 import {
   StoryDataAuthError,
   StoryDataConflictError,
   StoryDataError,
-} from "./errors";
+} from "./errors.js";
 
 export type AuthMode = "none" | "optional" | "required";
 

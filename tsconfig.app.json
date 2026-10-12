@@ -25,11 +25,26 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@novelsync/story-data-client": ["./packages/story-data-client/src/index.ts"],
-      "@novelsync/platform-auth/firestore": ["./packages/platform-auth/src/firestore.ts"],
-      "@novelsync/platform-auth/storage": ["./packages/platform-auth/src/storage.ts"],
-      "@novelsync/platform-auth": ["./packages/platform-auth/src/index.ts"],
-      "@novelsync/assistant-contracts": ["./packages/assistant-contracts/src/index.ts"]
+      "@novelsync/story-data-client": [
+        "./packages/story-data-client/src/index.ts"
+      ],
+      "@novelsync/platform-auth/firestore": ["./src/platform/firestore.ts"],
+      "@novelsync/platform-auth/storage": ["./src/platform/storage.ts"],
+      "@novelsync/platform-auth": ["./src/platform/auth.ts"],
+      "@novelsync/platform-auth/core": [
+        "./packages/platform-auth/src/index.ts"
+      ],
+      "@novelsync/platform-auth/firestore-core": [
+        "./packages/platform-auth/src/firestore.ts"
+      ],
+      "@novelsync/platform-auth/storage-core": [
+        "./packages/platform-auth/src/storage.ts"
+      ],
+      "@novelsync/reader-ui": ["./packages/reader-ui/src/index.ts"],
+      "@novelsync/reader-ui/*": ["./packages/reader-ui/src/*"],
+      "@novelsync/assistant-contracts": [
+        "./packages/assistant-contracts/src/index.ts"
+      ]
     }
   },
   "include": ["src", "packages/*/src"]

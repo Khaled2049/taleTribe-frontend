@@ -1,4 +1,4 @@
-import { request } from "../request";
+import { request } from "../request.js";
 
 export type AssistantMessageStatus =
   "incomplete" | "complete" | "requires_action" | "failed" | "cancelled";

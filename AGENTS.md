@@ -5,13 +5,18 @@ Cloud Functions that remain during the PostgreSQL migration.
 
 ## Commands
 
-- `yarn dev`: run Vite.
-- `yarn build`: type-check and build the client.
+- `yarn dev`: build shared package artifacts, then run Vite.
+- `yarn build`: build packages, type-check and build the client.
+- `yarn packages:verify`: pack and install shared reader packages in a temporary
+  independent consumer; see `docs/shared-reader-packages.md`.
 - `yarn lint` and `yarn test`: lint and run unit tests.
 - `npm run emulator --prefix functions`: build Functions and start Firebase
   emulators. Prefer `../story/dev-new.sh` when testing the integrated stack.
 
 ## Architecture rules
+
+- Shared reader packages must have no app aliases or implicit environment reads.
+  Apps own Firebase bootstrap, routing, query clients, and platform adapters.
 
 - Use the frontend story-data client and Vite `/story-data` proxy for migrated
   stories, chapters, worldbuilding, public reads, social interactions, reading

@@ -1,0 +1,134 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Compass } from "lucide-react";
+import type { RecommendationItem } from "../../recommendations.js";
+import { getApiErrorMessage } from "../../errors.js";
+import { useRecommendationExplanation } from "../../hooks/queries/useRecommendationQueries.js";
+import { BookCoverFallback } from "../story/BookCoverFallback.js";
+import { prefetchStoryDetail } from "../../routes/Story/prefetchStoryDetail.js";
+
+interface RecommendationCardProps {
+  item: RecommendationItem;
+  /** Real cover from story-data; the book mark stands in until it loads. */
+  coverUrl?: string;
+  prompt?: string;
+  seedItemIds?: number[];
+  onSimilar?: (item: RecommendationItem) => void;
+}
+
+export default function RecommendationCard({
+  item,
+  coverUrl,
+  prompt,
+  seedItemIds = [],
+  onSimilar,
+}: RecommendationCardProps) {
+  const queryClient = useQueryClient();
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const explain = useRecommendationExplanation();
+  const premise =
+    item.core_premise ||
+    [item.themes[0], item.tone[0]].filter(Boolean).join(" · ") ||
+    "A story selected for this shelf.";
+
+  const requestExplanation = () => {
+    if (explanation || explain.isPending) return;
+    explain.mutate(
+      { itemIds: [item.id], prompt, seedItemIds },
+      {
+        onSuccess: (results) => {
+          setExplanation(results[0]?.explanation ?? null);
+        },
+      },
+    );
+  };
+
+  return (
+    <article
+      className="group"
+      onMouseEnter={() => void prefetchStoryDetail(item.story_id, queryClient)}
+      onTouchStart={() => void prefetchStoryDetail(item.story_id, queryClient)}
+    >
+      <div className="book-perspective mx-auto max-w-[130px]">
+        {/* Coverless stories keep the same deterministic typographic jacket on
+            every shelf, without persisting or inventing generated artwork. */}
+        <div className="book-cover relative aspect-[2/3] overflow-hidden rounded-ns mb-2 bg-ns-surface">
+          <Link
+            to={`/story/${item.story_id}`}
+            aria-label={`Read ${item.title}`}
+            className="block h-full w-full"
+          >
+            {coverUrl ? (
+              <img
+                src={coverUrl}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            ) : (
+              <BookCoverFallback title={item.title} author={item.author} />
+            )}
+          </Link>
+
+          {/* Hover detail. `pointer-events-none` on the container so the cover
+              stays a single click target for the link underneath; only the
+              buttons take pointer events back. */}
+          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between p-2 bg-black/0 opacity-0 transition-colors duration-300 group-hover:bg-black/60 group-hover:opacity-100 group-focus-within:bg-black/60 group-focus-within:opacity-100">
+            <p className="line-clamp-3 font-body text-[10px] leading-relaxed text-white">
+              {premise}
+            </p>
+            <div className="space-y-1 font-ui">
+              <button
+                type="button"
+                onClick={requestExplanation}
+                disabled={explain.isPending}
+                className="pointer-events-auto flex w-full items-center justify-center rounded-full border border-white/35 bg-black/20 px-2 py-1 text-[9px] uppercase tracking-[0.08em] text-white transition-colors hover:bg-white hover:text-stone-900 disabled:cursor-wait disabled:opacity-60"
+              >
+                {explain.isPending ? "Finding…" : "Why this story?"}
+              </button>
+              {onSimilar && (
+                <button
+                  type="button"
+                  onClick={() => onSimilar(item)}
+                  className="pointer-events-auto flex w-full items-center justify-center gap-1 rounded-full border border-white/35 bg-black/20 px-2 py-1 text-[9px] uppercase tracking-[0.08em] text-white transition-colors hover:bg-white hover:text-stone-900"
+                >
+                  <Compass className="h-3 w-3" />
+                  More like this
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="min-w-0 space-y-0.5">
+        <Link to={`/story/${item.story_id}`} className="block min-w-0">
+          <h3
+            title={item.title}
+            className="truncate font-ui text-sm font-medium text-ns-ink transition-colors duration-200 group-hover:text-ns-accent"
+          >
+            {item.title}
+          </h3>
+        </Link>
+        <p
+          title={item.author || undefined}
+          className="truncate font-ui text-xs text-ns-ink-muted"
+        >
+          {item.author || "TheTaleTribe author"}
+        </p>
+      </div>
+
+      {(explanation || explain.isError) && (
+        <p className="mt-1.5 border-l-2 border-ns-accent/30 pl-2 font-body text-[11px] leading-relaxed text-ns-ink-secondary">
+          {explanation ||
+            getApiErrorMessage(
+              explain.error,
+              "We couldn't explain this match just yet.",
+            )}
+        </p>
+      )}
+    </article>
+  );
+}

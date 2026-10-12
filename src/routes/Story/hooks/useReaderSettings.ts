@@ -1,4 +1,4 @@
-import { useReaderSettingsStore } from "@/stores";
+import { useReaderSettingsStore } from "@/stores/readerSettingsStore";
 
 export const useReaderSettings = () => {
   const settings = useReaderSettingsStore((state) => state.settings);

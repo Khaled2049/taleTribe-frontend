@@ -1,0 +1,449 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════
+   INKWELL DESIGN SYSTEM — TheTaleTribe
+   "Where Stories Live"
+
+   Light: Daylight Edition (warm parchment, sealing-wax red)
+   Dark:  Midnight Edition (deep charcoal, vivid vermillion)
+   ═══════════════════════════════════════════════════════════════ */
+
+@layer base {
+  /* ─── Light Theme (Daylight Edition) ─── */
+  :root {
+    /* Surfaces */
+    --ns-bg: #fdfcf9;
+    --ns-surface: #f4f2ec;
+    --ns-surface-hover: #ece9e0;
+    --ns-elevated: #ffffff;
+
+    /* Ink (text) */
+    --ns-ink: #1c1c19;
+    --ns-ink-secondary: #5c5b53;
+    --ns-ink-muted: #9c9b93;
+
+    /* Accent — Vermillion (sealing wax) */
+    --ns-accent: #b91c1c;
+    --ns-accent-hover: #991b1b;
+    --ns-accent-deep: #7f1d1d;
+    --ns-accent-subtle: rgba(185, 28, 28, 0.07);
+    --ns-accent-glow: rgba(185, 28, 28, 0.15);
+
+    /* Gold — secondary accent */
+    --ns-gold: #92400e;
+    --ns-gold-bright: #b45309;
+
+    /* Teal — marks "someone else's identity" (another writer's avatar, a
+       Following state) distinctly from your own ink-black avatar and the
+       brand-red used everywhere else, e.g. Follow buttons. */
+    --ns-teal: #5c7a6e;
+    --ns-teal-border: #cfe0d6;
+    --ns-teal-subtle: rgba(92, 122, 110, 0.1);
+
+    /* Borders */
+    --ns-border: #e5e3db;
+    --ns-border-strong: #d4d1c6;
+
+    /* Destructive */
+    --ns-destructive: #dc2626;
+    --ns-destructive-hover: #b91c1c;
+
+    /* Success */
+    --ns-success: #16a34a;
+
+    /* Shadows — warm tinted */
+    --ns-shadow: rgba(28, 28, 25, 0.05);
+    --ns-shadow-strong: rgba(28, 28, 25, 0.1);
+
+    /* Ring */
+    --ns-ring: rgba(185, 28, 28, 0.35);
+    --ns-ring-offset: #fdfcf9;
+
+    /* Selection */
+    --ns-selection-bg: rgba(185, 28, 28, 0.12);
+    --ns-selection-text: #1c1c19;
+
+    /* Scrollbar */
+    --ns-scrollbar-track: #f4f2ec;
+    --ns-scrollbar-thumb: #d4d1c6;
+    --ns-scrollbar-thumb-hover: #b8b5aa;
+  }
+
+  /* ─── Dark Theme (Midnight Edition) ─── */
+  .dark {
+    --ns-bg: #0e0e0d;
+    --ns-surface: #191918;
+    --ns-surface-hover: #242422;
+    --ns-elevated: #222220;
+
+    --ns-ink: #ebebea;
+    --ns-ink-secondary: #a3a29c;
+    --ns-ink-muted: #6b6a64;
+
+    --ns-accent: #ef4444;
+    --ns-accent-hover: #dc2626;
+    --ns-accent-deep: #f87171;
+    --ns-accent-subtle: rgba(239, 68, 68, 0.1);
+    --ns-accent-glow: rgba(239, 68, 68, 0.2);
+
+    --ns-gold: #f59e0b;
+    --ns-gold-bright: #fbbf24;
+
+    --ns-teal: #7ca595;
+    --ns-teal-border: #2a3b34;
+    --ns-teal-subtle: rgba(124, 165, 149, 0.14);
+
+    --ns-border: #2d2d2b;
+    --ns-border-strong: #3d3d3a;
+
+    --ns-destructive: #ef4444;
+    --ns-destructive-hover: #dc2626;
+
+    --ns-success: #4ade80;
+
+    --ns-shadow: rgba(0, 0, 0, 0.25);
+    --ns-shadow-strong: rgba(0, 0, 0, 0.45);
+
+    --ns-ring: rgba(239, 68, 68, 0.4);
+    --ns-ring-offset: #0e0e0d;
+
+    --ns-selection-bg: rgba(239, 68, 68, 0.2);
+    --ns-selection-text: #ebebea;
+
+    --ns-scrollbar-track: #191918;
+    --ns-scrollbar-thumb: #3d3d3a;
+    --ns-scrollbar-thumb-hover: #4d4d4a;
+  }
+
+  /* ─── Global Resets & Base ─── */
+  *,
+  *::before,
+  *::after {
+    border-color: var(--ns-border);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-body;
+    background-color: var(--ns-bg);
+    color: var(--ns-ink);
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  /* ─── Typography Base ─── */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading;
+    color: var(--ns-ink);
+    text-wrap: balance;
+  }
+
+  h1 {
+    @apply text-display-lg font-light tracking-tight;
+  }
+  h2 {
+    @apply text-display font-normal;
+  }
+  h3 {
+    @apply text-title-lg font-medium;
+  }
+  h4 {
+    @apply text-title font-medium;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* UI elements use sans-serif */
+  button,
+  input,
+  select,
+  textarea,
+  label,
+  nav,
+  [role="tab"],
+  [role="menuitem"] {
+    font-family: "Hanken Grotesk", system-ui, sans-serif;
+  }
+
+  /* ─── Selection ─── */
+  ::selection {
+    background: var(--ns-selection-bg);
+    color: var(--ns-selection-text);
+  }
+
+  /* ─── Focus ─── */
+  :focus-visible {
+    outline: 2px solid var(--ns-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* ─── Links ─── */
+  a {
+    color: var(--ns-accent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+    transition:
+      color 0.2s ease,
+      text-decoration-color 0.2s ease;
+  }
+
+  a:hover {
+    color: var(--ns-accent-hover);
+  }
+
+  /* ─── Scrollbar ─── */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--ns-scrollbar-track);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--ns-scrollbar-thumb);
+    border-radius: 4px;
+    border: 2px solid var(--ns-scrollbar-track);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ns-scrollbar-thumb-hover);
+  }
+
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ns-scrollbar-thumb) var(--ns-scrollbar-track);
+  }
+}
+
+/* ─── Atmospheric Grain Overlay ─── */
+@layer components {
+  .ns-grain::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.3;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+    mix-blend-mode: multiply;
+  }
+
+  .dark .ns-grain::before {
+    mix-blend-mode: soft-light;
+    opacity: 0.5;
+  }
+
+  /* ─── Decorative Divider ─── */
+  .ns-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: var(--ns-ink-muted);
+    font-family: "Cormorant", serif;
+    font-style: italic;
+    font-size: 0.875rem;
+  }
+
+  .ns-divider::before,
+  .ns-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--ns-border-strong) 50%,
+      transparent 100%
+    );
+  }
+
+  /* ─── Glass Effect ─── */
+  .ns-glass {
+    background: color-mix(in srgb, var(--ns-surface) 80%, transparent);
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+  }
+
+  /* ─── Ink Dot Accent ─── */
+  .ns-ink-dot::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ns-accent);
+    margin-right: 0.5rem;
+    vertical-align: middle;
+  }
+
+  /* ─── Card Hover Lift ─── */
+  .ns-lift {
+    transition:
+      transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .ns-lift:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 8px 30px var(--ns-shadow),
+      0 20px 60px var(--ns-shadow-strong);
+  }
+
+  /* ─── Prose Overrides for Reading ─── */
+  .prose {
+    --tw-prose-body: var(--ns-ink);
+    --tw-prose-headings: var(--ns-ink);
+    --tw-prose-lead: var(--ns-ink-secondary);
+    --tw-prose-links: var(--ns-accent);
+    --tw-prose-bold: var(--ns-ink);
+    --tw-prose-counters: var(--ns-ink-muted);
+    --tw-prose-bullets: var(--ns-ink-muted);
+    --tw-prose-hr: var(--ns-border);
+    --tw-prose-quotes: var(--ns-ink);
+    --tw-prose-quote-borders: var(--ns-accent);
+    --tw-prose-captions: var(--ns-ink-muted);
+    --tw-prose-code: var(--ns-accent);
+    --tw-prose-th-borders: var(--ns-border-strong);
+    --tw-prose-td-borders: var(--ns-border);
+  }
+}
+
+/* ─── Utility Classes ─── */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* Stagger animation delays for lists */
+  .ns-stagger > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .ns-stagger > *:nth-child(2) {
+    animation-delay: 60ms;
+  }
+  .ns-stagger > *:nth-child(3) {
+    animation-delay: 120ms;
+  }
+  .ns-stagger > *:nth-child(4) {
+    animation-delay: 180ms;
+  }
+  .ns-stagger > *:nth-child(5) {
+    animation-delay: 240ms;
+  }
+  .ns-stagger > *:nth-child(6) {
+    animation-delay: 300ms;
+  }
+  .ns-stagger > *:nth-child(7) {
+    animation-delay: 360ms;
+  }
+  .ns-stagger > *:nth-child(8) {
+    animation-delay: 420ms;
+  }
+
+  /* Warm underline accent */
+  .ns-underline {
+    text-decoration: underline;
+    text-decoration-color: var(--ns-accent);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+  }
+
+  /* Peeking cat blink */
+  @keyframes ns-cat-blink {
+    0%,
+    90%,
+    100% {
+      transform: scaleY(1);
+    }
+    94% {
+      transform: scaleY(0.08);
+    }
+  }
+  .animate-cat-blink {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: ns-cat-blink 4.5s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-cat-blink {
+      animation: none;
+    }
+  }
+
+  /* Book-cover 3D hover: cover lifts and tilts open on its spine */
+  .book-perspective {
+    perspective: 1000px;
+  }
+  .book-cover {
+    transform-origin: left center;
+    transition:
+      transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.5s ease;
+    will-change: transform;
+  }
+  .group:hover .book-cover {
+    transform: rotateY(-16deg) translateY(-4px);
+    box-shadow: 18px 16px 34px -10px rgba(0, 0, 0, 0.4);
+  }
+  /* Spine shadow that deepens as the cover opens */
+  .book-cover::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 8px;
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.35),
+      rgba(0, 0, 0, 0)
+    );
+    transition: opacity 0.5s ease;
+  }
+  .group:hover .book-cover::before {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .book-cover {
+      transition: box-shadow 0.3s ease;
+    }
+    .group:hover .book-cover {
+      transform: none;
+    }
+  }
+}

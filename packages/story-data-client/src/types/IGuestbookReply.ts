@@ -1,4 +1,4 @@
-import type { GuestbookDate } from "./IGuestbookEntry";
+import type { GuestbookDate } from "./IGuestbookEntry.js";
 
 export interface IGuestbookReply {
   id: string;
