@@ -19,6 +19,7 @@ import {
   List,
   Code,
   ListChecks,
+  ScrollText,
   SeparatorHorizontal,
 } from "lucide-react";
 import SlashCommandMenu from "./SlashCommandMenu";
@@ -129,6 +130,7 @@ export const slashCommandSuggestion = (
   onGenerateNextLine: () => Promise<void>,
   onGenerateImage: () => void,
   onCoWrite: () => void,
+  onSummarize: () => Promise<void>,
 ): Partial<SuggestionOptions> => ({
   char: "/",
   pluginKey: new PluginKey("slashCommand"),
@@ -151,6 +153,15 @@ export const slashCommandSuggestion = (
         command: async ({ editor, range }: CommandContext) => {
           editor.chain().focus().deleteRange(range).run();
           await onGenerateNextLine();
+        },
+      },
+      {
+        title: "Summarize",
+        description: "Summarize this chapter",
+        icon: ScrollText,
+        command: async ({ editor, range }: CommandContext) => {
+          editor.chain().focus().deleteRange(range).run();
+          await onSummarize();
         },
       },
       {

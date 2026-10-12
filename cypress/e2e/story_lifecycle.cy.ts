@@ -71,7 +71,9 @@ describe("Story lifecycle", () => {
         });
 
         cy.get(".ProseMirror").first().click().type("It began with rain.");
-        cy.get('[data-cy="chapter-release"]').click();
+        cy.get('[data-cy="publication-controls"]:visible')
+          .find('[data-cy="chapter-release"]')
+          .click();
         cy.get('[role="dialog"]').contains("button", "Release").click();
 
         cy.get('[data-cy="chapter-status"]', { timeout: 20000 }).should(

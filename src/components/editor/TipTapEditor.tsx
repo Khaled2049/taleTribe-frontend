@@ -6,7 +6,6 @@ import React, {
   useState,
 } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
-import { BubbleMenu } from "@tiptap/react/menus";
 import Document from "@tiptap/extension-document";
 import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
@@ -43,13 +42,7 @@ import { slashCommandSuggestion } from "./SlashCommandExtension";
 import { CHAPTER_WORD_LIMIT } from "@/utils/chapterWordLimit";
 import { docWordCount } from "@/components/editor/docWordCount";
 import { SuggestionMenu } from "./SuggestionMenu";
-import {
-  ImageIcon,
-  Loader,
-  Maximize2,
-  MessageSquare,
-  Sparkles,
-} from "lucide-react";
+import { ImageIcon, Loader, Sparkles } from "lucide-react";
 import { EDITOR_PAGE_WIDTH } from "@/components/editor/editorZoom";
 import type { ParagraphStyle } from "@novelsync/story-data-client";
 import {
@@ -60,7 +53,7 @@ import {
   TextAlignExtension,
 } from "@/components/editor/editorExtensions";
 import { useAiSuggestions } from "@/hooks/useAiSuggestions";
-import { useTextEnhancement } from "@/hooks/useTextEnhancement";
+import { SelectionToolbar } from "./SelectionToolbar";
 import {
   useImageGeneration,
   MAX_CHAPTER_IMAGES,
@@ -154,6 +147,8 @@ interface TipTapEditorProps {
   onEditorReady?: (editor: Editor | null) => void;
   onTransaction?: (transaction: Transaction) => void;
   onOpenCoWrite?: () => void;
+  onSummarize: () => Promise<void>;
+  onLink: () => void;
   /** Page scale in percent. */
   zoom?: number;
   paragraphStyle?: ParagraphStyle;
@@ -169,6 +164,8 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   onEditorReady,
   onTransaction,
   onOpenCoWrite,
+  onSummarize,
+  onLink,
   zoom = 100,
   paragraphStyle = "spaced",
 }) => {
@@ -181,6 +178,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const onSaveRef = useRef(onSave);
   const onBlurRef = useRef(onBlur);
   const onTransactionRef = useRef(onTransaction);
+  const onSummarizeRef = useRef(onSummarize);
   // Ref so the paste plugin (created once) can surface errors via React state
   const pasteErrorRef = useRef<((msg: string) => void) | null>(null);
 
@@ -188,6 +186,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   onSaveRef.current = onSave;
   onBlurRef.current = onBlur;
   onTransactionRef.current = onTransaction;
+  onSummarizeRef.current = onSummarize;
 
   // Timed error banner shared by all AI features and the paste plugin
   const [editorError, setEditorError] = useState("");
@@ -260,13 +259,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     isGenerating,
     fetchNextLineSuggestions,
   } = useAiSuggestions({ storyId, chapterId });
-
-  const { isEnhancing, handleTextEnhancement } = useTextEnhancement({
-    editor: editorRef.current,
-    storyId,
-    chapterId,
-    onError: showError,
-  });
 
   const {
     imagePromptOpen,
@@ -344,6 +336,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
               async () => fetchNextLineSuggestions(editorInstance),
               openImagePrompt,
               () => onOpenCoWrite?.(),
+              () => onSummarizeRef.current(),
             ),
           }),
         ];
@@ -471,56 +464,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
 
   return (
     <div className="flex flex-col flex-1 min-h-full">
-      {/* AI Text Enhancement Bubble Menu */}
-      <BubbleMenu
-        editor={editor}
-        className="bg-black text-white shadow-lg rounded-md overflow-hidden"
-        shouldShow={({ from, to }) => from !== to}
-      >
-        <div className="flex items-center gap-1 bg-black p-1">
-          <button
-            onClick={() => handleTextEnhancement("expand")}
-            disabled={isEnhancing}
-            className="px-3 py-2 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
-            title="Expand text with more detail"
-          >
-            {isEnhancing ? (
-              <Loader className="w-4 h-4 animate-spin" />
-            ) : (
-              <Maximize2 className="w-4 h-4" />
-            )}
-            <span>Expand</span>
-          </button>
-
-          <button
-            onClick={() => handleTextEnhancement("dialogue")}
-            disabled={isEnhancing}
-            className="px-3 py-2 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
-            title="Improve dialogue quality"
-          >
-            {isEnhancing ? (
-              <Loader className="w-4 h-4 animate-spin" />
-            ) : (
-              <MessageSquare className="w-4 h-4" />
-            )}
-            <span>Dialogue</span>
-          </button>
-
-          <button
-            onClick={() => handleTextEnhancement("rewrite")}
-            disabled={isEnhancing}
-            className="px-3 py-2 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
-            title="Rewrite with different phrasing"
-          >
-            {isEnhancing ? (
-              <Loader className="w-4 h-4 animate-spin" />
-            ) : (
-              <Sparkles className="w-4 h-4" />
-            )}
-            <span>Rewrite</span>
-          </button>
-        </div>
-      </BubbleMenu>
+      <SelectionToolbar editor={editor} onLink={onLink} />
 
       {assistantProposal?.preview && (
         <div

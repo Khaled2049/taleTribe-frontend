@@ -294,7 +294,7 @@ export const StoryEditModal = ({
                 For your readers
               </h3>
               <p className="font-ui text-xs text-ns-ink-muted">
-                Shown on your story page once the story is published.
+                Visible on your published story.
               </p>
             </div>
 
@@ -355,8 +355,8 @@ export const StoryEditModal = ({
               />
               <p className="mt-1.5 font-ui text-xs text-ns-ink-muted">
                 {completed
-                  ? "A completed story has no next chapter."
-                  : "Clears itself when you release a chapter. Readers stop seeing it once it has passed."}
+                  ? "No next chapter for completed stories."
+                  : "Cleared when you release a chapter."}
               </p>
             </div>
 

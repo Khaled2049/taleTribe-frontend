@@ -34,8 +34,6 @@ interface SidebarPanelProps {
   canSplitIntoChapters?: boolean;
   onSplitIntoChapters?: () => void;
   storyPublished?: boolean;
-  /** Asks to release the open chapter to readers, or to pull it back. */
-  onChapterRelease?: (chapter: ChapterSummary, published: boolean) => void;
 }
 
 export const SidebarPanel: React.FC<SidebarPanelProps> = ({
@@ -56,7 +54,6 @@ export const SidebarPanel: React.FC<SidebarPanelProps> = ({
   canSplitIntoChapters = false,
   onSplitIntoChapters,
   storyPublished = false,
-  onChapterRelease,
 }) => {
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -118,29 +115,13 @@ export const SidebarPanel: React.FC<SidebarPanelProps> = ({
             iconSize="w-3.5 h-3.5"
           />
         )}
-        {currentChapter && onChapterRelease && (
-          <div className="flex items-center justify-between gap-2 pt-2">
-            <span
-              data-cy="chapter-status"
-              className="font-ui text-[11px] text-ns-ink-muted leading-snug"
-            >
-              {chapterStatusLine(isReleased(currentChapter), storyPublished)}
-            </span>
-            <button
-              type="button"
-              data-cy="chapter-release"
-              onClick={() =>
-                onChapterRelease(currentChapter, !isReleased(currentChapter))
-              }
-              className={`flex-shrink-0 rounded-ns px-2 py-1 font-ui text-[11px] font-medium transition-colors duration-150 ${
-                isReleased(currentChapter)
-                  ? "text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink"
-                  : "text-ns-accent hover:bg-ns-accent-subtle"
-              }`}
-            >
-              {isReleased(currentChapter) ? "Move to draft" : "Release"}
-            </button>
-          </div>
+        {currentChapter && (
+          <p
+            data-cy="chapter-status"
+            className="pt-2 font-ui text-[11px] text-ns-ink-muted leading-snug"
+          >
+            {chapterStatusLine(isReleased(currentChapter), storyPublished)}
+          </p>
         )}
       </div>
 

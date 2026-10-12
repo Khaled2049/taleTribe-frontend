@@ -66,8 +66,6 @@ import { useEditorZoom } from "@/components/editor/editorZoom";
 import { SaveConflictDialog } from "@/components/editor/SaveConflictDialog";
 import { isRetryableSaveError, saveStoryEdits } from "@/lib/storySave";
 import { WordCount } from "@/components/editor/WordCount";
-import { WritingGoal } from "@/components/editor/WritingGoal";
-import { useWritingGoalTracker } from "@/hooks/useWritingGoalTracker";
 import { sidebarShortcut, sidebarShortcutLabel } from "@/lib/sidebarShortcut";
 import {
   getDocumentOutline,
@@ -109,7 +107,7 @@ import {
   workspaceStoryQuery,
 } from "@/hooks/queries/workspaceStory";
 import { neighbourChapterIds } from "@/lib/chapterIndex";
-import { publishDescription } from "@/lib/chapterRelease";
+import { isReleased, publishDescription } from "@/lib/chapterRelease";
 import { useEditorBridge } from "@/components/editor/EditorBridge";
 
 function splitValidationError(sections: DocumentSection[]): string | null {
@@ -430,7 +428,6 @@ export function SimpleEditor() {
   flushAndWaitRef.current = flushAndWait;
   const currentStoryId = state.story?.id;
   const currentChapterId = state.currentChapter?.id;
-  useWritingGoalTracker(editor, currentChapterId);
 
   useLayoutEffect(() => {
     if (!editorBridge || !editor || !currentStoryId || !currentChapterId) {
@@ -787,11 +784,13 @@ export function SimpleEditor() {
 
   // Summarize the current chapter and persist the summary.
   const handleSummarizeChapter = async () => {
-    if (!state.story || !state.currentChapter) return;
-    if (!(await saveBeforeContinuing())) return;
+    if (!state.story || !state.currentChapter || isSummarizing) return;
 
     setIsSummarizing(true);
+    let loadingToast: string | number | undefined;
     try {
+      if (!(await saveBeforeContinuing())) return;
+      loadingToast = toast.loading("Summarizing chapter…");
       const result = await summarizeChapter({
         storyId: state.story.id,
         chapterId: state.currentChapter.id,
@@ -802,6 +801,7 @@ export function SimpleEditor() {
         error instanceof Error ? error.message : "Failed to summarize chapter.",
       );
     } finally {
+      if (loadingToast !== undefined) toast.dismiss(loadingToast);
       setIsSummarizing(false);
     }
   };
@@ -871,7 +871,7 @@ export function SimpleEditor() {
     const chapter = chapterBaseRef.current;
     if (!chapter || chapter.id !== request.chapterId) return;
     if (request.published && chapter.wordCount === 0) {
-      toast.error("Write something in this chapter before releasing it.");
+      toast.error("Add chapter text before releasing.");
       return;
     }
     try {
@@ -894,10 +894,10 @@ export function SimpleEditor() {
       const name = request.title || "Untitled";
       toast.success(
         !request.published
-          ? `"${name}" is a draft again.`
+          ? `"${name}" moved to draft.`
           : state.story.isPublished
-            ? `"${name}" is now live for readers.`
-            : `"${name}" is released. It goes live when you publish the story.`,
+            ? `"${name}" is live.`
+            : `"${name}" released. Publish the story to go live.`,
       );
     } catch (error) {
       toast.error(
@@ -1093,6 +1093,27 @@ export function SimpleEditor() {
   };
 
   const isPublished = !!state.story?.isPublished;
+  const chapterToRelease = state.chapters.find(
+    (chapter) => chapter.id === state.currentChapter?.id,
+  );
+  const chapterReleaseButton = chapterToRelease && (
+    <button
+      type="button"
+      data-cy="chapter-release"
+      disabled={isPublishing || !!state.openingChapter}
+      onClick={() =>
+        setReleaseRequest({
+          chapterId: chapterToRelease.id,
+          title: chapterToRelease.title,
+          published: !isReleased(chapterToRelease),
+        })
+      }
+      title={`${isReleased(chapterToRelease) ? "Move to draft" : "Release"}: ${chapterToRelease.title || "Untitled chapter"}`}
+      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs font-medium text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink active:scale-[0.97] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+    >
+      {isReleased(chapterToRelease) ? "Move to draft" : "Release chapter"}
+    </button>
+  );
   const sidebarPanelProps = {
     chapters: state.chapters,
     currentChapterId: state.currentChapter?.id || "",
@@ -1110,12 +1131,6 @@ export function SimpleEditor() {
     canSplitIntoChapters,
     onSplitIntoChapters: handleSplitRequest,
     storyPublished: isPublished,
-    onChapterRelease: (chapter: ChapterSummary, published: boolean) =>
-      setReleaseRequest({
-        chapterId: chapter.id,
-        title: chapter.title,
-        published,
-      }),
   };
 
   return (
@@ -1238,6 +1253,8 @@ export function SimpleEditor() {
                         bridgeRegistrationRef.current?.transaction(transaction)
                       }
                       onOpenCoWrite={openCoWrite}
+                      onSummarize={handleSummarizeChapter}
+                      onLink={applyLink}
                     />
                   </div>
                 </div>
@@ -1310,7 +1327,7 @@ export function SimpleEditor() {
                 <div
                   className={`${
                     focusMode ? "hidden" : "hidden sm:flex"
-                  } items-center gap-3 px-4 py-2`}
+                  } flex-wrap items-center gap-3 px-4 py-2`}
                 >
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button
@@ -1349,24 +1366,9 @@ export function SimpleEditor() {
                       <Save className="w-3.5 h-3.5 flex-shrink-0" />
                       <span className="hidden lg:inline">Save</span>
                     </button>
-                    <button
-                      onClick={handleSummarizeChapter}
-                      disabled={isSummarizing}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink hover:border-ns-border-strong active:scale-[0.97] transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                      title="Summarize this chapter and save the summary"
-                    >
-                      {isSummarizing ? (
-                        <Loader className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
-                      ) : (
-                        <ScrollText className="w-3.5 h-3.5 flex-shrink-0" />
-                      )}
-                      <span className="hidden lg:inline">
-                        {isSummarizing ? "Summarizing…" : "Summarize"}
-                      </span>
-                    </button>
                   </div>
 
-                  <div className="flex-1 flex items-center justify-center gap-4 min-w-0">
+                  <div className="order-last basis-full lg:order-none lg:basis-auto flex-1 flex items-center justify-center gap-4 min-w-0">
                     <SaveStatusIndicator
                       status={saveState.status}
                       lastSaved={saveState.lastSaved}
@@ -1374,11 +1376,15 @@ export function SimpleEditor() {
                       isOnline={isOnline}
                     />
                     <WordCount editor={editor} />
-                    <WritingGoal />
                   </div>
 
-                  <div className="flex items-center justify-end flex-shrink-0">
+                  <div
+                    data-cy="publication-controls"
+                    className="ml-auto flex items-center justify-end gap-2 flex-shrink-0"
+                  >
+                    {chapterReleaseButton}
                     <button
+                      title={isPublished ? "Unpublish story" : "Publish story"}
                       onClick={() => setPublishDialogOpen(true)}
                       disabled={isPublishing}
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns font-ui text-xs font-medium active:scale-[0.97] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap ${
@@ -1415,9 +1421,8 @@ export function SimpleEditor() {
                       isOnline={isOnline}
                     />
                     <WordCount editor={editor} />
-                    <WritingGoal />
                   </div>
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       onClick={enterFocusMode}
                       className="inline-flex justify-center rounded-ns border border-ns-border px-2 py-1.5 text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
@@ -1446,22 +1451,16 @@ export function SimpleEditor() {
                     >
                       <Save className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      onClick={handleSummarizeChapter}
-                      disabled={isSummarizing}
-                      className="inline-flex justify-center rounded-ns border border-ns-border px-2 py-1.5 text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      aria-label="Summarize chapter"
-                    >
-                      {isSummarizing ? (
-                        <Loader className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <ScrollText className="w-3.5 h-3.5" />
-                      )}
-                    </button>
+                  </div>
+                  <div
+                    data-cy="publication-controls"
+                    className="flex items-center justify-end gap-2"
+                  >
+                    {chapterReleaseButton}
                     <button
                       onClick={() => setPublishDialogOpen(true)}
                       disabled={isPublishing}
-                      className={`inline-flex justify-center rounded-ns px-2 py-1.5 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+                      className={`inline-flex items-center justify-center gap-1.5 rounded-ns px-3 py-1.5 font-ui text-xs font-medium text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                         isPublished
                           ? "bg-ns-destructive hover:bg-ns-destructive-hover"
                           : "bg-ns-accent hover:bg-ns-accent-hover"
@@ -1475,6 +1474,7 @@ export function SimpleEditor() {
                       ) : (
                         <Upload className="w-3.5 h-3.5" />
                       )}
+                      {isPublished ? "Unpublish" : "Publish"}
                     </button>
                   </div>
                 </div>
@@ -1542,7 +1542,7 @@ export function SimpleEditor() {
             title={isPublished ? "Unpublish story?" : "Publish story?"}
             description={
               isPublished
-                ? `"${state.story?.title}" will be hidden from readers and returned to draft. You can publish it again at any time.`
+                ? `Hide "${state.story?.title}" from readers?`
                 : publishDescription(state.story?.title ?? "", state.chapters)
             }
             confirmLabel={isPublished ? "Unpublish" : "Publish"}
@@ -1559,14 +1559,14 @@ export function SimpleEditor() {
             title={
               releaseRequest?.published
                 ? "Release this chapter?"
-                : "Move this chapter back to draft?"
+                : "Move chapter to draft?"
             }
             description={
               releaseRequest?.published
                 ? isPublished
-                  ? `Readers will be able to read "${releaseRequest.title || "Untitled"}" straight away. You can move it back to draft later.`
-                  : `"${releaseRequest.title || "Untitled"}" will be marked released. Nobody can read it until you publish the story.`
-                : `Readers will no longer be able to open "${releaseRequest?.title || "Untitled"}". Anyone part-way through it will start the story again.`
+                  ? `"${releaseRequest.title || "Untitled"}" will go live now.`
+                  : `"${releaseRequest.title || "Untitled"}" will go live when you publish the story.`
+                : `Hide "${releaseRequest?.title || "Untitled"}"? Readers in this chapter will restart the story.`
             }
             confirmLabel={
               releaseRequest?.published ? "Release" : "Move to draft"

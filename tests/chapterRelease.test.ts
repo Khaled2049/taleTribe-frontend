@@ -14,32 +14,32 @@ const released = (wordCount = 100) => ({
 describe("publishDescription", () => {
   it("releases every written chapter when the author has released none", () => {
     const text = publishDescription("Tide", [draft(), draft(), draft(0)]);
-    expect(text).toContain("the 2 chapters you have written will be released");
-    expect(text).toContain("Empty chapters stay as drafts.");
+    expect(text).toContain("release 2 chapters");
+    expect(text).toContain("Empty chapters stay private.");
   });
 
   it("leaves drafts alone once the author has released any chapter", () => {
     const text = publishDescription("Tide", [released(), draft(), draft()]);
-    expect(text).toContain("with the 1 chapter you have released");
-    expect(text).toContain("Your 2 chapters in draft stay private.");
-    expect(text).not.toContain("will be released");
+    expect(text).toContain("with 1 chapter.");
+    expect(text).toContain("2 chapters stay private.");
+    expect(text).not.toContain("release 3 chapters");
   });
 
   it("does not mention drafts when every chapter is already released", () => {
     const text = publishDescription("Tide", [released(), released()]);
-    expect(text).toContain("with the 2 chapters you have released.");
-    expect(text).not.toContain("in draft");
+    expect(text).toContain("with 2 chapters.");
+    expect(text).not.toContain("private");
   });
 
   it("warns when there is nothing to read", () => {
     expect(publishDescription("Tide", [draft(0)])).toContain(
-      "no chapter has any text yet",
+      "without any chapter text?",
     );
   });
 
   it("states the rule where chapters are not loaded", () => {
     expect(publishDescription("Tide")).toContain(
-      "every chapter with text if you have not released any",
+      "all chapters with text if none are released",
     );
   });
 });
@@ -57,8 +57,8 @@ describe("showsDraftMarks", () => {
 
 describe("chapterStatusLine", () => {
   it("says a released chapter is not live until the story is", () => {
-    expect(chapterStatusLine(true, false)).toContain("when you publish");
-    expect(chapterStatusLine(true, true)).toContain("readers can read it");
-    expect(chapterStatusLine(false, true)).toContain("only you");
+    expect(chapterStatusLine(true, false)).toContain("Publish to go live");
+    expect(chapterStatusLine(true, true)).toContain("Live");
+    expect(chapterStatusLine(false, true)).toContain("Private");
   });
 });

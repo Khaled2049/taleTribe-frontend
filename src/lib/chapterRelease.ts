@@ -17,10 +17,8 @@ export function chapterStatusLine(
   released: boolean,
   storyPublished: boolean,
 ): string {
-  if (!released) return "Draft — only you can read it";
-  return storyPublished
-    ? "Released — readers can read it"
-    : "Released — goes live when you publish";
+  if (!released) return "Draft · Private";
+  return storyPublished ? "Released · Live" : "Released · Publish to go live";
 }
 
 const count = (n: number) => (n === 1 ? "1 chapter" : `${n} chapters`);
@@ -36,23 +34,20 @@ export function publishDescription(
   title: string,
   chapters?: readonly ReleaseInfo[],
 ): string {
-  const opening = `"${title}" will become visible to readers`;
-  const closing = "You can unpublish it again at any time.";
   if (!chapters) {
-    return `${opening}. They will see the chapters you have released, or every chapter with text if you have not released any. ${closing}`;
+    return `Publish "${title}" with released chapters, or all chapters with text if none are released.`;
   }
   const released = chapters.filter(isReleased).length;
   if (released > 0) {
     const drafts = chapters.length - released;
-    const rest =
-      drafts > 0 ? ` Your ${count(drafts)} in draft stay private.` : "";
-    return `${opening} with the ${count(released)} you have released.${rest} ${closing}`;
+    const rest = drafts > 0 ? ` ${count(drafts)} stay private.` : "";
+    return `Publish "${title}" with ${count(released)}.${rest}`;
   }
   const written = chapters.filter((chapter) => chapter.wordCount > 0).length;
   if (written === 0) {
-    return `${opening}, but with nothing to read: no chapter has any text yet. ${closing}`;
+    return `Publish "${title}" without any chapter text?`;
   }
   const empty = chapters.length - written;
-  const rest = empty > 0 ? " Empty chapters stay as drafts." : "";
-  return `${opening}, and the ${count(written)} you have written will be released.${rest} ${closing}`;
+  const rest = empty > 0 ? " Empty chapters stay private." : "";
+  return `Publish "${title}" and release ${count(written)}.${rest}`;
 }
