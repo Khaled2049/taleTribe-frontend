@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef, KeyboardEvent } from "react";
 import { X } from "lucide-react";
-import { StoryMetadata } from "@novelsync/story-data-client";
+import type {
+  CompletionStatus,
+  ReaderUpdate,
+  Story,
+  StoryMetadata,
+} from "@novelsync/story-data-client";
 import {
   STORY_CATEGORIES,
   COPYRIGHT_OPTIONS,
@@ -10,6 +15,17 @@ import {
   LANGUAGES,
 } from "@/constants/storyOptions";
 import { TagMultiSelect } from "@/components/common";
+import {
+  READER_NOTE_MAX,
+  localToday,
+  normalizeReaderUpdate,
+  readerUpdateOf,
+} from "@/lib/readerUpdate";
+
+const COMPLETION_OPTIONS: { value: CompletionStatus; label: string }[] = [
+  { value: "ongoing", label: "Ongoing" },
+  { value: "completed", label: "Completed" },
+];
 
 interface StoryEditModalProps {
   story: Pick<
@@ -22,7 +38,8 @@ interface StoryEditModalProps {
     | "targetAudience"
     | "language"
     | "copyright"
-  >;
+  > &
+    Pick<Story, "completionStatus" | "nextChapterOn" | "readerNote">;
   onSave: (
     id: string,
     data: {
@@ -33,6 +50,7 @@ interface StoryEditModalProps {
       targetAudience?: string;
       language?: string;
       copyright?: string;
+      readerUpdate: ReaderUpdate;
     },
   ) => Promise<void>;
   onClose: () => void;
@@ -57,6 +75,8 @@ export const StoryEditModal = ({
   );
   const [language, setLanguage] = useState(story.language ?? "");
   const [copyright, setCopyright] = useState(story.copyright ?? "");
+  const [readerUpdate, setReaderUpdate] = useState(() => readerUpdateOf(story));
+  const completed = readerUpdate.completionStatus === "completed";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,6 +114,7 @@ export const StoryEditModal = ({
         targetAudience: targetAudience.trim(),
         language: language.trim(),
         copyright: copyright.trim(),
+        readerUpdate: normalizeReaderUpdate(readerUpdate),
       });
       onClose();
     } catch {
@@ -264,6 +285,103 @@ export const StoryEditModal = ({
               max={MAX_STORY_TAGS}
               placeholder="Select tags…"
             />
+          </div>
+
+          {/* Reader update */}
+          <div className="space-y-4 border-t border-ns-border pt-5">
+            <div>
+              <h3 className="font-heading text-lg text-ns-ink">
+                For your readers
+              </h3>
+              <p className="font-ui text-xs text-ns-ink-muted">
+                Shown on your story page once the story is published.
+              </p>
+            </div>
+
+            <div>
+              <span className={labelClass}>Status</span>
+              <div
+                role="radiogroup"
+                aria-label="Story status"
+                className="inline-flex rounded-ns border border-ns-border overflow-hidden"
+              >
+                {COMPLETION_OPTIONS.map(({ value, label }) => {
+                  const selected = readerUpdate.completionStatus === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() =>
+                        setReaderUpdate((current) => ({
+                          ...current,
+                          completionStatus: value,
+                        }))
+                      }
+                      className={`px-4 py-1.5 text-sm font-ui transition-colors ${
+                        selected
+                          ? "bg-ns-accent text-white"
+                          : "bg-ns-surface text-ns-ink-secondary hover:bg-ns-surface-hover"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="next-chapter-on" className={labelClass}>
+                Next chapter expected{" "}
+                <span className="normal-case font-normal tracking-normal opacity-60">
+                  (optional)
+                </span>
+              </label>
+              <input
+                id="next-chapter-on"
+                type="date"
+                min={localToday()}
+                disabled={completed}
+                value={completed ? "" : readerUpdate.nextChapterOn}
+                onChange={(e) =>
+                  setReaderUpdate((current) => ({
+                    ...current,
+                    nextChapterOn: e.target.value,
+                  }))
+                }
+                className={`${fieldClass} disabled:opacity-50`}
+              />
+              <p className="mt-1.5 font-ui text-xs text-ns-ink-muted">
+                {completed
+                  ? "A completed story has no next chapter."
+                  : "Clears itself when you release a chapter. Readers stop seeing it once it has passed."}
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="reader-note" className={labelClass}>
+                Note to readers{" "}
+                <span className="normal-case font-normal tracking-normal opacity-60">
+                  ({readerUpdate.readerNote.length}/{READER_NOTE_MAX})
+                </span>
+              </label>
+              <textarea
+                id="reader-note"
+                value={readerUpdate.readerNote}
+                onChange={(e) =>
+                  setReaderUpdate((current) => ({
+                    ...current,
+                    readerNote: e.target.value,
+                  }))
+                }
+                rows={2}
+                maxLength={READER_NOTE_MAX}
+                className={`${fieldClass} resize-none`}
+                placeholder="New chapters every Friday."
+              />
+            </div>
           </div>
 
           {/* Error */}

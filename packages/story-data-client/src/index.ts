@@ -29,8 +29,10 @@ export type { IReadingProgress } from "./types/IReadingProgress";
 export type {
   Chapter,
   ChapterSummary,
+  CompletionStatus,
   ILikes,
   ParagraphStyle,
+  ReaderUpdate,
   Story,
   StoryMetadata,
 } from "./types/IStory";

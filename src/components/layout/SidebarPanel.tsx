@@ -10,6 +10,11 @@ import {
 import { ChapterSummary } from "@novelsync/story-data-client";
 import type { OutlineEntry } from "@/utils/documentOutline";
 import { STORY_CHAPTER_LIMIT } from "@/utils/chapterWordLimit";
+import {
+  chapterStatusLine,
+  isReleased,
+  showsDraftMarks,
+} from "@/lib/chapterRelease";
 
 interface SidebarPanelProps {
   chapters: ChapterSummary[];
@@ -28,6 +33,9 @@ interface SidebarPanelProps {
   onOutlineSelect?: (entry: OutlineEntry) => void;
   canSplitIntoChapters?: boolean;
   onSplitIntoChapters?: () => void;
+  storyPublished?: boolean;
+  /** Asks to release the open chapter to readers, or to pull it back. */
+  onChapterRelease?: (chapter: ChapterSummary, published: boolean) => void;
 }
 
 export const SidebarPanel: React.FC<SidebarPanelProps> = ({
@@ -47,6 +55,8 @@ export const SidebarPanel: React.FC<SidebarPanelProps> = ({
   onOutlineSelect,
   canSplitIntoChapters = false,
   onSplitIntoChapters,
+  storyPublished = false,
+  onChapterRelease,
 }) => {
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -77,6 +87,10 @@ export const SidebarPanel: React.FC<SidebarPanelProps> = ({
   }, []);
 
   const hasChapter = Boolean(currentChapterId);
+  const currentChapter = chapters.find(
+    (chapter) => chapter.id === currentChapterId,
+  );
+  const markDrafts = showsDraftMarks(storyPublished, chapters);
 
   return (
     <div className="h-full flex flex-col bg-ns-surface">
@@ -103,6 +117,30 @@ export const SidebarPanel: React.FC<SidebarPanelProps> = ({
             className="font-ui text-sm text-ns-ink-secondary"
             iconSize="w-3.5 h-3.5"
           />
+        )}
+        {currentChapter && onChapterRelease && (
+          <div className="flex items-center justify-between gap-2 pt-2">
+            <span
+              data-cy="chapter-status"
+              className="font-ui text-[11px] text-ns-ink-muted leading-snug"
+            >
+              {chapterStatusLine(isReleased(currentChapter), storyPublished)}
+            </span>
+            <button
+              type="button"
+              data-cy="chapter-release"
+              onClick={() =>
+                onChapterRelease(currentChapter, !isReleased(currentChapter))
+              }
+              className={`flex-shrink-0 rounded-ns px-2 py-1 font-ui text-[11px] font-medium transition-colors duration-150 ${
+                isReleased(currentChapter)
+                  ? "text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink"
+                  : "text-ns-accent hover:bg-ns-accent-subtle"
+              }`}
+            >
+              {isReleased(currentChapter) ? "Move to draft" : "Release"}
+            </button>
+          </div>
         )}
       </div>
 
@@ -195,6 +233,11 @@ export const SidebarPanel: React.FC<SidebarPanelProps> = ({
                         >
                           {chapter.title || "Untitled"}
                         </span>
+                        {markDrafts && !isReleased(chapter) && (
+                          <span className="flex-shrink-0 rounded-ns border border-ns-border px-1 font-ui text-[9px] font-semibold uppercase tracking-wider text-ns-ink-muted">
+                            Draft
+                          </span>
+                        )}
                       </button>
 
                       <span className="hidden lg:block pr-3 font-ui text-[10px] text-ns-ink-muted tabular-nums group-hover:invisible">

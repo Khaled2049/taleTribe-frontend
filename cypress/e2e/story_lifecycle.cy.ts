@@ -45,6 +45,46 @@ describe("Story lifecycle", () => {
       });
   });
 
+  it("keeps a chapter private until the author releases it", () => {
+    cy.visit("/user-stories");
+    cy.get('[data-cy="new-story"]').click();
+    cy.acceptWriterAgreement();
+    cy.get('[data-cy="wizard-title"]').type("The Slow Serial");
+    cy.get('[data-cy="wizard-create"]').click();
+    cy.location("pathname", { timeout: 20000 }).should("include", "/create/");
+
+    const firstChapter = (storyId: string) =>
+      cy
+        .task<Record<string, unknown>[]>("storyData", {
+          path: `/v1/stories/${storyId}/chapters?content=false`,
+          uid,
+        })
+        .then((chapters) => chapters[0]);
+
+    cy.location("pathname")
+      .then((p) => p.split("/")[2])
+      .then((storyId) => {
+        cy.get('[data-cy="chapter-status"]').should("contain", "Draft");
+        firstChapter(storyId).then((chapter) => {
+          expect(chapter.publishedAt, "a new chapter is a draft").to.be
+            .undefined;
+        });
+
+        cy.get(".ProseMirror").first().click().type("It began with rain.");
+        cy.get('[data-cy="chapter-release"]').click();
+        cy.get('[role="dialog"]').contains("button", "Release").click();
+
+        cy.get('[data-cy="chapter-status"]', { timeout: 20000 }).should(
+          "contain",
+          "Released",
+        );
+        firstChapter(storyId).then((chapter) => {
+          expect(chapter.publishedAt, "released chapter").to.be.a("string");
+          expect(chapter.wordCount, "the text was saved first").to.be.gt(0);
+        });
+      });
+  });
+
   it("rejects story creation once the per-user cap (100) is reached", () => {
     // The cap is a real count in story-data now, not a denormalized counter, so
     // it has to be reached with real rows rather than by setting a field.

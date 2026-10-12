@@ -153,3 +153,61 @@ describe("StoryWorkspaceRepo writes", () => {
     expect(calls[2]).toMatchObject({ method: "PATCH", ifMatch: "2" });
   });
 });
+
+describe("StoryWorkspaceRepo chapter publication", () => {
+  it("sends the chapter revision and maps publishedAt", async () => {
+    respondWith({ ...apiChapter(4), publishedAt: "2026-10-01T00:00:00Z" });
+    const chapter = await new StoryWorkspaceRepo().setChapterPublication(
+      story,
+      { id: "c1", revision: 4 },
+      true,
+    );
+
+    expect(calls[0]).toEqual({
+      url: "https://story-data.test/v1/stories/s1/chapters/c1/publication",
+      method: "PUT",
+      ifMatch: "4",
+    });
+    expect(chapter.publishedAt).toEqual(new Date("2026-10-01T00:00:00Z"));
+    expect(chapter.revision).toBe(4);
+  });
+
+  it("reads a chapter with no publishedAt as a draft", async () => {
+    respondWith([apiChapter(1, "")]);
+    const [chapter] = await new StoryWorkspaceRepo().getChapterIndex("s1");
+    expect(chapter.publishedAt).toBeUndefined();
+  });
+});
+
+describe("StoryWorkspaceRepo.updateReaderUpdate", () => {
+  it("sends no revision and maps the reader update back", async () => {
+    respondWith({
+      id: "s1",
+      ownerId: "u1",
+      title: "Tide",
+      revision: 7,
+      createdAt: "2026-09-01T00:00:00Z",
+      updatedAt: "2026-09-02T00:00:00Z",
+      completionStatus: "ongoing",
+      nextChapterOn: "2026-11-01",
+      readerNote: "Fridays.",
+      readerNoteUpdatedAt: "2026-10-01T00:00:00Z",
+    });
+    const saved = await new StoryWorkspaceRepo().updateReaderUpdate("s1", {
+      completionStatus: "ongoing",
+      nextChapterOn: "2026-11-01",
+      readerNote: "Fridays.",
+    });
+
+    expect(calls[0]).toEqual({
+      url: "https://story-data.test/v1/stories/s1/reader-update",
+      method: "PUT",
+      ifMatch: undefined,
+    });
+    expect(saved.completionStatus).toBe("ongoing");
+    expect(saved.nextChapterOn).toBe("2026-11-01");
+    expect(saved.readerNote).toBe("Fridays.");
+    expect(saved.readerNoteUpdatedAt).toEqual(new Date("2026-10-01T00:00:00Z"));
+    expect(saved.revision).toBe(7);
+  });
+});

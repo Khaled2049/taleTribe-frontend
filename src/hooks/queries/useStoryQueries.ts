@@ -6,9 +6,11 @@ import {
 } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
+import { readerUpdateChanged, storyMetadataChanged } from "@/lib/readerUpdate";
 import { auth } from "@novelsync/platform-auth";
 import { storageService } from "@/services/StorageService";
 import type {
+  ReaderUpdate,
   OwnerStoryPage,
   Story,
   StoryMetadata,
@@ -181,7 +183,7 @@ export function useTogglePublishStory(userId: string | undefined) {
 export function useUpdateStoryMetadata(userId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       storyId,
       data,
     }: {
@@ -194,8 +196,22 @@ export function useUpdateStoryMetadata(userId: string | undefined) {
         targetAudience?: string;
         language?: string;
         copyright?: string;
+        readerUpdate?: ReaderUpdate;
       };
-    }) => storyWorkspaceRepo.updateStoryByID(storyId, data),
+    }) => {
+      const { readerUpdate, ...metadata } = data;
+      const current = await storyWorkspaceRepo.getStory(storyId);
+      if (!current) throw new Error("Story not found");
+      // A story PATCH resurfaces the story in discovery, so a save that only
+      // changed the reader update goes to its own endpoint and sends no PATCH.
+      const saved = storyMetadataChanged(current, metadata)
+        ? await storyWorkspaceRepo.updateStory({ ...current, ...metadata })
+        : current;
+      if (!readerUpdate || !readerUpdateChanged(saved, readerUpdate)) {
+        return saved;
+      }
+      return storyWorkspaceRepo.updateReaderUpdate(storyId, readerUpdate);
+    },
     onSuccess: async (updated) => {
       if (userId) {
         await updateOwnerCaches(queryClient, userId, updated.id, updated);

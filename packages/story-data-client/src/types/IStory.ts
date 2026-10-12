@@ -6,6 +6,8 @@ export interface Chapter {
   wordCount: number;
   userId: string;
   revision?: number;
+  /** Absent while the chapter is a draft only its author can read. */
+  publishedAt?: Date;
 }
 
 /**
@@ -19,6 +21,17 @@ export type ChapterSummary = Omit<Chapter, "content">;
  * between them, or no gap and an indented first line.
  */
 export type ParagraphStyle = "spaced" | "indented";
+
+/** Whether the author is still adding chapters. Separate from being published. */
+export type CompletionStatus = "ongoing" | "completed";
+
+/** What an author tells readers about a story's progress. */
+export interface ReaderUpdate {
+  completionStatus: CompletionStatus;
+  /** YYYY-MM-DD, or empty for none. A completed story never keeps one. */
+  nextChapterOn: string;
+  readerNote: string;
+}
 
 export interface Story {
   id: string;
@@ -44,6 +57,11 @@ export interface Story {
   revision?: number;
   /** Absent on a story from an endpoint that does not carry it. */
   paragraphStyle?: ParagraphStyle;
+  completionStatus?: CompletionStatus;
+  /** YYYY-MM-DD. Public reads drop it once the date has passed. */
+  nextChapterOn?: string;
+  readerNote?: string;
+  readerNoteUpdatedAt?: Date;
 }
 
 export interface StoryMetadata {
@@ -69,6 +87,7 @@ export interface StoryMetadata {
   averageRating?: number;
   ratingsCount?: number;
   wordCount?: number;
+  completionStatus?: CompletionStatus;
 }
 
 export interface ILikes {

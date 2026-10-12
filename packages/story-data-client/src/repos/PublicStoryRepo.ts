@@ -1,4 +1,4 @@
-import { toParagraphStyle } from "./StoryWorkspaceRepo";
+import { readerUpdateFields, toParagraphStyle } from "./StoryWorkspaceRepo";
 import { isNotFound } from "../errors";
 import { request } from "../request";
 import type { Chapter, Story, StoryMetadata } from "../types/IStory";
@@ -26,6 +26,10 @@ interface ApiPublicStory {
     ratingsCount: number;
     createdAt: string;
     updatedAt: string;
+    completionStatus?: string;
+    nextChapterOn?: string;
+    readerNote?: string;
+    readerNoteUpdatedAt?: string;
 }
 
 interface ApiPublicChapter {
@@ -35,6 +39,7 @@ interface ApiPublicChapter {
     content?: string;
     position: number;
     wordCount: number;
+    publishedAt?: string;
 }
 
 export interface PublicStoryAuthor {
@@ -87,6 +92,7 @@ class PublicStoryRepo {
             coverImageUrl: api.coverImageUrl || undefined,
             thumbnailUrl: api.thumbnailUrl || undefined,
             paragraphStyle: toParagraphStyle(api.paragraphStyle),
+            ...readerUpdateFields(api),
         };
     }
 
@@ -98,6 +104,7 @@ class PublicStoryRepo {
             order: api.position,
             wordCount: api.wordCount,
             userId: authorId,
+            publishedAt: api.publishedAt ? new Date(api.publishedAt) : undefined,
         };
     }
 

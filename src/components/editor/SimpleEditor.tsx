@@ -109,6 +109,7 @@ import {
   workspaceStoryQuery,
 } from "@/hooks/queries/workspaceStory";
 import { neighbourChapterIds } from "@/lib/chapterIndex";
+import { publishDescription } from "@/lib/chapterRelease";
 import { useEditorBridge } from "@/components/editor/EditorBridge";
 
 function splitValidationError(sections: DocumentSection[]): string | null {
@@ -195,6 +196,11 @@ export function SimpleEditor() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryResult, setSummaryResult] = useState<string | null>(null);
   const [splitDialogOpen, setSplitDialogOpen] = useState(false);
+  const [releaseRequest, setReleaseRequest] = useState<{
+    chapterId: string;
+    title: string;
+    published: boolean;
+  } | null>(null);
   const [isSplitting, setIsSplitting] = useState(false);
 
   useEffect(loadEditorFonts, []);
@@ -247,6 +253,7 @@ export function SimpleEditor() {
       if (
         deleteDialogOpen ||
         publishDialogOpen ||
+        releaseRequest ||
         unsavedChangesDialogOpen ||
         summaryResult
       ) {
@@ -260,6 +267,7 @@ export function SimpleEditor() {
     focusMode,
     deleteDialogOpen,
     publishDialogOpen,
+    releaseRequest,
     unsavedChangesDialogOpen,
     summaryResult,
     exitFocusMode,
@@ -698,7 +706,17 @@ export function SimpleEditor() {
           section.title || `Chapter ${i + 2}`,
           section.html,
         );
-        createdChapters.push(saved);
+        // Text readers could already see must not turn private by being
+        // moved into a new chapter, which would otherwise start as a draft.
+        createdChapters.push(
+          base.publishedAt
+            ? await storyWorkspaceRepo.setChapterPublication(
+                state.story,
+                saved,
+                true,
+              )
+            : saved,
+        );
       }
 
       const savedFirst = await storyWorkspaceRepo.updateChapter(
@@ -717,6 +735,9 @@ export function SimpleEditor() {
       editor.commands.setContent(first.html, { emitUpdate: false });
       resetSaveState();
       invalidateShelf();
+      if (base.publishedAt) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.stories.all() });
+      }
       toast.success(`Split into ${sections.length} chapters.`);
     } catch (error) {
       try {
@@ -812,11 +833,25 @@ export function SimpleEditor() {
         isPublished: !wasPublished,
       });
       replaceStory(savedStory);
+      queryClient.invalidateQueries({ queryKey: queryKeys.stories.all() });
 
       if (!wasPublished) {
-        toast.success(
-          "Story marked published. Public discovery will be available after its migration.",
-        );
+        toast.success("Story published.");
+        // A first publish releases the written chapters server-side. If this
+        // read fails the story is still published; only the markers are stale.
+        try {
+          const index = await storyWorkspaceRepo.getChapterIndex(
+            savedStory.id,
+            savedStory.userId,
+          );
+          for (const chapter of index) {
+            actions.updateChapterInList(chapter.id, {
+              publishedAt: chapter.publishedAt,
+            });
+          }
+        } catch {
+          toast.error("Reload to see which chapters were released.");
+        }
       } else {
         // Just unpublished — stay in editor
         toast.success("Story unpublished.");
@@ -825,6 +860,51 @@ export function SimpleEditor() {
       toast.error("Failed to update publish status. Please try again.");
     } finally {
       setIsPublishing(false);
+    }
+  };
+
+  const confirmChapterRelease = async () => {
+    const request = releaseRequest;
+    if (!state.story || !request) return;
+    if (!(await saveBeforeContinuing())) return;
+    // Read after the save: it is what moved the revision this call must send.
+    const chapter = chapterBaseRef.current;
+    if (!chapter || chapter.id !== request.chapterId) return;
+    if (request.published && chapter.wordCount === 0) {
+      toast.error("Write something in this chapter before releasing it.");
+      return;
+    }
+    try {
+      const saved = await storyWorkspaceRepo.setChapterPublication(
+        state.story,
+        chapter,
+        request.published,
+      );
+      if (chapterBaseRef.current?.id === saved.id) {
+        chapterBaseRef.current = saved;
+      }
+      actions.updateChapterInList(saved.id, { publishedAt: saved.publishedAt });
+      cacheChapter(saved);
+      // story-data clears the promised date when a chapter is released.
+      const story = storyBaseRef.current;
+      if (request.published && story?.nextChapterOn) {
+        replaceStory({ ...story, nextChapterOn: undefined });
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.stories.all() });
+      const name = request.title || "Untitled";
+      toast.success(
+        !request.published
+          ? `"${name}" is a draft again.`
+          : state.story.isPublished
+            ? `"${name}" is now live for readers.`
+            : `"${name}" is released. It goes live when you publish the story.`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof StoryDataConflictError
+          ? "This chapter changed somewhere else. Reload it and try again."
+          : "Couldn't update the chapter. Please try again.",
+      );
     }
   };
 
@@ -1029,6 +1109,13 @@ export function SimpleEditor() {
     onOutlineSelect: handleOutlineSelect,
     canSplitIntoChapters,
     onSplitIntoChapters: handleSplitRequest,
+    storyPublished: isPublished,
+    onChapterRelease: (chapter: ChapterSummary, published: boolean) =>
+      setReleaseRequest({
+        chapterId: chapter.id,
+        title: chapter.title,
+        published,
+      }),
   };
 
   return (
@@ -1456,12 +1543,35 @@ export function SimpleEditor() {
             description={
               isPublished
                 ? `"${state.story?.title}" will be hidden from readers and returned to draft. You can publish it again at any time.`
-                : `"${state.story?.title}" will become visible to readers. You can unpublish it again at any time.`
+                : publishDescription(state.story?.title ?? "", state.chapters)
             }
             confirmLabel={isPublished ? "Unpublish" : "Publish"}
             cancelLabel={isPublished ? "Keep published" : "Cancel"}
             isLoading={isPublishing}
             onConfirm={handlePublish}
+          />
+
+          <ConfirmDialog
+            open={releaseRequest !== null}
+            onOpenChange={(open) => {
+              if (!open) setReleaseRequest(null);
+            }}
+            title={
+              releaseRequest?.published
+                ? "Release this chapter?"
+                : "Move this chapter back to draft?"
+            }
+            description={
+              releaseRequest?.published
+                ? isPublished
+                  ? `Readers will be able to read "${releaseRequest.title || "Untitled"}" straight away. You can move it back to draft later.`
+                  : `"${releaseRequest.title || "Untitled"}" will be marked released. Nobody can read it until you publish the story.`
+                : `Readers will no longer be able to open "${releaseRequest?.title || "Untitled"}". Anyone part-way through it will start the story again.`
+            }
+            confirmLabel={
+              releaseRequest?.published ? "Release" : "Move to draft"
+            }
+            onConfirm={confirmChapterRelease}
           />
 
           <SaveConflictDialog
