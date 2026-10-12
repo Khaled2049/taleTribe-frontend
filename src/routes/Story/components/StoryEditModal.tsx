@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, KeyboardEvent } from "react";
 import { X } from "lucide-react";
 import type {
-  CompletionStatus,
   ReaderUpdate,
   Story,
   StoryMetadata,
@@ -15,17 +14,13 @@ import {
   LANGUAGES,
 } from "@/constants/storyOptions";
 import { TagMultiSelect } from "@/components/common";
+import { StoryCompletionPicker } from "@/components/story/StoryCompletionPicker";
 import {
   READER_NOTE_MAX,
   localToday,
   normalizeReaderUpdate,
   readerUpdateOf,
 } from "@/lib/readerUpdate";
-
-const COMPLETION_OPTIONS: { value: CompletionStatus; label: string }[] = [
-  { value: "ongoing", label: "Ongoing" },
-  { value: "completed", label: "Completed" },
-];
 
 interface StoryEditModalProps {
   story: Pick<
@@ -298,39 +293,12 @@ export const StoryEditModal = ({
               </p>
             </div>
 
-            <div>
-              <span className={labelClass}>Status</span>
-              <div
-                role="radiogroup"
-                aria-label="Story status"
-                className="inline-flex rounded-ns border border-ns-border overflow-hidden"
-              >
-                {COMPLETION_OPTIONS.map(({ value, label }) => {
-                  const selected = readerUpdate.completionStatus === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() =>
-                        setReaderUpdate((current) => ({
-                          ...current,
-                          completionStatus: value,
-                        }))
-                      }
-                      className={`px-4 py-1.5 text-sm font-ui transition-colors ${
-                        selected
-                          ? "bg-ns-accent text-white"
-                          : "bg-ns-surface text-ns-ink-secondary hover:bg-ns-surface-hover"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <StoryCompletionPicker
+              value={readerUpdate.completionStatus}
+              onChange={(completionStatus) =>
+                setReaderUpdate((current) => ({ ...current, completionStatus }))
+              }
+            />
 
             <div>
               <label htmlFor="next-chapter-on" className={labelClass}>

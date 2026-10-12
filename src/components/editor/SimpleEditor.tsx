@@ -38,6 +38,7 @@ import {
 import {
   Chapter,
   ChapterSummary,
+  CompletionStatus,
   ParagraphStyle,
   Story,
 } from "@novelsync/story-data-client";
@@ -108,6 +109,8 @@ import {
 } from "@/hooks/queries/workspaceStory";
 import { neighbourChapterIds } from "@/lib/chapterIndex";
 import { isReleased, publishDescription } from "@/lib/chapterRelease";
+import { publishStory } from "@/lib/storyPublication";
+import { StoryCompletionPicker } from "@/components/story/StoryCompletionPicker";
 import { useEditorBridge } from "@/components/editor/EditorBridge";
 
 function splitValidationError(sections: DocumentSection[]): string | null {
@@ -185,6 +188,8 @@ export function SimpleEditor() {
   // Dialog states
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [publishCompletionStatus, setPublishCompletionStatus] =
+    useState<CompletionStatus>("ongoing");
   const [chapterToDelete, setChapterToDelete] = useState<string | null>(null);
   const [unsavedChangesDialogOpen, setUnsavedChangesDialogOpen] =
     useState(false);
@@ -818,20 +823,36 @@ export function SimpleEditor() {
   };
 
   // Handle publishing
+  const openPublishDialog = () => {
+    setPublishCompletionStatus(
+      storyBaseRef.current?.completionStatus ?? "ongoing",
+    );
+    setPublishDialogOpen(true);
+  };
+
   const handlePublish = async () => {
-    if (!state.story) return;
-    if (!(await saveBeforeContinuing())) return;
+    if (!state.story) return false;
+    if (!(await saveBeforeContinuing())) return false;
     const story = storyBaseRef.current;
-    if (!story) return;
+    if (!story) return false;
 
     const wasPublished = story.isPublished;
 
     try {
       setIsPublishing(true);
-      const savedStory = await storyWorkspaceRepo.updateStory({
-        ...story,
-        isPublished: !wasPublished,
-      });
+      const savedStory = wasPublished
+        ? await storyWorkspaceRepo.updateStory({ ...story, isPublished: false })
+        : await publishStory(
+            storyWorkspaceRepo,
+            story,
+            publishCompletionStatus,
+            (saved) => {
+              replaceStory(saved);
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.stories.all(),
+              });
+            },
+          );
       replaceStory(savedStory);
       queryClient.invalidateQueries({ queryKey: queryKeys.stories.all() });
 
@@ -858,6 +879,7 @@ export function SimpleEditor() {
       }
     } catch {
       toast.error("Failed to update publish status. Please try again.");
+      return false;
     } finally {
       setIsPublishing(false);
     }
@@ -1385,7 +1407,7 @@ export function SimpleEditor() {
                     {chapterReleaseButton}
                     <button
                       title={isPublished ? "Unpublish story" : "Publish story"}
-                      onClick={() => setPublishDialogOpen(true)}
+                      onClick={openPublishDialog}
                       disabled={isPublishing}
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns font-ui text-xs font-medium active:scale-[0.97] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap ${
                         isPublished
@@ -1458,7 +1480,7 @@ export function SimpleEditor() {
                   >
                     {chapterReleaseButton}
                     <button
-                      onClick={() => setPublishDialogOpen(true)}
+                      onClick={openPublishDialog}
                       disabled={isPublishing}
                       className={`inline-flex items-center justify-center gap-1.5 rounded-ns px-3 py-1.5 font-ui text-xs font-medium text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                         isPublished
@@ -1549,7 +1571,14 @@ export function SimpleEditor() {
             cancelLabel={isPublished ? "Keep published" : "Cancel"}
             isLoading={isPublishing}
             onConfirm={handlePublish}
-          />
+          >
+            {!isPublished && (
+              <StoryCompletionPicker
+                value={publishCompletionStatus}
+                onChange={setPublishCompletionStatus}
+              />
+            )}
+          </ConfirmDialog>
 
           <ConfirmDialog
             open={releaseRequest !== null}

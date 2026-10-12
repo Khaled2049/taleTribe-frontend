@@ -96,19 +96,6 @@ export function BookCoverFallback({
       />
 
       <div className="relative z-[1] flex h-full min-h-0 flex-col pl-[5%]">
-        {size !== "tiny" && (
-          <p
-            className={cn(
-              "font-ui font-semibold uppercase text-white/65",
-              size === "large"
-                ? "text-[8px] tracking-[0.28em]"
-                : "text-[5px] tracking-[0.2em]",
-            )}
-          >
-            The Tale Tribe
-          </p>
-        )}
-
         <div className="flex min-h-0 flex-1 items-center py-1">
           <div className="min-w-0">
             <h3

@@ -85,9 +85,10 @@ export const StoryGridCard = memo(function StoryGridCard({
           />
           <StoryStatusBadge
             status={story.completionStatus}
-            className="absolute left-1 top-1 shadow-ns-sm"
+            variant="cover"
+            className="pointer-events-none absolute right-1 top-1 z-10 sm:right-2 sm:top-2"
           />
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors duration-300 flex flex-col justify-between p-2 opacity-0 group-hover:opacity-100">
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors duration-300 flex flex-col justify-between p-2 pt-8 opacity-0 group-hover:opacity-100">
             <p className="text-white text-[10px] line-clamp-3 leading-relaxed font-body">
               {story.description}
             </p>
@@ -209,7 +210,7 @@ export const StoryListRow = memo(function StoryListRow({
               {story.category}
             </span>
           )}
-          <StoryStatusBadge status={story.completionStatus} />
+          <StoryStatusBadge status={story.completionStatus} variant="cover" />
         </div>
       </div>
 
