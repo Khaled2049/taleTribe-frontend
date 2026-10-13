@@ -376,7 +376,14 @@ Light theme: warm parchment (`#FDFCF9`) bg, sealing-wax red accent (`#B91C1C`). 
 `src/components/` is organized by domain:
 
 - `ui/` — Radix UI primitives (shadcn/ui, do not modify)
-- `editor/` — TipTap editor, slash commands, AI writing tools
+- `editor/` — TipTap editor, slash commands, AI writing tools. **The chapter
+  HTML this editor writes is a format other apps depend on.** The offline
+  desktop editor (`taleTribe-desktop`, GitHub `taleTribe-editor-desktop`)
+  carries a copy of these TipTap extensions and publishes chapters through
+  story-data. When you add, remove or reconfigure an extension in
+  `TipTapEditor.tsx`, or change `editorExtensions.ts`, `ImageNode.tsx`,
+  `CodeBlockExtension.ts` or `TaskListExtensions.ts`, make the same change in
+  that repo's `src/editor/schema/`.
 - `layout/` — Navbar, Footer, SidebarPanel (+ `navbar/` subdir)
 - `story/` — StoryMetadata, StoriesHeader (+ `characters/`, `places/` subdirs)
 - `plot/` — Plot timeline and event editing
