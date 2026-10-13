@@ -1,6 +1,7 @@
 // src/components/reader/WordDefinitionPopup.tsx
 
 import React from "react";
+import { usePopoverPosition } from "../../../../hooks/usePopoverPosition.js";
 import { X, Loader } from "lucide-react";
 import { WordDefinition } from "../../../../types/IReader.js";
 
@@ -21,14 +22,12 @@ export const WordDefinitionPopup: React.FC<WordDefinitionPopupProps> = ({
   position,
   onClose,
 }) => {
+  const { ref, style } = usePopoverPosition(position);
   return (
     <div
+      ref={ref}
       className="fixed z-50 w-80 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 p-4"
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        transform: "translate(-50%, -100%)",
-      }}
+      style={style}
     >
       {loading ? (
         <div className="flex items-center justify-center py-4">

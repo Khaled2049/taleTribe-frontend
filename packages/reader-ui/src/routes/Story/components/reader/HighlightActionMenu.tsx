@@ -1,6 +1,7 @@
 // src/components/reader/HighlightActionMenu.tsx
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { usePopoverPosition } from "../../../../hooks/usePopoverPosition.js";
 import { Trash2, StickyNote } from "lucide-react";
 import { Highlight } from "../../../../types/IReader.js";
 
@@ -21,7 +22,7 @@ export const HighlightActionMenu: React.FC<HighlightActionMenuProps> = ({
 }) => {
   const [editingNote, setEditingNote] = useState(false);
   const [note, setNote] = useState(highlight.note ?? "");
-  const ref = useRef<HTMLDivElement>(null);
+  const { ref, style } = usePopoverPosition(position);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -36,11 +37,7 @@ export const HighlightActionMenu: React.FC<HighlightActionMenuProps> = ({
       ref={ref}
       data-highlight-menu
       className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 p-2 w-56"
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        transform: "translate(-50%, -100%)",
-      }}
+      style={style}
     >
       {editingNote ? (
         <div className="space-y-2">

@@ -1,6 +1,7 @@
 // src/components/reader/HighlightMenu.tsx
 
 import React from "react";
+import { usePopoverPosition } from "../../../../hooks/usePopoverPosition.js";
 import { Highlight } from "../../../../types/IReader.js";
 import { HIGHLIGHT_COLORS } from "../../constants/readerThemes.js";
 
@@ -13,6 +14,7 @@ export const HighlightMenu: React.FC<HighlightMenuProps> = ({
   position,
   onSelectColor,
 }) => {
+  const { ref, style } = usePopoverPosition(position);
   const colors: Array<{ color: Highlight["color"]; label: string }> = [
     { color: "yellow", label: "Yellow" },
     { color: "green", label: "Green" },
@@ -22,13 +24,10 @@ export const HighlightMenu: React.FC<HighlightMenuProps> = ({
 
   return (
     <div
+      ref={ref}
       data-highlight-menu
       className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 p-2 flex gap-2"
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        transform: "translate(-50%, -100%)",
-      }}
+      style={style}
     >
       {colors.map(({ color, label }) => (
         <button
