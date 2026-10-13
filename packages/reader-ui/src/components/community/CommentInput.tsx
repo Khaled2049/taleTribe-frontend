@@ -38,13 +38,13 @@ export const CommentInput: React.FC<CommentInputProps> = ({
         }
         disabled={!currentUser}
         className={`w-full p-3 rounded-lg border transition-all duration-200 resize-none
-      bg-white dark:bg-gray-900 
-      border-gray-300 dark:border-gray-700 
+      bg-white dark:bg-gray-900
+      border-gray-300 dark:border-gray-700
       text-gray-900 dark:text-gray-200
       placeholder:text-gray-500 dark:placeholder:text-gray-400
-      focus:outline-none focus:ring-2 
+      focus:outline-none focus:ring-2
       focus:ring-dark-green dark:focus:ring-light-green
-      disabled:bg-gray-100 dark:disabled:bg-gray-800 
+      disabled:bg-gray-100 dark:disabled:bg-gray-800
       disabled:cursor-not-allowed
     `}
         rows={3}
@@ -54,7 +54,7 @@ export const CommentInput: React.FC<CommentInputProps> = ({
           data-cy="comment-submit"
           type="submit"
           disabled={!message.trim()}
-          className={`mt-3 w-full py-2 text-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 
+          className={`mt-3 w-full py-2 text-lg font-medium flex items-center justify-center gap-2 transition-all duration-200
         ${
           !message.trim()
             ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
