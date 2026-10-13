@@ -26,7 +26,7 @@ configureStoryData({
 });
 let requests = 0;
 globalThis.fetch = async (url) => {
-  assert(String(url).startsWith("https://fixture.invalid"));
+  assert.equal(new URL(String(url)).origin, "https://fixture.invalid");
   requests++;
   return new Response(JSON.stringify({ stories: [], nextCursor: null }), {
     headers: { "Content-Type": "application/json" },
