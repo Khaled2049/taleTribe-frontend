@@ -93,6 +93,13 @@ commit its lockfile; upgrades are explicit consumer changes. Treat incompatible
 contract changes as a new major version and coordinate both clients. Retain the
 last verified artifact set for rollback.
 
+Chunk 4 upgrades only `@novelsync/reader-ui` to **0.1.1**; the other packages
+remain **0.1.0** because their contracts are unchanged. Reader popovers now stay
+inside the visual viewport when notes grow or the keyboard opens. The mobile
+manifest, lockfile, vendored tarball, source commit and checksum were updated
+together, and the independent mobile install/build check passed. Retain the
+0.1.0 reader artifact for rollback.
+
 A configured private npm-compatible registry can replace artifact distribution
 later. Use a CI secret for its token and app-owned `.npmrc` configuration; never
 commit credentials. Do not publish to the public npm registry by default. Chunk 3
