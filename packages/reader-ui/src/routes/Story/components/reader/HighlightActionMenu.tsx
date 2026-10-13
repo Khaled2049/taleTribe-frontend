@@ -30,7 +30,7 @@ export const HighlightActionMenu: React.FC<HighlightActionMenuProps> = ({
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [onClose]);
+  }, [onClose, ref]);
 
   return (
     <div
