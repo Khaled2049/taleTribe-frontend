@@ -1,0 +1,33 @@
+{
+  "name": "@novelsync/design-tokens",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    "./styles.css": "./dist/styles.css",
+    "./tailwind": {
+      "types": "./dist/tailwind.d.ts",
+      "import": "./dist/tailwind.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').copyFileSync('src/styles.css', 'dist/styles.css')\"",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "tailwindcss": "^3.4.7"
+  },
+  "dependencies": {
+    "@tailwindcss/typography": "^0.5.13",
+    "tailwind-scrollbar": "^3.1.0",
+    "tailwindcss-animate": "^1.0.7"
+  }
+}

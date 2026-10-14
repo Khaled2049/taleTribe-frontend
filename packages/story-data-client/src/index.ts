@@ -3,20 +3,23 @@ export {
   getStoryDataConfig,
   type StoryDataAuthContext,
   type StoryDataConfig,
-} from "./config";
+} from "./config.js";
 export {
   isNotFound,
   StoryDataAuthError,
   StoryDataConflictError,
   StoryDataError,
-} from "./errors";
-export { request, type AuthMode, type RequestOptions } from "./request";
+} from "./errors.js";
+export { request, type AuthMode, type RequestOptions } from "./request.js";
 
-export type { Character, CharacterRelationship } from "./types/ICharacter";
-export type { Comment } from "./types/IComment";
-export type { GuestbookDate, IGuestbookEntry } from "./types/IGuestbookEntry";
-export type { IGuestbookReply } from "./types/IGuestbookReply";
-export type { Place } from "./types/IPlace";
+export type { Character, CharacterRelationship } from "./types/ICharacter.js";
+export type { Comment } from "./types/IComment.js";
+export type {
+  GuestbookDate,
+  IGuestbookEntry,
+} from "./types/IGuestbookEntry.js";
+export type { IGuestbookReply } from "./types/IGuestbookReply.js";
+export type { Place } from "./types/IPlace.js";
 export type {
   EventDependency,
   PacingType,
@@ -24,8 +27,8 @@ export type {
   PlotLine,
   StoryBeatType,
   TimeConstraint,
-} from "./types/IPlot";
-export type { IReadingProgress } from "./types/IReadingProgress";
+} from "./types/IPlot.js";
+export type { IReadingProgress } from "./types/IReadingProgress.js";
 export type {
   Chapter,
   ChapterSummary,
@@ -35,9 +38,12 @@ export type {
   ReaderUpdate,
   Story,
   StoryMetadata,
-} from "./types/IStory";
+} from "./types/IStory.js";
 
-export { guestbookRepo, type GuestbookReplyPage } from "./repos/GuestbookRepo";
+export {
+  guestbookRepo,
+  type GuestbookReplyPage,
+} from "./repos/GuestbookRepo.js";
 export {
   assistantThreadRepo,
   AssistantThreadRepo,
@@ -46,31 +52,31 @@ export {
   type AssistantMessageStatus,
   type AssistantThread,
   type AssistantThreadPage,
-} from "./repos/AssistantThreadRepo";
+} from "./repos/AssistantThreadRepo.js";
 export {
   PEOPLE_PAGE_SIZE,
   profileRepo,
   type ProfileUpdate,
   type PublicProfile,
   type RecentFollower,
-} from "./repos/ProfileRepo";
+} from "./repos/ProfileRepo.js";
 export {
   publicStoryRepo,
   type PublicStoryAuthor,
   type PublicStoryPage,
-} from "./repos/PublicStoryRepo";
-export { readingHistoryRepo } from "./repos/ReadingHistoryRepo";
+} from "./repos/PublicStoryRepo.js";
+export { readingHistoryRepo } from "./repos/ReadingHistoryRepo.js";
 export {
   storySocialRepo,
   type StorySocialMe,
   type StorySocialSummary,
-} from "./repos/StorySocialRepo";
+} from "./repos/StorySocialRepo.js";
 export {
   storyWorkspaceRepo,
   StoryWorkspaceRepo,
   type OwnerStoryPage,
-} from "./repos/StoryWorkspaceRepo";
+} from "./repos/StoryWorkspaceRepo.js";
 export {
   storyWorldbuildingRepo,
   StoryWorldbuildingRepo,
-} from "./repos/StoryWorldbuildingRepo";
+} from "./repos/StoryWorldbuildingRepo.js";

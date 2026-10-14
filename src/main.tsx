@@ -1,4 +1,5 @@
 import "./polyfills";
+import { WebReaderProvider } from "@/components/AppBootstrap/WebReaderProvider";
 import "./index.css";
 import { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
@@ -467,7 +468,9 @@ createRoot(document.getElementById("root")!).render(
   <SEOProvider>
     <QueryClientProvider client={appQueryClient}>
       <AuthBootstrap />
-      <RouterProvider router={router} />
+      <WebReaderProvider>
+        <RouterProvider router={router} />
+      </WebReaderProvider>
       <ThemeToaster />
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>

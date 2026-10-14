@@ -1,20 +1,45 @@
 {
   "name": "@novelsync/platform-auth",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./firestore": "./src/firestore.ts",
-    "./storage": "./src/storage.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    },
+    "./core": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./firestore-core": {
+      "types": "./dist/firestore.d.ts",
+      "import": "./dist/firestore.js"
+    },
+    "./storage-core": {
+      "types": "./dist/storage.d.ts",
+      "import": "./dist/storage.js"
+    }
   },
-  "sideEffects": [
-    "./src/firebase.ts",
-    "./src/firestore.ts",
-    "./src/storage.ts"
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
+  "sideEffects": [
+    "./dist/firestore.js",
+    "./dist/storage.js"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build"
+  },
   "peerDependencies": {
     "firebase": "^10.14.1",
     "react": "^19.2.1"

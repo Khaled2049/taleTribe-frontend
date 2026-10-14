@@ -1,28 +1,12 @@
-import type { QueryClient } from "@tanstack/react-query";
-import { appQueryClient } from "@/lib/queryClient";
 import {
-  publicChapterQuery,
-  publicStoryQuery,
-} from "@/hooks/queries/publicStory";
-
-export function prefetchStoryDetail(
-  storyId: string,
-  queryClient: QueryClient = appQueryClient,
-) {
-  import("./StoryDetail").catch(() => undefined);
-  return queryClient.prefetchQuery(publicStoryQuery(storyId));
-}
-
-export async function prefetchReaderChapter(
+  prefetchStoryDetail as detail,
+  prefetchReaderChapter as chapter,
+} from "@novelsync/reader-ui/routes/Story/prefetchStoryDetail";
+import { appQueryClient } from "@/lib/queryClient";
+export const prefetchStoryDetail = (storyId: string, client = appQueryClient) =>
+  detail(storyId, client);
+export const prefetchReaderChapter = (
   storyId: string,
   chapterId: string,
-  queryClient: QueryClient = appQueryClient,
-) {
-  const detail = await queryClient
-    .ensureQueryData(publicStoryQuery(storyId))
-    .catch(() => null);
-  if (!detail) return;
-  await queryClient.prefetchQuery(
-    publicChapterQuery(storyId, chapterId, detail.story.userId),
-  );
-}
+  client = appQueryClient,
+) => chapter(storyId, chapterId, client);

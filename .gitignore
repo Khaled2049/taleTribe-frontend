@@ -45,3 +45,6 @@ functions/story-ideas/
 
 # Temporary Workload Identity Federation credentials
 gha-creds-*.json
+
+# Locally packed shared package artifacts and isolated verification consumers.
+.artifacts/

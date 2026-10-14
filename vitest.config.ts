@@ -14,29 +14,35 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@novelsync/story-data-client": path.resolve(
-        __dirname,
-        "./packages/story-data-client/src/index.ts",
-      ),
-      "@novelsync/platform-auth/firestore": path.resolve(
-        __dirname,
-        "./packages/platform-auth/src/firestore.ts",
-      ),
-      "@novelsync/platform-auth/storage": path.resolve(
-        __dirname,
-        "./packages/platform-auth/src/storage.ts",
-      ),
-      "@novelsync/platform-auth": path.resolve(
-        __dirname,
-        "./packages/platform-auth/src/index.ts",
-      ),
-      "@novelsync/assistant-contracts": path.resolve(
-        __dirname,
-        "./packages/assistant-contracts/src/index.ts",
-      ),
-    },
+    alias: [
+      { find: "@", replacement: path.resolve(__dirname, "./src") },
+      {
+        find: /^@novelsync\/story\-data\-client$/,
+        replacement: path.resolve(
+          __dirname,
+          "./packages/story-data-client/src/index.ts",
+        ),
+      },
+      {
+        find: /^@novelsync\/platform\-auth\/firestore$/,
+        replacement: path.resolve(__dirname, "./src/platform/firestore.ts"),
+      },
+      {
+        find: /^@novelsync\/platform\-auth\/storage$/,
+        replacement: path.resolve(__dirname, "./src/platform/storage.ts"),
+      },
+      {
+        find: /^@novelsync\/platform\-auth$/,
+        replacement: path.resolve(__dirname, "./src/platform/auth.ts"),
+      },
+      {
+        find: /^@novelsync\/assistant\-contracts$/,
+        replacement: path.resolve(
+          __dirname,
+          "./packages/assistant-contracts/src/index.ts",
+        ),
+      },
+    ],
   },
   test: {
     // Unit tests only — browser/E2E coverage lives in cypress/.

@@ -1,10 +1,12 @@
 import { useSyncExternalStore } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "./firebase";
+import { getPlatformAuth } from "./firebase.js";
 
 export interface AuthIdentity {
   uid: string | null;
   email: string | null;
+  displayName?: string | null;
+  photoURL?: string | null;
   isAdmin: boolean;
   /** True until the first auth callback resolves — not "a request is running". */
   loading: boolean;
@@ -33,6 +35,8 @@ function publish(next: AuthIdentity) {
   if (
     next.uid === snapshot.uid &&
     next.email === snapshot.email &&
+    next.displayName === snapshot.displayName &&
+    next.photoURL === snapshot.photoURL &&
     next.isAdmin === snapshot.isAdmin &&
     next.loading === snapshot.loading
   ) {
@@ -45,6 +49,7 @@ function publish(next: AuthIdentity) {
 let unsubscribe: (() => void) | null = null;
 
 function start() {
+  const { auth } = getPlatformAuth();
   unsubscribe = onAuthStateChanged(auth, (user) => {
     if (!user) {
       publish(SIGNED_OUT);
@@ -56,6 +61,8 @@ function start() {
     publish({
       uid: user.uid,
       email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL,
       isAdmin: snapshot.uid === user.uid ? snapshot.isAdmin : false,
       loading: false,
       isSignedIn: true,

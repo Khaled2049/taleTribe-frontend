@@ -29,10 +29,8 @@ yarn test:watch       # Vitest in watch mode
 yarn test:rules       # Firestore rules tests — needs a running emulator
 ```
 
-`yarn lint` currently reports 89 pre-existing errors. Every file under
-`functions/src/` fails to parse under the root ESLint config (it cannot resolve
-`tsconfig.dev.json` from there), which accounts for most of them. Judge a change by whether it adds errors **in the files it
-touches**, not by the total.
+`yarn lint` checks `src/` and package source, excluding generated output. It must
+pass with zero warnings; Functions have their own build and verification.
 
 ### Tests
 
@@ -56,12 +54,16 @@ that path is verified by seeding (see below).
 
 ## Path Aliases
 
-`@/` maps to `./src/`. Two workspace packages resolve by name:
-`@novelsync/story-data-client` and `@novelsync/platform-auth`. All three are
-declared in `tsconfig.app.json`, `tsconfig.json`, `vite.config.ts` and
-`vitest.config.ts` — adding a package means adding it in all four.
+`@/` maps to `./src/`. Story-data and assistant contracts retain source aliases.
+Platform auth's exact root/firestore/storage aliases select app-owned bootstrap
+adapters; `/core` imports the configurable package without an app adapter.
+Reader UI and design tokens resolve their built workspace artifacts at runtime.
+`yarn dev`, build, typecheck, and test build packages first. After package edits
+with Vite running, run `yarn packages:build` again.
 
-Always use `@/` for app imports — never deep relative paths like `../../../`.
+Use `@/` for app imports. Shared packages use relative `.js` ESM imports and
+declared package imports, never app aliases or environment reads. See
+`docs/shared-reader-packages.md` for consumer setup and private artifact releases.
 
 ## Comments
 
@@ -74,6 +76,7 @@ density.
 a reader who understands the code would still ask "why like this?"
 
 Worth writing:
+
 - An external constraint the code obeys silently — "Firestore caps a
   transaction at 500 writes", "the ledger rejects a zero delta".
 - A plausible alternative that is wrong — why an assertion measures the
@@ -83,6 +86,7 @@ Worth writing:
 - A safety property that looks incidental — why `list` must stay `false`.
 
 Not worth writing:
+
 - Restating the next line. `// Escrow is empty` above `entryFeesHeld: "0"`.
 - Change archaeology. Comments about what a thing "used to be", what you just
   replaced, or why you made an edit. Git has this; the comment reads as noise a
@@ -91,7 +95,7 @@ Not worth writing:
 - Docstrings that restate the signature. A `getX` returning `X` needs nothing.
 
 **Keep it short.** One or two lines is normal. A multi-paragraph header is for a
-module whose *design* is non-obvious — `competitionSettlement.ts` explaining why
+module whose _design_ is non-obvious — `competitionSettlement.ts` explaining why
 settlement is not one transaction is the bar. Reaching that length to justify a
 single function usually means the comment is padding, or the function is wrong.
 
@@ -101,9 +105,11 @@ work. If a sentence only makes sense to a reader who watched you write it, cut i
 ## Architecture
 
 ### Stack
+
 React 19 + TypeScript 5 + Vite 5. Firebase (Auth, Firestore, Functions, Storage) for backend. thirdweb/Wagmi for Ethereum wallet integration. TipTap for rich text editing. React Router v7 for routing.
 
 ### Entry Points
+
 - `src/main.tsx` — Provider stack + all route definitions (code-split via `React.lazy`)
 - `src/NavbarWrapper.tsx` — Layout shell wrapping all non-auth routes
 
@@ -140,7 +146,9 @@ provider, and on mount it subscribes to `onAuthStateChanged` to hydrate
 fire a repo call before any component mounts, and an unconfigured client throws.
 
 ### Routing
+
 All routes are defined in `src/main.tsx` using React Router v7. Every route is lazy-loaded. Key route groups:
+
 - `/create/:storyId` — writing workspace (children: `/characters`, `/plot`, `/places`)
 - `/story/:id` — public reader view; the param is `<slug>-<uuid>`, read with `storyIdFromParam`
 - `/stories`, `/stories/genre/:genre`, `/stories/tag/:tag` — discovery, filter in the URL
@@ -148,8 +156,10 @@ All routes are defined in `src/main.tsx` using React Router v7. Every route is l
 - `/book-clubs`, `/competitions` — community
 
 ### SEO
+
 Read `docs/seo.md` before touching public routes, `index.html`, `firebase.json`
 rewrites/headers, or `functions/src/seo/`. The short version:
+
 - Firebase Hosting rewrites `/story/**`, `/profile/**`, `/stories/**` and the
   sitemap to the `seoRender` Function, which fills head tags, JSON-LD and a
   content snapshot into the SPA shell, 404s missing stories and 301s to
@@ -205,13 +215,14 @@ four places as the package itself.
 **`src/services/`** holds stateful client-side modules that own a connection or
 a cache and are not components or hooks. It is not one backend — read the
 imports to see which a given file talks to:
+
 - `ChatService.ts`, `RateLimitService.ts` — **Firestore** (realtime chat; `userActivity` counters)
 - `CompetitionService.ts`, `TokenService.ts` — **story-data**
 - `StorageService.ts` — Firebase Storage, with a Cloud Function reserving quota first
 - `DictionaryService.ts` — an **external** API (dictionaryapi.dev), with an in-memory cache
 - `HighlightService.ts` — **localStorage**, no network
 
-A thin typed wrapper over a single Cloud Function does *not* belong here — that
+A thin typed wrapper over a single Cloud Function does _not_ belong here — that
 is `src/cloudFunctions/` (see the Data Layer above). `credits.ts` and `images.ts`
 live there for that reason.
 
@@ -220,9 +231,11 @@ Do not add new Firestore access for a domain story-data owns.
 **Custom Hooks** (`src/hooks/`): `useAutosave()` handles periodic draft saves to Firestore. `useEditorState()` manages TipTap state. Web3 hooks (`useEarnings`, `useTippingContract`, `useWalletState`, `useTokenBalance`) wrap Wagmi.
 
 ### Firebase
+
 Config in `packages/platform-auth/src/firebase.ts` (it used to be
 `src/config/firebase.ts`). Set `VITE_USE_EMULATORS=true` (default in dev) to
 connect to local emulators:
+
 - Auth: 9099, Firestore: 8080, Functions: 5001, Storage: 9199
 
 Firestore holds nothing under `stories/{id}` any more — chapters moved to
@@ -231,6 +244,7 @@ history is durable now, but in story-data's Postgres, not Firestore. The rules
 deny the whole subtree.
 
 ### AI Features
+
 - **Story assistant**: `AssistantPanel` (assistant-ui headless primitives, Inkwell
   styling) → the `assistantRun` Function → `POST /assistant/run` in
   taleTribe-agents → tool-calling run loop over story-data → creditProxy
@@ -269,6 +283,7 @@ deny the whole subtree.
 - **Per-user story cap**: enforced by story-data. The pre-cutover `onStoryWrite` trigger no longer exists in `functions/src/`; a vestigial `users.storyCount` field may still sit on old documents but nothing reads or writes it. Soft cap; the indexing budget is the hard cost ceiling.
 
 ### Web3
+
 Wagmi config in `src/blockchain/config.ts`. Target chain from `VITE_CHAIN_ID` (default 31337 for local Anvil). Tipping contract ABI in `src/blockchain/abi/TippingPlatform.abi.json`. Wallet state machine: `DISCONNECTED → CONNECTING → CONNECTED → READY` (or `WRONG_NETWORK / ERROR`).
 
 ### Competitions and TALE
@@ -347,6 +362,7 @@ Use CSS variable–backed Tailwind tokens for all styling — never hardcode col
 **Color tokens:** `ns-bg`, `ns-surface`, `ns-surface-hover`, `ns-elevated`, `ns-ink`, `ns-ink-secondary`, `ns-ink-muted`, `ns-accent`, `ns-accent-hover`, `ns-accent-deep`, `ns-accent-subtle`, `ns-gold`, `ns-border`, `ns-border-strong`, `ns-destructive`
 
 **Typography:**
+
 - `font-heading` — Cormorant (serif, titles)
 - `font-body` — Crimson Pro (serif, prose)
 - `font-ui` — Hanken Grotesk (sans, UI labels)
@@ -358,6 +374,7 @@ Light theme: warm parchment (`#FDFCF9`) bg, sealing-wax red accent (`#B91C1C`). 
 ## Components Structure
 
 `src/components/` is organized by domain:
+
 - `ui/` — Radix UI primitives (shadcn/ui, do not modify)
 - `editor/` — TipTap editor, slash commands, AI writing tools. **The chapter
   HTML this editor writes is a format other apps depend on.** The offline
@@ -393,7 +410,7 @@ Most folders have an `index.ts` barrel; `AppBootstrap/`, `chat/`, `explore/`,
 
 Every `defineString` param in `functions/src/` **must** have a value here.
 A param with a `default` still prompts if the emulator cannot resolve it from a
-file, and that prompt blocks startup *before any trigger is registered* — so
+file, and that prompt blocks startup _before any trigger is registered_ — so
 every function 404s, not just the one that owns the param, and the only
 symptom is `Function us-central1-x does not exist, valid functions are:` with
 an empty list.

@@ -1,4 +1,4 @@
-import { auth } from "./firebase";
+import { getPlatformAuth } from "./firebase.js";
 
 export interface AuthContext {
   uid: string;
@@ -10,7 +10,7 @@ export interface AuthContext {
  * story-data-client never imports firebase — see that package's config.ts.
  */
 export async function getAuthContext(): Promise<AuthContext | null> {
-  const user = auth.currentUser;
+  const user = getPlatformAuth().auth.currentUser;
   if (!user) return null;
   return { uid: user.uid, token: await user.getIdToken() };
 }
@@ -21,5 +21,5 @@ export async function getAuthContext(): Promise<AuthContext | null> {
  * so callers that need a guaranteed uid should use `getAuthContext`.
  */
 export function getCurrentUid(): string | null {
-  return auth.currentUser?.uid ?? null;
+  return getPlatformAuth().auth.currentUser?.uid ?? null;
 }

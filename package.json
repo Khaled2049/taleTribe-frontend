@@ -10,13 +10,13 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "build:analyze": "tsc -b && vite build --mode analyze",
+    "dev": "yarn packages:build && vite",
+    "build": "yarn packages:build && tsc -b && vite build",
+    "build:analyze": "yarn packages:build && tsc -b && vite build --mode analyze",
     "kill-ports": "test -x ../../kill-ports && ../../kill-ports || echo 'kill-ports moved to TheTaleTribe workspace root (it now stops story-data and creditProxy too). Run ./kill-ports from there.'",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "lint": "eslint src packages --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "typecheck": "tsc -b",
+    "typecheck": "yarn packages:build && tsc -b",
     "preview": "vite preview",
     "start:agent": "cd python && python server.py",
     "start:emulator": "npm run emulator --prefix functions",
@@ -25,12 +25,15 @@
     "cy:open": "cypress open",
     "cy:run": "cypress run --e2e",
     "e2e": "./scripts/e2e-stack.sh",
-    "test": "vitest run",
+    "test": "yarn packages:build && vitest run",
     "assistant:contracts:generate": "yarn workspace @novelsync/assistant-contracts run generate",
     "assistant:contracts:check": "yarn workspace @novelsync/assistant-contracts run check",
-    "test:watch": "vitest",
+    "test:watch": "yarn packages:build && vitest",
     "test:rules": "vitest run --config vitest.rules.config.ts",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
+    "packages:build": "node scripts/build-reader-packages.mjs",
+    "packages:pack": "yarn packages:build && node scripts/pack-reader-packages.mjs",
+    "packages:verify": "yarn packages:pack && node scripts/verify-reader-packages.mjs"
   },
   "dependencies": {
     "@assistant-ui/react": "0.15.18",
@@ -92,7 +95,11 @@
     "viem": "^2.46.3",
     "wagmi": "^3.5.0",
     "zod": "^4.4.3",
-    "zustand": "^5.0.13"
+    "zustand": "^5.0.13",
+    "@novelsync/story-data-client": "0.1.0",
+    "@novelsync/platform-auth": "0.1.0",
+    "@novelsync/reader-ui": "0.1.1",
+    "@novelsync/design-tokens": "0.1.0"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",

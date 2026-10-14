@@ -1,8 +1,4 @@
-import type { QueryClient } from "@tanstack/react-query";
+import { prefetchStoriesPage as prefetch } from "@novelsync/reader-ui/routes/Story/prefetchStories";
 import { appQueryClient } from "@/lib/queryClient";
-import { publishedStoriesQuery } from "@/hooks/queries/publishedStories";
-
-export function prefetchStoriesPage(queryClient: QueryClient = appQueryClient) {
-  import("./AllStories").catch(() => undefined);
-  return queryClient.prefetchInfiniteQuery(publishedStoriesQuery("all"));
-}
+export const prefetchStoriesPage = (client = appQueryClient) =>
+  prefetch(client);
