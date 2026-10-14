@@ -23,6 +23,8 @@
  */
 
 const admin = require('firebase-admin')
+const { getAuth } = require('firebase-admin/auth')
+const { getFirestore, FieldValue } = require('firebase-admin/firestore')
 
 const STATUS_GRANTED = 'granted'
 const STATUS_REVOKED = 'revoked'
@@ -78,8 +80,8 @@ Options:
 
   // Resolve the uid from Auth rather than trusting anything the requester
   // wrote: the request document deliberately carries no email field.
-  const user = await admin.auth().getUserByEmail(email)
-  const db = admin.firestore()
+  const user = await getAuth().getUserByEmail(email)
+  const db = getFirestore()
   const ref = db.collection('mcpAccess').doc(user.uid)
   const before = (await ref.get()).data() || {}
 
@@ -87,7 +89,7 @@ Options:
   await ref.set(
     {
       status,
-      decidedAt: admin.firestore.FieldValue.serverTimestamp(),
+      decidedAt: FieldValue.serverTimestamp(),
       requestedAt: before.requestedAt || null,
     },
     { merge: true },

@@ -12,6 +12,7 @@
  */
 
 const admin = require('firebase-admin')
+const { getAuth } = require('firebase-admin/auth')
 
 function parseArgs(argv) {
   const args = argv.slice(2)
@@ -60,7 +61,7 @@ Options:
 
   admin.initializeApp({ projectId })
 
-  const user = await admin.auth().getUserByEmail(email)
+  const user = await getAuth().getUserByEmail(email)
   const existingClaims = user.customClaims || {}
   const nextClaims = { ...existingClaims }
 
@@ -70,7 +71,7 @@ Options:
     nextClaims.admin = true
   }
 
-  await admin.auth().setCustomUserClaims(user.uid, nextClaims)
+  await getAuth().setCustomUserClaims(user.uid, nextClaims)
 
   console.log(
     JSON.stringify(
