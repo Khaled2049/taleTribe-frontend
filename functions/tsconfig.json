@@ -6,6 +6,9 @@
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "outDir": "lib",
+    // firebase-admin 14 ships a google-auth-library whose .d.ts imports the
+    // ESM-only gtoken from CJS (TS1479); Node 22 loads it fine at runtime.
+    "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
     // es2020 (not es2017) so BigInt literals compile — money.ts/ledger.ts do all

@@ -36,6 +36,8 @@
 const fs = require('fs')
 const path = require('path')
 const admin = require('firebase-admin')
+const { getAuth } = require('firebase-admin/auth')
+const { getFirestore } = require('firebase-admin/firestore')
 
 const DEFAULT_PROJECT = 'story-6f89f'
 const DEFAULT_OWNER_EMAIL = 'seed-owner@taletribe.local'
@@ -138,17 +140,17 @@ function loadUserProfileDefaults() {
 
 /** Resolve (and in the emulator create) the account stories will be attributed to. */
 async function ensureOwner({ email, prod }) {
-  const db = admin.firestore()
+  const db = getFirestore()
 
   let user
   try {
-    user = await admin.auth().getUserByEmail(email)
+    user = await getAuth().getUserByEmail(email)
   } catch (error) {
     if (error.code !== 'auth/user-not-found') throw error
     if (prod) {
       throw new Error(`Owner ${email} does not exist — pass --owner-uid for production`)
     }
-    user = await admin.auth().createUser({ email, emailVerified: true, displayName: 'seed-owner' })
+    user = await getAuth().createUser({ email, emailVerified: true, displayName: 'seed-owner' })
     console.log(`  created owner user ${email} (${user.uid})`)
   }
 
@@ -179,7 +181,7 @@ async function ensureOwner({ email, prod }) {
 async function mintIdToken({ uid, prod, projectId }) {
   let customToken
   try {
-    customToken = await admin.auth().createCustomToken(uid)
+    customToken = await getAuth().createCustomToken(uid)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (/signBlob|service account/i.test(message)) {

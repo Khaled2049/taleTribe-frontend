@@ -1,5 +1,5 @@
 /** Authentication and authorization utilities. */
-import * as admin from "firebase-admin";
+import { getAuth } from "firebase-admin/auth";
 import { Request, Response } from "express";
 import * as logger from "firebase-functions/logger";
 
@@ -16,7 +16,7 @@ export async function verifyAuthContext(request: Request): Promise<AuthContext |
 
   const idToken = authHeader.split("Bearer ")[1];
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const decodedToken = await getAuth().verifyIdToken(idToken);
     return { userId: decodedToken.uid, idToken };
   } catch (error) {
     logger.error("Error verifying auth token", error);

@@ -14,6 +14,8 @@
  */
 
 const admin = require("firebase-admin");
+const { getAuth } = require("firebase-admin/auth");
+const { getFirestore } = require("firebase-admin/firestore");
 
 function parseArgs(argv) {
   const flags = new Set(argv.slice(2).filter((a) => a.startsWith("--")));
@@ -65,7 +67,7 @@ Options:
   }
 
   admin.initializeApp({ projectId });
-  const db = admin.firestore();
+  const db = getFirestore();
 
   let query = db.collection("mcpAccess");
   if (!all) query = query.where("status", "==", "requested");
@@ -83,7 +85,7 @@ Options:
       const data = doc.data();
       let email = "(no auth record)";
       try {
-        email = (await admin.auth().getUser(doc.id)).email || "(no email)";
+        email = (await getAuth().getUser(doc.id)).email || "(no email)";
       } catch {
         // User deleted from Auth but the request document survives.
       }

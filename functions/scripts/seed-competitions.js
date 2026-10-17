@@ -77,6 +77,7 @@
  */
 
 const admin = require('firebase-admin')
+const { getAuth } = require('firebase-admin/auth')
 
 const DEFAULT_PROJECT = 'story-6f89f'
 const DEFAULT_ADMIN_EMAIL = 'admin@taletribe.local'
@@ -299,10 +300,10 @@ function loadUserProfileDefaults() {
 
 async function ensureAuthUser({ email, displayName, password }) {
   try {
-    return await admin.auth().getUserByEmail(email)
+    return await getAuth().getUserByEmail(email)
   } catch (error) {
     if (error.code !== 'auth/user-not-found') throw error
-    return admin.auth().createUser({
+    return getAuth().createUser({
       email,
       password,
       emailVerified: true,
@@ -335,7 +336,7 @@ async function ensureProfile({ uid, email, username }) {
 async function ensureAdmin({ email, password }) {
   const user = await ensureAuthUser({ email, displayName: 'seed-admin', password })
   if (!user.customClaims?.admin) {
-    await admin.auth().setCustomUserClaims(user.uid, {
+    await getAuth().setCustomUserClaims(user.uid, {
       ...(user.customClaims || {}),
       admin: true,
     })

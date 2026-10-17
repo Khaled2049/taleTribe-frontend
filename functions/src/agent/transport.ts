@@ -57,7 +57,7 @@ export async function getIdentityToken(): Promise<string | null> {
     if (!auth) return null;
     const client = await auth.getIdTokenClient(url);
     const headers = await client.getRequestHeaders();
-    return headers.Authorization?.split(" ")[1] || null;
+    return headers.get("Authorization")?.split(" ")[1] || null;
   } catch (error) {
     logger.error("Error getting identity token", error);
     return null;
