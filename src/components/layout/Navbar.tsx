@@ -5,6 +5,7 @@ import { Loader, Menu, User } from "lucide-react";
 import UserDropdown from "./navbar/UserDropdown";
 import MobileMenu from "./navbar/MobileMenu";
 import NavLinks from "./navbar/NavLinks";
+import { ThemeToggle } from "../common/ThemeToggle";
 import { APP_NAME } from "../../config/seo";
 import { WEB3_ENABLED } from "../../config/featureFlags";
 import { Web3Boundary } from "@/contexts/Web3Boundary";
@@ -138,6 +139,7 @@ const Navbar = () => {
               </div>
             ) : (
               <div className="flex items-center gap-3">
+                <ThemeToggle />
                 <Link
                   to="/sign-in"
                   className="px-2.5 py-2 font-ui text-sm font-medium text-ns-ink-secondary no-underline transition-colors duration-200 hover:text-ns-ink sm:px-3"
