@@ -73,8 +73,7 @@ jobs:
               echo "Skipping $name (unchanged)"
             fi
           }
-          sync_secret "SMTP_USER" "${INPUT_SECRETS_SMTP_USER}"
-          sync_secret "SMTP_PASS" "${INPUT_SECRETS_SMTP_PASS}"
+          # SMTP_USER/SMTP_PASS are written by terraform/aws-email, not synced from GitHub.
           sync_secret "EMAIL_FROM" "${INPUT_SECRETS_EMAIL_FROM}"
           sync_secret "MAGIC_LINK_REDIRECT_URL" "${INPUT_SECRETS_MAGIC_LINK_REDIRECT_URL}"
           sync_secret "REPLICATE_API_TOKEN" "${INPUT_SECRETS_REPLICATE_API_TOKEN}"
@@ -82,8 +81,6 @@ jobs:
           sync_secret "BOOKS_API_KEY" "${INPUT_SECRETS_BOOKS_API_KEY}"
 
         env:
-          INPUT_SECRETS_SMTP_USER: ${{ secrets.SMTP_USER }}
-          INPUT_SECRETS_SMTP_PASS: ${{ secrets.SMTP_PASS }}
           INPUT_SECRETS_EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           INPUT_SECRETS_MAGIC_LINK_REDIRECT_URL: ${{ secrets.MAGIC_LINK_REDIRECT_URL }}
           INPUT_SECRETS_REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
@@ -106,8 +103,6 @@ jobs:
               gcloud secrets versions destroy "$v" --secret="$name" --project=${PROJECT_ID} --quiet
             done
           }
-          cleanup_secret "SMTP_USER"
-          cleanup_secret "SMTP_PASS"
           cleanup_secret "EMAIL_FROM"
           cleanup_secret "MAGIC_LINK_REDIRECT_URL"
           cleanup_secret "REPLICATE_API_TOKEN"
