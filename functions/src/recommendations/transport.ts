@@ -56,7 +56,7 @@ async function identityToken(audience: string): Promise<string | null> {
   if (!auth) return null;
   const client = await idTokenClient(auth, audience);
   const headers = await client.getRequestHeaders();
-  return headers.Authorization?.split(" ")[1] ?? null;
+  return headers.get("Authorization")?.split(" ")[1] ?? null;
 }
 
 /**

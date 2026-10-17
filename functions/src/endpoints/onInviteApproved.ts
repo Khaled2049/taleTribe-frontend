@@ -1,6 +1,6 @@
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
-import * as admin from "firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { ActionCodeSettings, getAuth } from "firebase-admin/auth";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import * as nodemailer from "nodemailer";
 import * as logger from "firebase-functions/logger";
 import { defineSecret } from "firebase-functions/params";
@@ -16,10 +16,10 @@ const magicLinkRedirectUrl = defineSecret("MAGIC_LINK_REDIRECT_URL");
 interface InviteData {
   email: string;
   status: "pending" | "approved" | "sent" | "completed" | "rejected";
-  requestedAt: admin.firestore.Timestamp;
-  approvedAt?: admin.firestore.Timestamp;
-  sentAt?: admin.firestore.Timestamp;
-  completedAt?: admin.firestore.Timestamp;
+  requestedAt: Timestamp;
+  approvedAt?: Timestamp;
+  sentAt?: Timestamp;
+  completedAt?: Timestamp;
   approvedBy?: string;
   linkSentCount: number;
 }
@@ -71,14 +71,15 @@ export const onInviteApproved = onDocumentUpdated(
           "http://localhost:5173/auth/complete-signup")
         : magicLinkRedirectUrl.value();
 
-      const actionCodeSettings: admin.auth.ActionCodeSettings = {
+      const actionCodeSettings: ActionCodeSettings = {
         url: redirectUrl,
         handleCodeInApp: true,
       };
 
-      const magicLink = await admin
-        .auth()
-        .generateSignInWithEmailLink(email, actionCodeSettings);
+      const magicLink = await getAuth().generateSignInWithEmailLink(
+        email,
+        actionCodeSettings,
+      );
 
       if (isEmulator) {
         logger.info(`[EMULATOR] Magic link for ${email}: ${magicLink}`);
