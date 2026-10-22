@@ -193,6 +193,19 @@ const MobileMenu = ({ isOpen, onClose }: MobileMenuProps) => {
                 <nav aria-label="Account" className="mb-2">
                   <SectionLabel>Account</SectionLabel>
                   <div className="space-y-0.5">
+                    {user.isAdmin && (
+                      <Link
+                        to="/admin"
+                        onClick={onClose}
+                        aria-current={
+                          pathname.startsWith("/admin") ? "page" : undefined
+                        }
+                        className={`flex items-center gap-3 px-4 py-3 rounded-ns font-ui font-semibold text-ns-gold transition-colors hover:bg-ns-surface hover:text-ns-gold-bright ${pathname.startsWith("/admin") ? "bg-ns-surface" : ""}`}
+                      >
+                        <Shield className="h-5 w-5 shrink-0" />
+                        <span>Admin</span>
+                      </Link>
+                    )}
                     {accountItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = pathname.startsWith(item.to);

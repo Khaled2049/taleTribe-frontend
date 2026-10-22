@@ -24,6 +24,40 @@ export async function verifyAuthContext(request: Request): Promise<AuthContext |
   }
 }
 
+/**
+ * Middleware for admin-only endpoints: requires a verified `admin: true` claim
+ * and checks revocation, so `npm run unset-admin` takes effect at once.
+ */
+export function requireAdmin(
+  handler: (request: Request, response: Response, adminId: string, idToken: string) => Promise<void>
+) {
+  return async (request: Request, response: Response): Promise<void> => {
+    if (request.method === "OPTIONS") {
+      response.status(204).send("");
+      return;
+    }
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      response.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const idToken = authHeader.split("Bearer ")[1];
+    let decoded;
+    try {
+      decoded = await getAuth().verifyIdToken(idToken, true);
+    } catch (error) {
+      logger.warn("Admin token rejected", error);
+      response.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    if (decoded.admin !== true) {
+      response.status(403).json({ error: "admin only" });
+      return;
+    }
+    await handler(request, response, decoded.uid, idToken);
+  };
+}
+
 /** Stories live in story-data, which authorizes them with the caller's original
  * Firebase token. This is the only ownership check — there is no Firestore
  * story document to fall back to. */

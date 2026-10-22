@@ -100,6 +100,18 @@ const UserDropdown = ({
   if (!isOpen || !user) return null;
 
   const menuItems = [
+    ...(user.isAdmin
+      ? [
+          {
+            icon: Shield,
+            label: "Admin",
+            to: "/admin",
+            onClick: onClose,
+            prefetch: undefined,
+            admin: true,
+          },
+        ]
+      : []),
     {
       icon: BookOpen,
       label: "My Shelf",
@@ -176,9 +188,15 @@ const UserDropdown = ({
               className="group relative flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-ns-surface transition-colors"
             >
               {/* accent bar slides in on hover */}
-              <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-ns-accent scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-200" />
-              <Icon className="w-4 h-4 text-ns-ink-muted group-hover:text-ns-accent transition-colors" />
-              <span className="font-ui text-ns-ink-secondary group-hover:text-ns-ink transition-colors">
+              <span
+                className={`absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full ${"admin" in item ? "bg-ns-gold" : "bg-ns-accent"} scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-200`}
+              />
+              <Icon
+                className={`w-4 h-4 transition-colors ${"admin" in item ? "text-ns-gold group-hover:text-ns-gold-bright" : "text-ns-ink-muted group-hover:text-ns-accent"}`}
+              />
+              <span
+                className={`font-ui transition-colors ${"admin" in item ? "font-semibold text-ns-gold group-hover:text-ns-gold-bright" : "text-ns-ink-secondary group-hover:text-ns-ink"}`}
+              >
                 {item.label}
               </span>
             </Link>

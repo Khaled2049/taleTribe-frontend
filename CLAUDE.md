@@ -421,7 +421,13 @@ clone has none of this and hits the prompt. Current params:
 ```
 AGENT_SERVICE_URL=http://localhost:8000
 RECOMMENDATION_SERVICE_URL=http://localhost:8100
+CREDIT_PROXY_URL=http://localhost:8090
 ```
+
+`CREDIT_PROXY_URL` is used only by the admin `aiUsageSummary` Function, which
+calls creditProxy's `/v1/admin` routes with an OIDC token and the admin's own
+Firebase token. Production sets it from the frontend Terraform output
+`credit_proxy_url` in `deploy.yml`.
 
 Frontend (`src/`, `packages/`). Verified against actual `import.meta.env` reads:
 

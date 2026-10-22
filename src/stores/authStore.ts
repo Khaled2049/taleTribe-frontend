@@ -83,11 +83,13 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
 
     try {
-      const userDoc = await readUserDoc(firebaseUser.uid);
+      const [userDoc, tokenResult] = await Promise.all([
+        readUserDoc(firebaseUser.uid),
+        firebaseUser.getIdTokenResult(),
+      ]);
 
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        const tokenResult = await firebaseUser.getIdTokenResult();
         // username lives in story-data now; Firebase Auth's displayName (set
         // at signup, kept in sync by updateProfile — see authStore.updateProfile)
         // is the bootstrap source until the story-data profile loads below.
@@ -213,7 +215,13 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       }
 
       if (run === hydrateRun)
-        set({ user: getFallbackUser(firebaseUser), loading: false });
+        set({
+          user: {
+            ...getFallbackUser(firebaseUser),
+            isAdmin: tokenResult.claims["admin"] === true,
+          },
+          loading: false,
+        });
     } catch (error) {
       console.error("Error hydrating authenticated user:", error);
       if (run === hydrateRun) set({ user: null, loading: false });

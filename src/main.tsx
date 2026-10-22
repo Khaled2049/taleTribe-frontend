@@ -19,6 +19,8 @@ import { AuthBootstrap } from "./components/AppBootstrap/AuthBootstrap";
 import { RouteError } from "./components/common/RouteError";
 import { useAuthContext } from "./contexts/AuthContext";
 import RequireAuth from "./routes/RequireAuth";
+import RequireAdmin from "./routes/Admin/RequireAdmin";
+import AdminLayout from "./routes/Admin/AdminLayout";
 import { prefetchStoriesPage } from "./routes/Story/prefetchStories";
 import {
   prefetchReaderChapter,
@@ -39,6 +41,13 @@ import {
 } from "./components/editor/EditorWorkspaceSkeleton";
 
 const Root = lazy(() => import("./routes/root"));
+const AdminStories = lazy(() => import("./routes/Admin/AdminStories"));
+const AdminCompetitions = lazy(
+  () => import("./routes/Admin/AdminCompetitions"),
+);
+const AdminMembers = lazy(() => import("./routes/Admin/AdminMembers"));
+const AdminAiUsage = lazy(() => import("./routes/Admin/AdminAiUsage"));
+const AdminAiUsageUser = lazy(() => import("./routes/Admin/AdminAiUsageUser"));
 const Signin = lazy(() => import("./routes/Auth/sign-in"));
 const Signup = lazy(() => import("./routes/Auth/sign-up"));
 const StoryDetail = lazy(() => import("./routes/Story/StoryDetail"));
@@ -117,6 +126,57 @@ const router = createBrowserRouter([
     element: <NavbarWrapper />,
     errorElement: <RouteError />,
     children: [
+      {
+        path: "/admin",
+        element: (
+          <RequireAdmin>
+            <AdminLayout />
+          </RequireAdmin>
+        ),
+        children: [
+          { index: true, loader: () => redirect("/admin/stories") },
+          ...["stories", "stories/:storyId"].map((path) => ({
+            path,
+            element: (
+              <Suspense fallback={<LoadingFallback />}>
+                <AdminStories />
+              </Suspense>
+            ),
+          })),
+          ...["competitions", "competitions/:competitionId"].map((path) => ({
+            path,
+            element: (
+              <Suspense fallback={<LoadingFallback />}>
+                <AdminCompetitions />
+              </Suspense>
+            ),
+          })),
+          {
+            path: "members",
+            element: (
+              <Suspense fallback={<LoadingFallback />}>
+                <AdminMembers />
+              </Suspense>
+            ),
+          },
+          {
+            path: "ai-usage",
+            element: (
+              <Suspense fallback={<LoadingFallback />}>
+                <AdminAiUsage />
+              </Suspense>
+            ),
+          },
+          {
+            path: "ai-usage/users/:uid",
+            element: (
+              <Suspense fallback={<LoadingFallback />}>
+                <AdminAiUsageUser />
+              </Suspense>
+            ),
+          },
+        ],
+      },
       {
         path: "/",
         loader: () => {
