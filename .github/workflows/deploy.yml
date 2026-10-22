@@ -29,6 +29,7 @@ jobs:
     outputs:
       backend_url: ${{ steps.terraform.outputs.backend_url }}
       recommendation_url: ${{ steps.terraform.outputs.recommendation_url }}
+      credit_proxy_url: ${{ steps.terraform.outputs.credit_proxy_url }}
 
     steps:
       - name: Checkout code
@@ -115,8 +116,10 @@ jobs:
         run: |
           BACKEND_URL=$(terraform output -raw backend_service_url)
           RECOMMENDATION_URL=$(terraform output -raw recommendation_service_url)
+          CREDIT_PROXY_URL=$(terraform output -raw credit_proxy_url)
           echo "backend_url=$BACKEND_URL" >> $GITHUB_OUTPUT
           echo "recommendation_url=$RECOMMENDATION_URL" >> $GITHUB_OUTPUT
+          echo "credit_proxy_url=$CREDIT_PROXY_URL" >> $GITHUB_OUTPUT
 
     needs: test
   build:
@@ -230,6 +233,7 @@ jobs:
           ASSISTANT_API_ENABLED: ${{ vars.ASSISTANT_API_ENABLED || 'true' }}
           ASSISTANT_EDIT_PROPOSALS_ENABLED: ${{ vars.ASSISTANT_EDIT_PROPOSALS_ENABLED || 'true' }}
           RECOMMENDATION_SERVICE_URL: ${{ needs.terraform-apply.outputs.recommendation_url }}
+          CREDIT_PROXY_URL: ${{ needs.terraform-apply.outputs.credit_proxy_url }}
           STORY_DATA_URL: ${{ secrets.VITE_STORY_DATA_URL }}
           SITE_URL: ${{ vars.SITE_URL || 'https://thetaletribe.com' }}
         run: |
@@ -238,6 +242,7 @@ jobs:
             echo "ASSISTANT_API_ENABLED=$ASSISTANT_API_ENABLED"
             echo "ASSISTANT_EDIT_PROPOSALS_ENABLED=$ASSISTANT_EDIT_PROPOSALS_ENABLED"
             echo "RECOMMENDATION_SERVICE_URL=$RECOMMENDATION_SERVICE_URL"
+            echo "CREDIT_PROXY_URL=$CREDIT_PROXY_URL"
             echo "STORY_DATA_URL=$STORY_DATA_URL"
             echo "SITE_URL=$SITE_URL"
           } > functions/.env

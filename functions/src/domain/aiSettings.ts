@@ -257,7 +257,7 @@ export async function checkAiAccess(userId: string): Promise<AiAccessResult> {
   return access;
 }
 
-function getDailyAiQuotaLimit(): number {
+export function getDailyAiQuotaLimit(): number {
   const raw = process.env.MAX_AI_USAGE || "100";
   const parsed = Number.parseInt(raw, 10);
   if (Number.isNaN(parsed) || parsed <= 0) return 100;

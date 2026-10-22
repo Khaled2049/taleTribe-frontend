@@ -62,6 +62,15 @@ data "google_cloud_run_v2_service" "recommendations" {
   project  = var.project_id
 }
 
+# creditProxy owns the gateway and its IAM (including the Functions invoker
+# grant). Functions read only its URL, which is also the OIDC audience: the
+# gateway derives the expected audience from the request's Host.
+data "google_cloud_run_v2_service" "credit_proxy_gateway" {
+  name     = var.credit_proxy_gateway_service_name
+  location = var.region
+  project  = var.project_id
+}
+
 data "google_project" "current" {
   project_id = var.project_id
 }

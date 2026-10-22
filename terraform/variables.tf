@@ -53,3 +53,9 @@ variable "secret_names" {
     "BOOKS_API_KEY",
   ]
 }
+
+variable "credit_proxy_gateway_service_name" {
+  description = "Cloud Run service name of the creditProxy gateway, called by the admin AI usage Function"
+  type        = string
+  default     = "credit-proxy-gateway"
+}

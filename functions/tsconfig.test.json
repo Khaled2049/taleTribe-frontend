@@ -6,8 +6,12 @@
     "sourceMap": false
   },
   "include": [
+    "src/domain/adminRoles.ts",
+    "src/domain/aiUsage.ts",
     "src/domain/adminStorySchemas.ts",
     "src/domain/aiSettings.ts",
+    "src/domain/inviteReview.ts",
+    "src/domain/mcpAccess.ts",
     "src/seo/*.ts",
     "tests/**/*.test.ts"
   ]

@@ -20,6 +20,10 @@ export { assistantRun } from "./endpoints/assistantRun";
 export { enhanceText } from "./endpoints/enhanceText";
 export { enhanceWizardInput } from "./endpoints/enhanceWizardInput";
 export { onInviteApproved } from "./endpoints/onInviteApproved";
+export { listInvites, reviewInvite } from "./endpoints/adminInvites";
+export { listMcpAccess, reviewMcpAccess } from "./endpoints/adminMcpAccess";
+export { adminRoles, setAdminRole } from "./endpoints/adminRoles";
+export { aiUsageSummary, aiUsageUser, aiUsageUsers } from "./endpoints/adminAiUsage";
 export {
   saveAiSettings,
   deleteAiSettings,

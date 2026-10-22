@@ -152,6 +152,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Admin grants and removals, written by the setAdminRole Function only.
+    match /adminRoleChanges/{changeId} {
+      allow read, write: if false;
+    }
+
     match /mcpAccess/{uid} {
       function isValidMcpRequest() {
         return request.resource.data.status == 'requested'

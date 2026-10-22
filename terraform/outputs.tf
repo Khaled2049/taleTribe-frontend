@@ -8,6 +8,11 @@ output "recommendation_service_url" {
   value       = local.recommendation_service_url
 }
 
+output "credit_proxy_url" {
+  description = "creditProxy gateway URL injected into Firebase Functions for the admin AI usage summary"
+  value       = data.google_cloud_run_v2_service.credit_proxy_gateway.uri
+}
+
 output "firebase_hosting_site" {
   description = "Firebase Hosting site ID"
   value       = var.firebase_hosting_site_id

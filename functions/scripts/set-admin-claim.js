@@ -72,6 +72,9 @@ Options:
   }
 
   await getAuth().setCustomUserClaims(user.uid, nextClaims)
+  // story-data's admin routes check revocation, so this ends admin access now
+  // instead of when the current ID token expires.
+  if (revoke) await getAuth().revokeRefreshTokens(user.uid)
 
   console.log(
     JSON.stringify(
@@ -81,7 +84,9 @@ Options:
         uid: user.uid,
         admin: !!nextClaims.admin,
         target: prod ? 'production' : 'emulator',
-        message: 'Done. User must sign out/sign in to refresh token claims.',
+        message: revoke
+          ? 'Done. Admin removed and sessions revoked; the user must sign in again.'
+          : 'Done. User must sign out/sign in to refresh token claims.',
       },
       null,
       2,
