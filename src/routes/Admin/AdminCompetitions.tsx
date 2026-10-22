@@ -17,6 +17,7 @@ import {
   adminCompetitionService,
   type AdminCompetition,
 } from "@/services/AdminCompetitionService";
+import { AdminSelect } from "./AdminSelect";
 
 const control =
   "rounded-ns border border-ns-border bg-ns-elevated px-3 py-2 text-sm text-ns-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent disabled:opacity-50";
@@ -185,8 +186,8 @@ function CompetitionList({ viewerId }: { viewerId: string }) {
         </button>
         <label className="text-sm">
           Status
-          <select
-            className={`${control} mt-2 block`}
+          <AdminSelect
+            className="mt-2"
             value={phase}
             onChange={(event) => setPhase(event.target.value)}
           >
@@ -196,7 +197,7 @@ function CompetitionList({ viewerId }: { viewerId: string }) {
                 {label}
               </option>
             ))}
-          </select>
+          </AdminSelect>
         </label>
       </form>
       {competitions.isPending && <p role="status">Loading competitions…</p>}

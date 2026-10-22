@@ -16,6 +16,7 @@ import {
   type McpDecision,
   type McpStatus,
 } from "@/cloudFunctions/adminMcpAccess";
+import { AdminSelect } from "./AdminSelect";
 
 const control =
   "rounded-ns border border-ns-border bg-ns-elevated px-3 py-2 text-sm text-ns-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent disabled:opacity-50";
@@ -157,8 +158,8 @@ export function McpAccessRequests({ viewerId }: { viewerId: string }) {
       </p>
       <label className="my-8 block text-sm">
         Status
-        <select
-          className={`${control} mt-2 block`}
+        <AdminSelect
+          className="mt-2"
           value={status}
           onChange={(event) => setStatus(event.target.value as McpStatus | "")}
         >
@@ -168,7 +169,7 @@ export function McpAccessRequests({ viewerId }: { viewerId: string }) {
             </option>
           ))}
           <option value="">All records</option>
-        </select>
+        </AdminSelect>
       </label>
       {records.isPending && <p role="status">Loading connector access…</p>}
       {records.error && (

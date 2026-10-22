@@ -21,6 +21,7 @@ import {
   type AdminStoryStatus,
 } from "@/services/AdminStoryService";
 import { withoutForeignImages } from "./ownImages";
+import { AdminSelect } from "./AdminSelect";
 
 const control =
   "rounded-ns border border-ns-border bg-ns-elevated px-3 py-2 text-sm text-ns-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent disabled:opacity-50";
@@ -443,8 +444,8 @@ function StoryList({ viewerId }: { viewerId: string }) {
         </button>
         <label className="text-sm">
           Status
-          <select
-            className={`${control} mt-2 block`}
+          <AdminSelect
+            className="mt-2"
             value={status}
             onChange={(event) =>
               setStatus(event.target.value as AdminStoryStatus)
@@ -454,7 +455,7 @@ function StoryList({ viewerId }: { viewerId: string }) {
             <option value="draft">Drafts</option>
             <option value="ongoing">In progress</option>
             <option value="completed">Completed</option>
-          </select>
+          </AdminSelect>
         </label>
       </form>
       {stories.isPending && <p role="status">Loading stories…</p>}
