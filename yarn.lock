@@ -5200,20 +5200,6 @@ ox@0.14.54:
     abitype "^1.2.3"
     eventemitter3 "5.0.1"
 
-ox@0.14.56:
-  version "0.14.56"
-  resolved "https://registry.yarnpkg.com/ox/-/ox-0.14.56.tgz#f3020dde5b7e34af9a8cf85883044853ec87b3f0"
-  integrity sha512-Feinlj+deWEam6RIwurRE+eHZ2N3hoUb3AAjQ10BmxRCYIymfqNkv0eZ+4ln4GkgDmSGLD2rGtTMqsFYSVDC6w==
-  dependencies:
-    "@adraffy/ens-normalize" "^1.11.0"
-    "@noble/ciphers" "^1.3.0"
-    "@noble/curves" "1.9.1"
-    "@noble/hashes" "^1.8.0"
-    "@scure/bip32" "^1.7.0"
-    "@scure/bip39" "^1.6.0"
-    abitype "^1.2.3"
-    eventemitter3 "5.0.1"
-
 p-limit@^3.0.2:
   version "3.1.0"
   resolved "https://registry.yarnpkg.com/p-limit/-/p-limit-3.1.0.tgz#e1daccbe78d0d1388ca18c64fea38e3e57e3706b"
@@ -5643,7 +5629,7 @@ raf-schd@^4.0.3:
   resolved "https://registry.yarnpkg.com/raf-schd/-/raf-schd-4.0.3.tgz#5d6c34ef46f8b2a0e880a8fcdb743efc5bfdbc1a"
   integrity sha512-tQkJl2GRWh83ui2DiPTJz9wEiMN20syf+5oKfB03yYP7ioZcJwsIK8FjrtLwH1m7C7e+Tt2yYBlrOpdT+dyeIQ==
 
-react-dom@19.3.0, react-dom@^19.3.0:
+react-dom@^19.3.0:
   version "19.3.0"
   resolved "https://registry.yarnpkg.com/react-dom/-/react-dom-19.3.0.tgz#a0ff19161d7f4e9be5469a07278b0c06e00f9001"
   integrity sha512-JDk8dgif51OjFoDE70+OT9ICyYr+69HlmihNwp1+Nsfbna3t5sIiCa9ZJktDmQ4/1b/rn26hIAR2uYXDMr5r0Q==
@@ -5791,7 +5777,7 @@ react-textarea-autosize@^8.5.9:
     use-composed-ref "^1.3.0"
     use-latest "^1.2.1"
 
-react@19.3.0, react@^19.3.0:
+react@^19.3.0:
   version "19.3.0"
   resolved "https://registry.yarnpkg.com/react/-/react-19.3.0.tgz#e20aa3a14687075ce863351b5878b0608c3fbfb2"
   integrity sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog==
@@ -6682,7 +6668,7 @@ vfile@^6.0.0:
     "@types/unist" "^3.0.0"
     vfile-message "^4.0.0"
 
-viem@2.57.4, viem@^2.57.4:
+viem@^2.57.4:
   version "2.57.4"
   resolved "https://registry.yarnpkg.com/viem/-/viem-2.57.4.tgz#8e516b4beea638474b9a5d088bfe6b60141844d6"
   integrity sha512-ro+8AKrcGU6tPfou0gBRYv6bxnU3tPxxJGY4qpJwjiR40eHCWzeGhrAgYMlIncFtlnry2/yGjz57WOC67oshCQ==
@@ -6696,10 +6682,10 @@ viem@2.57.4, viem@^2.57.4:
     ox "0.14.54"
     ws "8.21.0"
 
-vite@^6.4.3:
-  version "6.4.3"
-  resolved "https://registry.yarnpkg.com/vite/-/vite-6.4.3.tgz#85a164db7ce706f2a776812efa2b340f1721858e"
-  integrity sha512-NTKlcQjlAK7MlQoyb6LgaqHc8sso/pVyUJYWMws3jg21uTJw/LddqIFPcPqP6PzpgbIcZyKI85sFE4HBrQDA8A==
+vite@^6.4.4:
+  version "6.4.4"
+  resolved "https://registry.yarnpkg.com/vite/-/vite-6.4.4.tgz#ddcfd2e568dd4904a9154d8763f2d78a3e9bf443"
+  integrity sha512-xGjU/SyjeNyb0E4KxXBvYz/1C+3JXuujvf2hXNOtnlcE+58o5ajd9N2/n2VhkiJvpCP2qQasnUpx5PXNeI+p1Q==
   dependencies:
     esbuild "^0.25.0"
     fdir "^6.4.4"
