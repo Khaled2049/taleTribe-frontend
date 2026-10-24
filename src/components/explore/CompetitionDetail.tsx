@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { StoryDataError } from "@novelsync/story-data-client";
 import { useAuthContext } from "@/contexts/AuthContext";
 import {
   useCancelCompetition,
@@ -9,6 +10,7 @@ import {
   useCompetitionQuery,
   useJoinCompetition,
   useMyBallotQuery,
+  useSettleCompetition,
   useSubmissionsQuery,
   useSubmitStory,
   useWithdrawSubmission,
@@ -23,7 +25,12 @@ import {
   isCompetitionFull,
 } from "@/lib/competitionListing";
 import { PHASE_COPY } from "@/lib/competitionPhaseCopy";
-import { canTransition, isEditablePhase } from "@/lib/competitionPhase";
+import {
+  canTransition,
+  displayPhase,
+  isEditablePhase,
+  isVotingClosed,
+} from "@/lib/competitionPhase";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import EntryFeeDialog from "./EntryFeeDialog";
 import CompetitionDetailHero from "./CompetitionDetailHero";
@@ -88,8 +95,10 @@ const CompetitionDetail: React.FC = () => {
   const withdrawSubmission = useWithdrawSubmission(competitionId);
   const castVote = useCastVote(competitionId, user?.uid);
   const cancelCompetition = useCancelCompetition();
+  const settleCompetition = useSettleCompetition();
 
-  const phase: CompetitionPhase = competition?.phase ?? "open";
+  const storedPhase: CompetitionPhase = competition?.phase ?? "open";
+  const phase = displayPhase(storedPhase, competition?.votingDeadline, now);
   const entries = useMemo(() => submissions ?? [], [submissions]);
 
   const entryFee = competition ? getEntryFee(competition) : null;
@@ -208,6 +217,22 @@ const CompetitionDetail: React.FC = () => {
     );
   };
 
+  const handleSettle = () => {
+    settleCompetition.mutate(competitionId, {
+      onSuccess: () => toast.success("Results announced"),
+      onError: (error) =>
+        toast.error(
+          // The button follows this device's clock; the server judges the
+          // deadline on its own, so a skewed clock can still be early.
+          error instanceof StoryDataError && error.status === 422
+            ? "Voting hasn't closed yet. Try again in a minute."
+            : error instanceof Error
+              ? error.message
+              : "Failed to settle the competition",
+        ),
+    });
+  };
+
   /** No server-side edit-in-place — withdraw, then let the picker reopen. */
   const handleEditEntry = async () => {
     try {
@@ -257,8 +282,11 @@ const CompetitionDetail: React.FC = () => {
   // the host, or any admin. This only decides what is offered — the endpoints
   // re-check it, so hiding the buttons is not what makes it safe.
   const canManage = isCreator || !!user?.isAdmin;
-  const canEdit = isEditablePhase(phase);
-  const canCancel = canTransition(phase, "cancelled");
+  const canEdit = isEditablePhase(storedPhase);
+  const canCancel = canTransition(storedPhase, "cancelled");
+  const canSettle =
+    canManage &&
+    isVotingClosed(storedPhase, competition.votingDeadline, now);
 
   // The hero's call to action. `null` means "no actionable button" — the hero
   // then falls back to phase/sign-in/creator copy instead.
@@ -297,6 +325,18 @@ const CompetitionDetail: React.FC = () => {
             <span className="hidden sm:inline font-ui text-[10px] uppercase tracking-[0.18em] text-ns-ink-muted">
               {isCreator ? "You host this" : "Admin"}
             </span>
+            {canSettle && (
+              <button
+                type="button"
+                onClick={handleSettle}
+                disabled={settleCompetition.isPending}
+                className="font-ui text-[13px] font-semibold text-ns-accent hover:text-ns-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {settleCompetition.isPending
+                  ? "Settling…"
+                  : "Settle and announce results"}
+              </button>
+            )}
             {canEdit ? (
               <Link
                 to={`/competitions/${competitionId}/edit`}
@@ -306,7 +346,7 @@ const CompetitionDetail: React.FC = () => {
               </Link>
             ) : (
               <span
-                title={`A competition in the ${phase} phase can no longer be edited`}
+                title={`A competition in the ${storedPhase} phase can no longer be edited`}
                 className="font-ui text-[13px] font-semibold text-ns-ink-secondary opacity-40 cursor-not-allowed"
               >
                 Edit
@@ -319,7 +359,7 @@ const CompetitionDetail: React.FC = () => {
               title={
                 canCancel
                   ? undefined
-                  : `A competition in the ${phase} phase can no longer be cancelled`
+                  : `A competition in the ${storedPhase} phase can no longer be cancelled`
               }
               className="font-ui text-[13px] font-semibold text-ns-destructive hover:text-ns-destructive-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-ns-destructive"
             >

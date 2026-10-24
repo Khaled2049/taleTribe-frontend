@@ -3,8 +3,10 @@ import {
   canTransition,
   deriveCompetitionStatus,
   deriveStatusFromDates,
+  displayPhase,
   dueTimePhase,
   isTerminalPhase,
+  isVotingClosed,
   nextTransitionAt,
 } from "../src/lib/competitionPhase";
 import type { CompetitionPhase } from "../src/types/ICompetition";
@@ -203,5 +205,49 @@ describe("nextTransitionAt", () => {
     expect(nextTransitionAt("cancelled", past(5), past(1))).toBeNull();
     // A legacy document with no voting deadline.
     expect(nextTransitionAt("voting", past(5), past(1), undefined)).toBeNull();
+  });
+});
+
+describe("isVotingClosed", () => {
+  it("closes at the voting deadline, matching the server's ballot cutoff", () => {
+    const deadline = new Date(NOW);
+    expect(isVotingClosed("voting", deadline, NOW - 1)).toBe(false);
+    expect(isVotingClosed("voting", deadline, NOW)).toBe(true);
+    expect(isVotingClosed("voting", past(1), NOW)).toBe(true);
+  });
+
+  it("counts a competition mid-settlement as closed", () => {
+    expect(isVotingClosed("settling", past(1), NOW)).toBe(true);
+  });
+
+  it("is false in every other phase, whatever the clock says", () => {
+    const others: CompetitionPhase[] = [
+      "draft",
+      "scheduled",
+      "open",
+      "settled",
+      "cancelled",
+    ];
+    for (const phase of others) {
+      expect(isVotingClosed(phase, past(1), NOW)).toBe(false);
+    }
+    expect(isVotingClosed(undefined, past(1), NOW)).toBe(false);
+  });
+
+  it("stays open without a voting deadline", () => {
+    expect(isVotingClosed("voting", undefined, NOW)).toBe(false);
+  });
+});
+
+describe("displayPhase", () => {
+  it("shows a closed vote as counting until settlement lands", () => {
+    expect(displayPhase("voting", past(1), NOW)).toBe("settling");
+    expect(displayPhase("voting", future(1), NOW)).toBe("voting");
+  });
+
+  it("leaves every phase but voting as stored", () => {
+    expect(displayPhase("settled", past(1), NOW)).toBe("settled");
+    expect(displayPhase("cancelled", past(1), NOW)).toBe("cancelled");
+    expect(displayPhase("open", past(1), NOW)).toBe("open");
   });
 });

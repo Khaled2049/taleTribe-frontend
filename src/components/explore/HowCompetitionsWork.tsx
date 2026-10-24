@@ -34,7 +34,7 @@ const GUARANTEES: Guarantee[] = [
   },
   {
     title: "An entry fee is never at risk",
-    body: "Most competitions are free. Where a host does charge, the fee is held in escrow next to the prize rather than paid out on the spot — so withdrawing your entry before the deadline returns it in full, as does a cancellation or a competition nobody voted in. Fees are revenue split between the host and the platform, and they never change the prize the winner receives.",
+    body: "Most competitions are free. Where a host does charge, the fee is held in escrow next to the prize rather than paid out on the spot — so withdrawing your entry before the deadline returns it in full, as does a cancellation. Once a competition settles, fees are revenue split between the host and the platform, even if nobody voted, and they never change the prize the winner receives.",
   },
 ];
 

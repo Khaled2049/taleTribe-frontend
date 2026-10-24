@@ -15,6 +15,7 @@ import {
   actionBadgeProps,
   type RowActionKey,
 } from "@/lib/competitionLedger";
+import { displayPhase } from "@/lib/competitionPhase";
 import type { ICompetition } from "@/types/ICompetition";
 
 /**
@@ -57,8 +58,11 @@ const LedgerDate = ({ date }: { date?: Date }) => {
 function rowState(competition: ICompetition, now: number) {
   const countdown = formatCountdown(competition.deadline, now);
   const category = competition.category;
+  const phase =
+    competition.phase &&
+    displayPhase(competition.phase, competition.votingDeadline, now);
 
-  if (competition.phase === "settled") {
+  if (phase === "settled") {
     return {
       subline: `Results announced · ${category}`,
       urgent: false,
@@ -66,7 +70,7 @@ function rowState(competition: ICompetition, now: number) {
       actionKey: "results" as RowActionKey,
     };
   }
-  if (competition.phase === "settling") {
+  if (phase === "settling") {
     return {
       subline: `Judging · ${category}`,
       urgent: false,
@@ -74,7 +78,7 @@ function rowState(competition: ICompetition, now: number) {
       actionKey: "judging" as RowActionKey,
     };
   }
-  if (competition.phase === "cancelled") {
+  if (phase === "cancelled") {
     return {
       subline: `Cancelled · ${category}`,
       urgent: false,
@@ -85,7 +89,7 @@ function rowState(competition: ICompetition, now: number) {
   // Voting is still "active", so without this it would fall through to the
   // entry branch below and invite the reader to enter a competition whose
   // entries have already closed.
-  if (competition.phase === "voting") {
+  if (phase === "voting") {
     const voting = competition.votingDeadline
       ? formatCountdown(competition.votingDeadline, now)
       : null;

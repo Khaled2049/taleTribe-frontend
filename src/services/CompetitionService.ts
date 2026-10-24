@@ -124,6 +124,14 @@ class CompetitionService {
       true,
     );
   }
+  settleCompetition(id: string) {
+    return this.request<ApiCompetition>(
+      "POST",
+      `/v1/competitions/${id}/settle`,
+      undefined,
+      true,
+    ).then((x) => this.map(x));
+  }
   joinCompetition(id: string) {
     return this.request<void>(
       "PUT",
