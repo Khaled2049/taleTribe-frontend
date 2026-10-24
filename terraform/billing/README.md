@@ -37,6 +37,16 @@ terraform -chdir=terraform/billing validate
 Commit this stack's `.terraform.lock.hcl` when updating providers. Python
 decision tests mock the Billing API and never change a real project's billing.
 
+After changing provider versions, record package checksums for both Linux CI
+and Apple Silicon development before committing the lock file:
+
+```sh
+terraform -chdir=terraform/billing providers lock -platform=linux_amd64 -platform=darwin_arm64
+```
+
+CI initializes with `-lockfile=readonly`, so it cannot add a missing platform's
+package checksum before validation.
+
 ## Explicit production rollout
 
 Creating or merging this PR deploys no billing resources. This stack has
