@@ -11,6 +11,10 @@ import os
 from zoneinfo import ZoneInfo
 
 
+class AccountChanged(Exception):
+    """The project moved billing accounts; retrying cannot make shutdown safe."""
+
+
 def _amount(value):
     amount = Decimal(str(value))
     if not amount.is_finite() or amount < 0:
@@ -67,7 +71,7 @@ def disable_billing(project_id):
         return "already_disabled"
     expected = f"billingAccounts/{os.environ['BILLING_ACCOUNT_ID']}"
     if info.get("billingAccountName") != expected:
-        raise ValueError("Project billing account changed; refusing a stale shutdown")
+        raise AccountChanged("Project billing account changed; refusing a stale shutdown")
     response = session.put(url, json={"billingAccountName": ""}, timeout=20)
     response.raise_for_status()
     if response.json().get("billingEnabled", False):
@@ -81,8 +85,9 @@ def stop_billing(request):
     try:
         project = os.environ["PROJECT_ID"]
         limit = _amount(os.environ["MONTHLY_BUDGET_USD"])
-        if not project or limit <= 0:
-            raise ValueError("Missing project or positive budget")
+        # Checked here so a missing value is a retryable 500, not a discarded notification.
+        if not (project and os.environ["BILLING_ACCOUNT_ID"] and os.environ["EXPECTED_BUDGET_ID"]) or limit <= 0:
+            raise ValueError("Missing configuration or positive budget")
     except (KeyError, ValueError, InvalidOperation):
         logging.exception("Invalid shutdown configuration")
         return {"error": "invalid configuration"}, 500
@@ -100,6 +105,9 @@ def stop_billing(request):
     else:
         try:
             status = disable_billing(project)
+        except AccountChanged:
+            logging.error("Billing account changed; acknowledging without shutdown")
+            status = "account_changed"
         except Exception:
             # A 5xx makes Pub/Sub retry; the legacy handler swallowed errors.
             logging.exception("Project billing shutdown failed")

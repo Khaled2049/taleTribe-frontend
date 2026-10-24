@@ -8,6 +8,12 @@ variable "billing_account_id" {
   default = "01F66B-B18158-2731DE"
 }
 
+variable "budget_id" {
+  description = "Id of the adopted budget; the shutdown function ignores notifications from any other."
+  type        = string
+  default     = "b9ee89dc-1af4-4bb7-845f-9b5ac92fb73e"
+}
+
 variable "region" {
   type    = string
   default = "us-central1"

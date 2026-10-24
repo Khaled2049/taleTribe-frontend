@@ -84,6 +84,15 @@ class ShutdownTests(unittest.TestCase):
             self.assertEqual(main.stop_billing(self.request())[1], 500)
             disable.assert_not_called()
 
+    def test_missing_account_or_budget_id_is_retryable_not_discarded(self):
+        for key in ("BILLING_ACCOUNT_ID", "EXPECTED_BUDGET_ID"):
+            for env in ({key: ""}, None):
+                with self.subTest(key=key, env=env), patch.dict(os.environ, env or {}), patch.object(main, "disable_billing") as disable:
+                    if env is None:
+                        del os.environ[key]
+                    self.assertEqual(main.stop_billing(self.request()), ({"error": "invalid configuration"}, 500))
+                    disable.assert_not_called()
+
     def test_billing_api_failure_requests_pubsub_retry(self):
         with patch.object(main, "disable_billing", side_effect=RuntimeError("temporary outage")):
             self.assertEqual(main.stop_billing(self.request())[1], 500)
@@ -101,8 +110,11 @@ class ShutdownTests(unittest.TestCase):
             "billingEnabled": True, "billingAccountName": "billingAccounts/other",
         }
         with patch.object(main, "billing_session", return_value=session):
-            with self.assertRaises(ValueError):
+            with self.assertRaises(main.AccountChanged):
                 main.disable_billing("story-6f89f")
+            session.put.assert_not_called()
+            # A permanent refusal is acknowledged so Pub/Sub does not retry it for a week.
+            self.assertEqual(main.stop_billing(self.request()), ({"status": "account_changed"}, 200))
             session.put.assert_not_called()
 
     def test_disable_uses_correct_project_and_empty_billing_account(self):

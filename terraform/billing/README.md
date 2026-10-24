@@ -11,6 +11,14 @@ This standalone Terraform stack manages spending controls for `story-6f89f`:
 Disabling billing interrupts paid services and requires manual recovery.
 Notifications can lag, so spending may exceed USD 50 before shutdown.
 
+## Restore billing after a shutdown
+
+This month's spend is still at or over the budget, so re-linking billing on its
+own is undone by the next budget notification, usually within hours. First
+raise `monthly_budget_usd` above current spend and apply; the function ignores
+notifications for any other budget amount. Then re-link billing in the console.
+Lower the budget again after the month ends.
+
 ## Check locally
 
 From the repository root:
@@ -40,8 +48,10 @@ terraform -chdir=terraform/billing apply budget.tfplan
 ```
 
 The plan should adopt the existing budget and create the replacement shutdown
-path. Apply while spend is below USD 50; it switches notification topics during
-the rollout. Application resources and the old shutdown path are left alone.
+path. It enables the APIs the path needs, including Cloud Billing. The budget
+moves to the new topic only after the function and its push subscription
+exist, so a failed build leaves the budget on the old topic. Apply while spend
+is below USD 50. Application resources and the old shutdown path are left alone.
 
 Once `story-budget-shutdown` is active and logs a real `below_budget`
 notification, preview and remove the old setup:
@@ -51,7 +61,12 @@ python3 terraform/billing/retire_legacy.py
 python3 terraform/billing/retire_legacy.py --execute
 ```
 
-The script verifies the replacement before deleting the old subscription,
-topic and function. It retains the adopted budget and shared resources.
+The script reads its expected values from `terraform output`, so run it with
+the same state access as the apply. It verifies the replacement before deleting
+the old subscription, topic and function. It also impersonates
+`story-budget-runtime` to confirm, read-only, that the runtime holds the
+shutdown permissions and can reach the Cloud Billing API, so you need
+`roles/iam.serviceAccountTokenCreator` on that account. It retains the adopted
+budget and shared resources.
 Never send a synthetic notification of USD 50 or more to the live function;
 the local tests cover shutdown with mocks.

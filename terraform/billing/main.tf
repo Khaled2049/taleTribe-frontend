@@ -12,8 +12,26 @@ resource "google_project_service" "budgets" {
   disable_on_destroy = false
 }
 
+# The shutdown path builds and runs a gen2 function behind Pub/Sub push, and
+# the runtime calls the Cloud Billing API when spend reaches the budget.
+resource "google_project_service" "shutdown" {
+  for_each = toset([
+    "artifactregistry.googleapis.com",
+    "cloudbilling.googleapis.com",
+    "cloudbuild.googleapis.com",
+    "cloudfunctions.googleapis.com",
+    "iam.googleapis.com",
+    "pubsub.googleapis.com",
+    "run.googleapis.com",
+  ])
+  project            = var.project_id
+  service            = each.value
+  disable_on_destroy = false
+}
+
 resource "google_pubsub_topic" "budget" {
-  name = "story-monthly-budget"
+  name       = "story-monthly-budget"
+  depends_on = [google_project_service.shutdown]
 }
 
 resource "google_pubsub_topic_iam_member" "billing_publisher" {
@@ -56,14 +74,24 @@ resource "google_billing_budget" "monthly" {
 
   lifecycle {
     prevent_destroy = true
+    postcondition {
+      condition     = endswith(self.id, "/budgets/${var.budget_id}")
+      error_message = "var.budget_id must name the adopted budget; the shutdown function only acts on that id."
+    }
   }
 
-  depends_on = [google_project_service.budgets, google_pubsub_topic_iam_member.billing_publisher]
+  # Switch the budget to the new topic only once something consumes it.
+  depends_on = [
+    google_project_service.budgets,
+    google_pubsub_topic_iam_member.billing_publisher,
+    google_pubsub_subscription.shutdown,
+  ]
 }
 
 resource "google_service_account" "runtime" {
   account_id   = "story-budget-runtime"
   display_name = "Project budget shutdown runtime"
+  depends_on   = [google_project_service.shutdown]
 }
 
 # This identity can unlink this project's billing, but cannot attach billing,
@@ -107,6 +135,15 @@ resource "google_storage_bucket" "source" {
   location                    = var.region
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
+  # Cloud Functions copies source at deploy, so old uploads are unused.
+  lifecycle_rule {
+    condition {
+      age = 30
+    }
+    action {
+      type = "Delete"
+    }
+  }
 }
 
 resource "google_storage_bucket_iam_member" "build_source" {
@@ -146,6 +183,7 @@ resource "google_artifact_registry_repository" "images" {
     }
   }
   cleanup_policy_dry_run = false
+  depends_on             = [google_project_service.shutdown]
 }
 
 resource "google_artifact_registry_repository_iam_member" "build_images" {
@@ -198,12 +236,13 @@ resource "google_cloudfunctions2_function" "shutdown" {
     environment_variables = {
       PROJECT_ID         = var.project_id
       BILLING_ACCOUNT_ID = var.billing_account_id
-      EXPECTED_BUDGET_ID = element(reverse(split("/", google_billing_budget.monthly.id)), 0)
+      EXPECTED_BUDGET_ID = var.budget_id
       MONTHLY_BUDGET_USD = tostring(var.monthly_budget_usd)
     }
   }
 
   depends_on = [
+    google_project_service.shutdown,
     google_project_iam_member.shutdown,
     google_project_iam_member.build_logs,
     google_storage_bucket_iam_member.build_source,
