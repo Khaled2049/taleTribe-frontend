@@ -18,6 +18,10 @@ import {
   type AdminCompetition,
 } from "@/services/AdminCompetitionService";
 import { AdminSelect } from "./AdminSelect";
+import {
+  AWAITING_SETTLEMENT,
+  awaitingSettlementFor,
+} from "./competitionStatus";
 
 const control =
   "rounded-ns border border-ns-border bg-ns-elevated px-3 py-2 text-sm text-ns-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent disabled:opacity-50";
@@ -41,6 +45,22 @@ function QueryError({ error, retry }: { error: Error; retry: () => void }) {
         Try again
       </button>
     </div>
+  );
+}
+
+function CompetitionStatus({ competition }: { competition: AdminCompetition }) {
+  const overdue = awaitingSettlementFor(
+    competition.phase,
+    competition.votingDeadline,
+  );
+  if (!overdue) return <>{phaseNames[competition.phase]}</>;
+  return (
+    <span className="font-semibold text-ns-accent">
+      Awaiting settlement
+      <span className="block text-xs font-normal text-ns-ink-secondary">
+        Voting closed {overdue} ago
+      </span>
+    </span>
   );
 }
 
@@ -74,7 +94,7 @@ function CompetitionRows({
         {competition.creatorId}
       </td>
       <td className="whitespace-nowrap py-5 pr-6">
-        {phaseNames[competition.phase]}
+        <CompetitionStatus competition={competition} />
       </td>
       <td className="whitespace-nowrap py-5 pr-6">
         {dateLabel(competition.deadline)}
@@ -197,6 +217,7 @@ function CompetitionList({ viewerId }: { viewerId: string }) {
                 {label}
               </option>
             ))}
+            <option value={AWAITING_SETTLEMENT}>Awaiting settlement</option>
           </AdminSelect>
         </label>
       </form>
@@ -310,13 +331,22 @@ function CompetitionReview({ id, viewerId }: { id: string; viewerId: string }) {
       >
         <ArrowLeft size={16} /> All competitions
       </Link>
-      <p className="mb-2 text-sm text-ns-accent">{phaseNames[data.phase]}</p>
+      <p className="mb-2 text-sm text-ns-accent">
+        <CompetitionStatus competition={data} />
+      </p>
       <h1 className="break-words font-heading text-3xl sm:text-4xl">
         {data.title}
       </h1>
       <p className="mt-2 text-ns-ink-secondary">
         Hosted by {names.get(data.creatorId) || data.creatorName}
       </p>
+      {awaitingSettlementFor(data.phase, data.votingDeadline) && (
+        <p className="mt-4 max-w-prose rounded-ns border border-ns-border bg-ns-surface p-4 text-sm text-ns-ink-secondary">
+          Voting has closed but nobody has opened this competition since, so it
+          has not settled and the winner has not been paid. Opening the
+          competition page settles it.
+        </p>
+      )}
       <dl className="my-6 grid gap-4 border-y border-ns-border py-6 text-sm sm:grid-cols-2">
         {[
           ["Competition ID", data.id],
