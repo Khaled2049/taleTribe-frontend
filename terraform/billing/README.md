@@ -2,14 +2,14 @@
 
 This standalone Terraform stack manages spending controls for `story-6f89f`:
 
-- Adopts the existing budget and sets it to **USD 50/month before credits**.
-- Emails billing recipients and project owners at **USD 25, 45 and 50**.
+- Adopts the existing budget and sets it to **USD 100/month before credits**.
+- Emails billing recipients and project owners at **USD 50, 90 and 100**.
 - Uses authenticated Pub/Sub notifications to disable project billing when
-  reported actual spend reaches USD 50.
+  reported actual spend reaches USD 100.
 - Provides a guarded script to retire the old shutdown function and messaging.
 
 Disabling billing interrupts paid services and requires manual recovery.
-Notifications can lag, so spending may exceed USD 50 before shutdown.
+Notifications can lag, so spending may exceed USD 100 before shutdown.
 
 ## Restore billing after a shutdown
 
@@ -51,7 +51,7 @@ The plan should adopt the existing budget and create the replacement shutdown
 path. It enables the APIs the path needs, including Cloud Billing. The budget
 moves to the new topic only after the function and its push subscription
 exist, so a failed build leaves the budget on the old topic. Apply while spend
-is below USD 50. Application resources and the old shutdown path are left alone.
+is below USD 100. Application resources and the old shutdown path are left alone.
 
 Once `story-budget-shutdown` is active and logs a real `below_budget`
 notification, preview and remove the old setup:
@@ -68,5 +68,5 @@ the old subscription, topic and function. It also impersonates
 shutdown permissions and can reach the Cloud Billing API, so you need
 `roles/iam.serviceAccountTokenCreator` on that account. It retains the adopted
 budget and shared resources.
-Never send a synthetic notification of USD 50 or more to the live function;
+Never send a synthetic notification of USD 100 or more to the live function;
 the local tests cover shutdown with mocks.

@@ -22,7 +22,7 @@ variable "region" {
 variable "monthly_budget_usd" {
   description = "Monthly usage budget before credits; disables project billing at this amount."
   type        = number
-  default     = 50
+  default     = 100
   validation {
     condition     = var.monthly_budget_usd > 0 && floor(var.monthly_budget_usd) == var.monthly_budget_usd
     error_message = "The budget must be a positive whole number of USD."
