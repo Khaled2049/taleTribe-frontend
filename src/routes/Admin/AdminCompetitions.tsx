@@ -2,10 +2,12 @@ import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   useInfiniteQuery,
+  useMutation,
   useQuery,
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query";
+import { StoryDataError } from "@novelsync/story-data-client";
 import { ArrowLeft, Search, Trash2 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { toast } from "sonner";
@@ -21,6 +23,7 @@ import { AdminSelect } from "./AdminSelect";
 import {
   AWAITING_SETTLEMENT,
   awaitingSettlementFor,
+  settleDueSummary,
 } from "./competitionStatus";
 
 const control =
@@ -132,6 +135,20 @@ function CompetitionList({ viewerId }: { viewerId: string }) {
       adminCompetitionService.list(search, phase, pageParam, signal),
     getNextPageParam: (page) => page.nextCursor,
   });
+  const settleDue = useMutation({
+    mutationFn: () => adminCompetitionService.settleDue(),
+    onSuccess: (result) => {
+      const summary = settleDueSummary(result);
+      if (result.failed.length > 0) toast.warning(summary);
+      else toast.success(summary);
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error ? error.message : "Could not settle. Try again.",
+      ),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: ["admin", viewerId] }),
+  });
   function findCompetition(event: FormEvent) {
     event.preventDefault();
     setSearch(input.trim());
@@ -220,6 +237,14 @@ function CompetitionList({ viewerId }: { viewerId: string }) {
             <option value={AWAITING_SETTLEMENT}>Awaiting settlement</option>
           </AdminSelect>
         </label>
+        <button
+          type="button"
+          className={control}
+          onClick={() => settleDue.mutate()}
+          disabled={settleDue.isPending}
+        >
+          {settleDue.isPending ? "Settling…" : "Settle all overdue"}
+        </button>
       </form>
       {competitions.isPending && <p role="status">Loading competitions…</p>}
       {competitions.error && (
@@ -314,6 +339,21 @@ function CompetitionReview({ id, viewerId }: { id: string; viewerId: string }) {
     queryFn: ({ signal }) => adminCompetitionService.get(id, signal),
   });
   const names = useProfileNames([competition.data?.creatorId]);
+  const queryClient = useQueryClient();
+  const settle = useMutation({
+    mutationFn: () => adminCompetitionService.settle(id),
+    onSuccess: () => toast.success("Competition settled"),
+    onError: (error) =>
+      toast.error(
+        error instanceof StoryDataError && error.status === 422
+          ? "Could not settle: voting has not closed on the server yet, or the payout failed. The story-data logs say which."
+          : error instanceof Error
+            ? error.message
+            : "Could not settle. Try again.",
+      ),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: ["admin", viewerId] }),
+  });
   if (competition.isPending) return <p role="status">Loading competition…</p>;
   if (competition.error)
     return (
@@ -341,11 +381,20 @@ function CompetitionReview({ id, viewerId }: { id: string; viewerId: string }) {
         Hosted by {names.get(data.creatorId) || data.creatorName}
       </p>
       {awaitingSettlementFor(data.phase, data.votingDeadline) && (
-        <p className="mt-4 max-w-prose rounded-ns border border-ns-border bg-ns-surface p-4 text-sm text-ns-ink-secondary">
-          Voting has closed but nobody has opened this competition since, so it
-          has not settled and the winner has not been paid. Opening the
-          competition page settles it.
-        </p>
+        <div className="mt-4 max-w-prose rounded-ns border border-ns-border bg-ns-surface p-4 text-sm text-ns-ink-secondary">
+          <p>
+            Voting has closed but nobody has opened this competition since, so
+            it has not settled and the winner has not been paid.
+          </p>
+          <button
+            type="button"
+            className={`${control} mt-3`}
+            onClick={() => settle.mutate()}
+            disabled={settle.isPending}
+          >
+            {settle.isPending ? "Settling…" : "Settle now"}
+          </button>
+        </div>
       )}
       <dl className="my-6 grid gap-4 border-y border-ns-border py-6 text-sm sm:grid-cols-2">
         {[

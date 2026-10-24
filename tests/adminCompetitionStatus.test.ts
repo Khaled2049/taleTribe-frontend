@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { awaitingSettlementFor } from "../src/routes/Admin/competitionStatus";
+import {
+  awaitingSettlementFor,
+  settleDueSummary,
+} from "../src/routes/Admin/competitionStatus";
 
 const NOW = Date.parse("2026-06-15T12:00:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -27,5 +30,31 @@ describe("awaitingSettlementFor", () => {
 
   it("does not flag a competition with no voting deadline", () => {
     expect(awaitingSettlementFor("voting", null, NOW)).toBeNull();
+  });
+});
+
+describe("settleDueSummary", () => {
+  it("says when there was nothing to do", () => {
+    expect(settleDueSummary({ settled: [], failed: [] })).toBe(
+      "Nothing was waiting to settle.",
+    );
+  });
+
+  it("counts what settled", () => {
+    expect(settleDueSummary({ settled: ["a"], failed: [] })).toBe(
+      "Settled 1 competition.",
+    );
+    expect(settleDueSummary({ settled: ["a", "b"], failed: [] })).toBe(
+      "Settled 2 competitions.",
+    );
+  });
+
+  it("reports failures and where to look", () => {
+    expect(settleDueSummary({ settled: ["a"], failed: ["b"] })).toBe(
+      "Settled 1 competition. 1 competition could not be settled and is still awaiting settlement; the story-data logs say why.",
+    );
+    expect(settleDueSummary({ settled: [], failed: ["a", "b"] })).toBe(
+      "2 competitions could not be settled and are still awaiting settlement; the story-data logs say why.",
+    );
   });
 });

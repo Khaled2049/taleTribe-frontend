@@ -27,3 +27,26 @@ export function awaitingSettlementFor(
   if (phase !== "voting" || !isVotingClosed(phase, deadline, now)) return null;
   return overdueFor(now - (deadline as Date).getTime());
 }
+
+const competitions = (n: number) =>
+  `${n} ${n === 1 ? "competition" : "competitions"}`;
+
+/** The toast after "Settle all overdue". Failures arrive as ids only. */
+export function settleDueSummary(result: {
+  settled: string[];
+  failed: string[];
+}): string {
+  const { settled, failed } = result;
+  if (settled.length === 0 && failed.length === 0)
+    return "Nothing was waiting to settle.";
+  const parts: string[] = [];
+  if (settled.length > 0)
+    parts.push(`Settled ${competitions(settled.length)}.`);
+  if (failed.length > 0)
+    parts.push(
+      `${competitions(failed.length)} could not be settled and ${
+        failed.length === 1 ? "is" : "are"
+      } still awaiting settlement; the story-data logs say why.`,
+    );
+  return parts.join(" ");
+}

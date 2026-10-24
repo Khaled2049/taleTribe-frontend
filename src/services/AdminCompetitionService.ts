@@ -47,4 +47,17 @@ export const adminCompetitionService = {
   deleteDraft(id: string) {
     return request<void>(`${base}/${id}`, { ...options, method: "DELETE" });
   },
+  settle(id: string) {
+    return request<AdminCompetition>(`${base}/${id}/settle`, {
+      ...options,
+      method: "POST",
+    });
+  },
+  /** Settles every competition past its voting deadline; failures are ids only. */
+  settleDue() {
+    return request<{ settled: string[]; failed: string[] }>(
+      `${base}/settle-due`,
+      { ...options, method: "POST" },
+    );
+  },
 };
