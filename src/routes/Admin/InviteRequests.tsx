@@ -12,6 +12,7 @@ import {
   type AdminInvite,
   type InviteStatus,
 } from "@/cloudFunctions/adminInvites";
+import { AdminSelect } from "./AdminSelect";
 
 const control =
   "rounded-ns border border-ns-border bg-ns-elevated px-3 py-2 text-sm text-ns-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent disabled:opacity-50";
@@ -123,8 +124,8 @@ export function InviteRequests({ viewerId }: { viewerId: string }) {
       </p>
       <label className="my-8 block text-sm">
         Status
-        <select
-          className={`${control} mt-2 block`}
+        <AdminSelect
+          className="mt-2"
           value={status}
           onChange={(event) =>
             setStatus(event.target.value as InviteStatus | "")
@@ -136,7 +137,7 @@ export function InviteRequests({ viewerId }: { viewerId: string }) {
             </option>
           ))}
           <option value="">All requests</option>
-        </select>
+        </AdminSelect>
       </label>
       {invites.isPending && <p role="status">Loading invite requests…</p>}
       {invites.error && (
