@@ -3,7 +3,8 @@ data "google_project" "current" {
 }
 
 locals {
-  service_name = "story-budget-shutdown"
+  service_name         = "story-budget-shutdown"
+  staged_source_bucket = "projects/_/buckets/gcf-v2-sources-${data.google_project.current.number}-${var.region}"
 }
 
 resource "google_project_service" "budgets" {
@@ -158,8 +159,9 @@ resource "google_project_iam_member" "build_staged_source" {
   role    = "roles/storage.objectViewer"
   member  = "serviceAccount:${google_service_account.build.email}"
   condition {
-    title      = "Read regional Cloud Functions build source"
-    expression = "resource.name.startsWith('projects/_/buckets/gcf-v2-sources-${data.google_project.current.number}-${var.region}/')"
+    title = "Read regional Cloud Functions build source"
+    # Listing objects is checked against the bucket itself, so match it as well as its objects.
+    expression = "resource.name == '${local.staged_source_bucket}' || resource.name.startsWith('${local.staged_source_bucket}/')"
   }
 }
 
