@@ -22,7 +22,9 @@ import {
 import { AdminSelect } from "./AdminSelect";
 import {
   AWAITING_SETTLEMENT,
+  MAX_CANCEL_REASON,
   awaitingSettlementFor,
+  canAdminCancel,
   settleDueSummary,
 } from "./competitionStatus";
 
@@ -340,6 +342,32 @@ function CompetitionReview({ id, viewerId }: { id: string; viewerId: string }) {
   });
   const names = useProfileNames([competition.data?.creatorId]);
   const queryClient = useQueryClient();
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  async function cancelCompetition() {
+    if (!reason.trim()) {
+      setCancelError("Give a reason. It is kept in the audit log.");
+      return false;
+    }
+    try {
+      await adminCompetitionService.cancel(id, reason.trim());
+      toast.success("Competition cancelled and refunded");
+      setReason("");
+      return true;
+    } catch (error) {
+      setCancelError(
+        error instanceof StoryDataError && error.status === 422
+          ? "This competition can no longer be cancelled: it has settled."
+          : error instanceof Error
+            ? error.message
+            : "Could not cancel. Try again.",
+      );
+      return false;
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: ["admin", viewerId] });
+    }
+  }
   const settle = useMutation({
     mutationFn: () => adminCompetitionService.settle(id),
     onSuccess: () => toast.success("Competition settled"),
@@ -409,6 +437,9 @@ function CompetitionReview({ id, viewerId }: { id: string; viewerId: string }) {
           ["Submissions", data.submissionCount],
           ["Ballots cast", data.ballotCount],
           ["Category", data.category || "Not set"],
+          ...(data.cancellationReason
+            ? [["Cancellation reason", data.cancellationReason]]
+            : []),
         ].map(([label, value]) => (
           <div key={label}>
             <dt className="text-ns-ink-secondary">{label}</dt>
@@ -425,14 +456,55 @@ function CompetitionReview({ id, viewerId }: { id: string; viewerId: string }) {
           Tags: {data.tags.join(", ")}
         </p>
       )}
-      {data.phase !== "draft" && (
-        <Link
-          to={`/competitions/${data.id}`}
-          className="mt-8 inline-block text-ns-accent underline"
-        >
-          Open competition
-        </Link>
-      )}
+      <div className="mt-8 flex flex-wrap items-center gap-6">
+        {data.phase !== "draft" && (
+          <Link
+            to={`/competitions/${data.id}`}
+            className="text-ns-accent underline"
+          >
+            Open competition
+          </Link>
+        )}
+        {canAdminCancel(data.phase) && (
+          <button
+            type="button"
+            className="text-sm font-semibold text-ns-destructive hover:text-ns-destructive-hover"
+            onClick={() => {
+              setCancelError("");
+              setCancelOpen(true);
+            }}
+          >
+            Cancel competition
+          </button>
+        )}
+      </div>
+      <ConfirmDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title="Cancel this competition?"
+        description="The prize goes back to the host and every entry fee to whoever paid it. It can't be reopened."
+        confirmLabel="Cancel competition"
+        cancelLabel="Keep competition"
+        variant="danger"
+        onConfirm={cancelCompetition}
+      >
+        <label className="block text-sm">
+          Reason
+          <textarea
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            maxLength={MAX_CANCEL_REASON}
+            rows={3}
+            className={`${control} mt-2 block w-full`}
+            placeholder="Only admins see this."
+          />
+        </label>
+        {cancelError && (
+          <p role="alert" className="mt-2 text-sm text-ns-destructive">
+            {cancelError}
+          </p>
+        )}
+      </ConfirmDialog>
     </>
   );
 }

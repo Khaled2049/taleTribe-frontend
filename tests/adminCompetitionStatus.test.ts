@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   awaitingSettlementFor,
+  canAdminCancel,
   settleDueSummary,
 } from "../src/routes/Admin/competitionStatus";
 
@@ -56,5 +57,23 @@ describe("settleDueSummary", () => {
     expect(settleDueSummary({ settled: [], failed: ["a", "b"] })).toBe(
       "2 competitions could not be settled and are still awaiting settlement; the story-data logs say why.",
     );
+  });
+});
+
+describe("canAdminCancel", () => {
+  it("offers cancel until a competition settles", () => {
+    for (const phase of ["scheduled", "open", "voting"] as const) {
+      expect(canAdminCancel(phase)).toBe(true);
+    }
+  });
+
+  it("never offers it for a draft, which is deleted instead", () => {
+    expect(canAdminCancel("draft")).toBe(false);
+  });
+
+  it("never offers it once settlement has started or it is over", () => {
+    for (const phase of ["settling", "settled", "cancelled"] as const) {
+      expect(canAdminCancel(phase)).toBe(false);
+    }
   });
 });

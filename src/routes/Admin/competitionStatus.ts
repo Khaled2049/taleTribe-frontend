@@ -1,4 +1,4 @@
-import { isVotingClosed } from "@/lib/competitionPhase";
+import { canTransition, isVotingClosed } from "@/lib/competitionPhase";
 import type { CompetitionPhase } from "@/types/ICompetition";
 
 /** Matches the `awaiting-settlement` filter story-data's admin list accepts. */
@@ -50,3 +50,12 @@ export function settleDueSummary(result: {
     );
   return parts.join(" ");
 }
+
+/**
+ * Whether the admin page offers Cancel. A draft is deleted rather than
+ * cancelled, since it holds no escrow; the server refuses anything settled.
+ */
+export const canAdminCancel = (phase: CompetitionPhase): boolean =>
+  phase !== "draft" && canTransition(phase, "cancelled");
+
+export const MAX_CANCEL_REASON = 500;
