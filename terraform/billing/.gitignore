@@ -1,0 +1,4 @@
+.function-source.zip
+__pycache__/
+# Pin this stack's providers even though the parent ignores Terraform locks.
+!.terraform.lock.hcl
