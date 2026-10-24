@@ -52,17 +52,11 @@
  * fees held alongside the pool, the platform/host split at settlement, and a
  * cancellation that refunds every entrant rather than sweeping to the host.
  *
- * ONE EMULATOR QUIRK WORTH KNOWING
+ * SETTLED SCENARIOS TAKE A FEW SECONDS
  *
- * The emulator's task queue fires `scheduleDelaySeconds` immediately, so a
- * competition that enters `voting` is auto-settled seconds later regardless of
- * its voting deadline — which otherwise makes the voting UI impossible to look
- * at locally. The competitions that must stay in `voting` therefore sit past
- * the 25-day scheduling horizon (see BEYOND_TASK_HORIZON), where no task is
- * enqueued at all. The two settled scenarios keep realistic past deadlines and
- * simply let that race happen: settleCompetition is idempotent by design, so
- * whichever of the task and this script gets there first, the result is the
- * same.
+ * story-data refuses a ballot from the voting deadline on and a settle before
+ * it, so a scenario that votes and then settles sets the deadline
+ * VOTING_CLOSES_IN ahead, votes, and waits for it to pass before settling.
  *
  * Options:
  *   --users=<n>            Test writers to create (default 5, min 3)
@@ -93,25 +87,10 @@ const STORY_DATA_URL = process.env.STORY_DATA_URL || 'http://127.0.0.1:8084'
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
 
-/**
- * Voting deadline offset for the phases that must STAY in `voting`.
- *
- * The Firebase emulator's task queue ignores `scheduleDelaySeconds` and
- * dispatches immediately, and competitionAdvanceTask only verifies that the
- * stored date still matches what the task was scheduled against — never that
- * the time has actually arrived. So in the emulator, a competition that reaches
- * `voting` with any reachable voting deadline is settled within seconds,
- * whatever that deadline says.
- *
- * `enqueueAdvance` declines to schedule anything more than 25 days out (Cloud
- * Tasks' own limit), leaving lazy advance to cover correctness. Sitting past
- * that horizon is therefore an ordinary in-system state, not a trick: no task
- * is ever enqueued, and the competition stays in `voting` until something
- * touches it. That is what makes the voting UI observable locally at all.
- *
- * In production Cloud Tasks honours the schedule, so this only shapes seeding.
- */
-const BEYOND_TASK_HORIZON = 30 * DAY
+/** Long enough to cast every seeded ballot before voting closes. */
+const VOTING_CLOSES_IN = 5 * 1000
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // ---------------------------------------------------------------------------
 // Scenario roster
@@ -173,7 +152,7 @@ const SCENARIOS = [
       'Paid entry, settled with a winner — pool to first place, fees split platform/host.',
     expectPhase: 'settled',
     dates: { start: -12 * DAY, deadline: 1 * DAY, voting: 8 * DAY },
-    retime: { deadline: -3 * HOUR, voting: -1 * HOUR },
+    retime: { deadline: -3 * HOUR, voting: VOTING_CLOSES_IN },
     entryFeeTale: 25,
     entrants: 3,
     voters: 'all',
@@ -196,9 +175,7 @@ const SCENARIOS = [
     summary: 'Submissions closed, ballots open. Live standings stay hidden.',
     expectPhase: 'voting',
     dates: { start: -2 * DAY, deadline: 1 * DAY, voting: 8 * DAY },
-    // See BEYOND_TASK_HORIZON. A nearer voting deadline gets settled within
-    // seconds by the emulator's task queue.
-    retime: { deadline: -1 * HOUR, voting: BEYOND_TASK_HORIZON },
+    retime: { deadline: -1 * HOUR, voting: 7 * DAY },
     entrants: 3,
     voters: 'all',
   },
@@ -208,7 +185,7 @@ const SCENARIOS = [
     summary: 'Settled with a real winner — escrow released, digest written.',
     expectPhase: 'settled',
     dates: { start: -12 * DAY, deadline: 1 * DAY, voting: 8 * DAY },
-    retime: { deadline: -3 * HOUR, voting: -1 * HOUR },
+    retime: { deadline: -3 * HOUR, voting: VOTING_CLOSES_IN },
     entrants: 3,
     voters: 'all',
     settle: true,
@@ -595,7 +572,9 @@ async function runApiScenario({ scenario, adminUser, adminIdentity, writers, pri
 
   // Push the dates into the past while the competition is still editable, then
   // let ensurePhase do the advancing.
+  let retimedAt = 0
   if (scenario.retime) {
+    retimedAt = Date.now()
     const body = { competitionId }
     if (scenario.retime.deadline !== undefined) body.deadline = iso(scenario.retime.deadline)
     if (scenario.retime.voting !== undefined) body.votingDeadline = iso(scenario.retime.voting)
@@ -624,6 +603,8 @@ async function runApiScenario({ scenario, adminUser, adminIdentity, writers, pri
   }
 
   if (scenario.settle) {
+    const wait = scenario.retime ? retimedAt + scenario.retime.voting - Date.now() : 0
+    if (wait > 0) await sleep(wait + 1000)
     const outcome = await call('settleCompetition', adminIdentity, { competitionId })
     const winner = (outcome.results || []).find((result) => BigInt(result.amount) > 0n)
     const detail = winner
@@ -801,13 +782,6 @@ async function main() {
     console.log(`  ${writer.email} / ${options.password}`)
   }
   if (writers.length > 3) console.log(`  ...through writer${writers.length}@taletribe.local`)
-
-  const settling = results.find((result) => result.scenario.key === 'settling' && !result.error)
-  if (settling) {
-    console.log(
-      `\nStuck settlement: POST settleCompetition {"competitionId":"${settling.competitionId}"} to finish it.`,
-    )
-  }
 
   console.log(`\nDone. ${results.length - failed.length}/${results.length} scenarios landed in the expected phase.`)
   if (failed.length > 0) process.exitCode = 1

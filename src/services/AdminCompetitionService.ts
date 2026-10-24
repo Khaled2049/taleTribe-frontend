@@ -23,6 +23,8 @@ export interface AdminCompetition {
   prizePool: ITokenAmount;
   entryFee: ITokenAmount;
   results?: ICompetitionResult[];
+  /** Only the admin read carries this. */
+  cancellationReason?: string;
 }
 
 const base = "/v1/admin/competitions";
@@ -46,5 +48,25 @@ export const adminCompetitionService = {
   },
   deleteDraft(id: string) {
     return request<void>(`${base}/${id}`, { ...options, method: "DELETE" });
+  },
+  settle(id: string) {
+    return request<AdminCompetition>(`${base}/${id}/settle`, {
+      ...options,
+      method: "POST",
+    });
+  },
+  cancel(id: string, reason: string) {
+    return request<AdminCompetition>(`${base}/${id}/cancel`, {
+      ...options,
+      method: "POST",
+      body: { reason },
+    });
+  },
+  /** Settles every competition past its voting deadline; failures are ids only. */
+  settleDue() {
+    return request<{ settled: string[]; failed: string[] }>(
+      `${base}/settle-due`,
+      { ...options, method: "POST" },
+    );
   },
 };

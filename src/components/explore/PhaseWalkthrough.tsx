@@ -69,7 +69,7 @@ const STEPS: WalkthroughStep[] = [
     countdownFromMs: 3 * DAY,
     clockLabel: "Voting closes in",
     heading: "The tribe reads and votes",
-    body: "Entries close and ballots open. Each reader backs up to three entries and cannot back their own. Entries are shown in a different order to every reader, so nobody gets a head start from being first on the page.",
+    body: "Entries close and ballots open. Each reader backs as many entries as the host allows and cannot back their own. Entries are shown in a different order to every reader, so nobody gets a head start from being first on the page.",
     money:
       "Still escrowed, still untouched. Running vote counts are hidden from everyone — including the host — so nobody can pile onto whoever is ahead.",
   },
@@ -89,7 +89,7 @@ const STEPS: WalkthroughStep[] = [
     heading: "The winner is paid",
     body: "The result is published along with the full standings, and the prize lands in the winner's balance.",
     money:
-      "The whole pool goes to first place — entry fees are revenue and never add to it, splitting instead between the host and the platform. If nobody voted, nothing is earned: the pool goes back to the host and every fee back to the entrant who paid it. A SHA-256 digest of the results is published next to them, so anyone can recompute it and check the result was not edited after the fact.",
+      "The whole pool goes to first place — entry fees are revenue and never add to it, splitting instead between the host and the platform. If nobody voted, there is no winner and the pool goes back to the host; entry fees are still split between the host and the platform. A SHA-256 digest of the results is published next to them, so anyone can recompute it and check the result was not edited after the fact.",
   },
 ];
 

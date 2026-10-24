@@ -2,10 +2,12 @@ import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   useInfiniteQuery,
+  useMutation,
   useQuery,
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query";
+import { StoryDataError } from "@novelsync/story-data-client";
 import { ArrowLeft, Search, Trash2 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { toast } from "sonner";
@@ -18,6 +20,13 @@ import {
   type AdminCompetition,
 } from "@/services/AdminCompetitionService";
 import { AdminSelect } from "./AdminSelect";
+import {
+  AWAITING_SETTLEMENT,
+  MAX_CANCEL_REASON,
+  awaitingSettlementFor,
+  canAdminCancel,
+  settleDueSummary,
+} from "./competitionStatus";
 
 const control =
   "rounded-ns border border-ns-border bg-ns-elevated px-3 py-2 text-sm text-ns-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent disabled:opacity-50";
@@ -41,6 +50,22 @@ function QueryError({ error, retry }: { error: Error; retry: () => void }) {
         Try again
       </button>
     </div>
+  );
+}
+
+function CompetitionStatus({ competition }: { competition: AdminCompetition }) {
+  const overdue = awaitingSettlementFor(
+    competition.phase,
+    competition.votingDeadline,
+  );
+  if (!overdue) return <>{phaseNames[competition.phase]}</>;
+  return (
+    <span className="font-semibold text-ns-accent">
+      Awaiting settlement
+      <span className="block text-xs font-normal text-ns-ink-secondary">
+        Voting closed {overdue} ago
+      </span>
+    </span>
   );
 }
 
@@ -74,7 +99,7 @@ function CompetitionRows({
         {competition.creatorId}
       </td>
       <td className="whitespace-nowrap py-5 pr-6">
-        {phaseNames[competition.phase]}
+        <CompetitionStatus competition={competition} />
       </td>
       <td className="whitespace-nowrap py-5 pr-6">
         {dateLabel(competition.deadline)}
@@ -111,6 +136,20 @@ function CompetitionList({ viewerId }: { viewerId: string }) {
     queryFn: ({ pageParam, signal }) =>
       adminCompetitionService.list(search, phase, pageParam, signal),
     getNextPageParam: (page) => page.nextCursor,
+  });
+  const settleDue = useMutation({
+    mutationFn: () => adminCompetitionService.settleDue(),
+    onSuccess: (result) => {
+      const summary = settleDueSummary(result);
+      if (result.failed.length > 0) toast.warning(summary);
+      else toast.success(summary);
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error ? error.message : "Could not settle. Try again.",
+      ),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: ["admin", viewerId] }),
   });
   function findCompetition(event: FormEvent) {
     event.preventDefault();
@@ -197,8 +236,17 @@ function CompetitionList({ viewerId }: { viewerId: string }) {
                 {label}
               </option>
             ))}
+            <option value={AWAITING_SETTLEMENT}>Awaiting settlement</option>
           </AdminSelect>
         </label>
+        <button
+          type="button"
+          className={control}
+          onClick={() => settleDue.mutate()}
+          disabled={settleDue.isPending}
+        >
+          {settleDue.isPending ? "Settling…" : "Settle all overdue"}
+        </button>
       </form>
       {competitions.isPending && <p role="status">Loading competitions…</p>}
       {competitions.error && (
@@ -293,6 +341,47 @@ function CompetitionReview({ id, viewerId }: { id: string; viewerId: string }) {
     queryFn: ({ signal }) => adminCompetitionService.get(id, signal),
   });
   const names = useProfileNames([competition.data?.creatorId]);
+  const queryClient = useQueryClient();
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  async function cancelCompetition() {
+    if (!reason.trim()) {
+      setCancelError("Give a reason. It is kept in the audit log.");
+      return false;
+    }
+    try {
+      await adminCompetitionService.cancel(id, reason.trim());
+      toast.success("Competition cancelled and refunded");
+      setReason("");
+      return true;
+    } catch (error) {
+      setCancelError(
+        error instanceof StoryDataError && error.status === 422
+          ? "This competition can no longer be cancelled: it has settled."
+          : error instanceof Error
+            ? error.message
+            : "Could not cancel. Try again.",
+      );
+      return false;
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: ["admin", viewerId] });
+    }
+  }
+  const settle = useMutation({
+    mutationFn: () => adminCompetitionService.settle(id),
+    onSuccess: () => toast.success("Competition settled"),
+    onError: (error) =>
+      toast.error(
+        error instanceof StoryDataError && error.status === 422
+          ? "Could not settle: voting has not closed on the server yet, or the payout failed. The story-data logs say which."
+          : error instanceof Error
+            ? error.message
+            : "Could not settle. Try again.",
+      ),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: ["admin", viewerId] }),
+  });
   if (competition.isPending) return <p role="status">Loading competition…</p>;
   if (competition.error)
     return (
@@ -310,13 +399,31 @@ function CompetitionReview({ id, viewerId }: { id: string; viewerId: string }) {
       >
         <ArrowLeft size={16} /> All competitions
       </Link>
-      <p className="mb-2 text-sm text-ns-accent">{phaseNames[data.phase]}</p>
+      <p className="mb-2 text-sm text-ns-accent">
+        <CompetitionStatus competition={data} />
+      </p>
       <h1 className="break-words font-heading text-3xl sm:text-4xl">
         {data.title}
       </h1>
       <p className="mt-2 text-ns-ink-secondary">
         Hosted by {names.get(data.creatorId) || data.creatorName}
       </p>
+      {awaitingSettlementFor(data.phase, data.votingDeadline) && (
+        <div className="mt-4 max-w-prose rounded-ns border border-ns-border bg-ns-surface p-4 text-sm text-ns-ink-secondary">
+          <p>
+            Voting has closed but nobody has opened this competition since, so
+            it has not settled and the winner has not been paid.
+          </p>
+          <button
+            type="button"
+            className={`${control} mt-3`}
+            onClick={() => settle.mutate()}
+            disabled={settle.isPending}
+          >
+            {settle.isPending ? "Settling…" : "Settle now"}
+          </button>
+        </div>
+      )}
       <dl className="my-6 grid gap-4 border-y border-ns-border py-6 text-sm sm:grid-cols-2">
         {[
           ["Competition ID", data.id],
@@ -330,6 +437,9 @@ function CompetitionReview({ id, viewerId }: { id: string; viewerId: string }) {
           ["Submissions", data.submissionCount],
           ["Ballots cast", data.ballotCount],
           ["Category", data.category || "Not set"],
+          ...(data.cancellationReason
+            ? [["Cancellation reason", data.cancellationReason]]
+            : []),
         ].map(([label, value]) => (
           <div key={label}>
             <dt className="text-ns-ink-secondary">{label}</dt>
@@ -346,14 +456,55 @@ function CompetitionReview({ id, viewerId }: { id: string; viewerId: string }) {
           Tags: {data.tags.join(", ")}
         </p>
       )}
-      {data.phase !== "draft" && (
-        <Link
-          to={`/competitions/${data.id}`}
-          className="mt-8 inline-block text-ns-accent underline"
-        >
-          Open competition
-        </Link>
-      )}
+      <div className="mt-8 flex flex-wrap items-center gap-6">
+        {data.phase !== "draft" && (
+          <Link
+            to={`/competitions/${data.id}`}
+            className="text-ns-accent underline"
+          >
+            Open competition
+          </Link>
+        )}
+        {canAdminCancel(data.phase) && (
+          <button
+            type="button"
+            className="text-sm font-semibold text-ns-destructive hover:text-ns-destructive-hover"
+            onClick={() => {
+              setCancelError("");
+              setCancelOpen(true);
+            }}
+          >
+            Cancel competition
+          </button>
+        )}
+      </div>
+      <ConfirmDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title="Cancel this competition?"
+        description="The prize goes back to the host and every entry fee to whoever paid it. It can't be reopened."
+        confirmLabel="Cancel competition"
+        cancelLabel="Keep competition"
+        variant="danger"
+        onConfirm={cancelCompetition}
+      >
+        <label className="block text-sm">
+          Reason
+          <textarea
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            maxLength={MAX_CANCEL_REASON}
+            rows={3}
+            className={`${control} mt-2 block w-full`}
+            placeholder="Only admins see this."
+          />
+        </label>
+        {cancelError && (
+          <p role="alert" className="mt-2 text-sm text-ns-destructive">
+            {cancelError}
+          </p>
+        )}
+      </ConfirmDialog>
     </>
   );
 }

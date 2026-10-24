@@ -119,6 +119,20 @@ export function useCancelCompetition() {
   });
 }
 
+export function useSettleCompetition() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (competitionId: string) =>
+      competitionService.settleCompetition(competitionId),
+    onSuccess: () => {
+      invalidateAll(queryClient);
+      // Settling pays the winner and the host's fee share.
+      queryClient.invalidateQueries({ queryKey: ["token", "balance"] });
+    },
+  });
+}
+
 /**
  * Join, applied optimistically.
  *

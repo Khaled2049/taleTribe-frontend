@@ -33,11 +33,12 @@ export const PHASE_COPY: Record<CompetitionPhase, PhaseCopy> = {
   voting: {
     label: "Voting open",
     blurb:
-      "Back up to three entries. Results stay hidden until voting closes — nobody can see who's ahead.",
+      "Back the entries you rate highest. Results stay hidden until voting closes — nobody can see who's ahead.",
   },
   settling: {
     label: "Counting votes",
-    blurb: "Voting has closed and the prize is being paid out.",
+    blurb:
+      "Voting has closed. Results are announced once the votes are counted.",
   },
   settled: { label: "Settled", blurb: "The prize has been paid out." },
   cancelled: {

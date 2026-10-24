@@ -130,9 +130,9 @@ export function dueTimePhase(
 }
 
 /**
- * When this competition next needs attention, for the `nextTransitionAt` field
- * a future scheduled sweep will query on. Null once nothing further is
- * time-driven.
+ * When this competition next needs attention: the next phase boundary, or
+ * when story-data's `settle-due` job becomes due to settle it. Null once
+ * nothing further is time-driven.
  */
 export function nextTransitionAt(
   phase: CompetitionPhase,
@@ -151,4 +151,35 @@ export function nextTransitionAt(
     default:
       return null;
   }
+}
+
+/**
+ * Voting has ended on the clock but the competition is not settled yet. The
+ * server refuses ballots from `votingDeadline` on, while `phase` stays
+ * `voting` until settlement runs, so the stored phase alone overstates it.
+ */
+export function isVotingClosed(
+  phase: CompetitionPhase | undefined,
+  votingDeadline: Date | undefined,
+  now: number = Date.now(),
+): boolean {
+  return (
+    (phase === "voting" || phase === "settling") &&
+    !!votingDeadline &&
+    now >= votingDeadline.getTime()
+  );
+}
+
+/**
+ * The phase to show a reader. A competition whose voting has closed reads as
+ * `settling` ("Counting votes") until settlement lands. Decisions the server
+ * makes on the stored phase, such as whether it can still be cancelled, must
+ * keep using `competition.phase`.
+ */
+export function displayPhase(
+  phase: CompetitionPhase,
+  votingDeadline: Date | undefined,
+  now: number = Date.now(),
+): CompetitionPhase {
+  return isVotingClosed(phase, votingDeadline, now) ? "settling" : phase;
 }

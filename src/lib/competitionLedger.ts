@@ -67,7 +67,7 @@ export const ROW_ACTION: Record<
     label: "Vote",
     tone: "live",
     meaning:
-      "Entries are closed and voting is open. You can back up to three entries.",
+      "Entries are closed and voting is open. You can back as many entries as the host allows.",
   },
   judging: {
     label: "Judging",
