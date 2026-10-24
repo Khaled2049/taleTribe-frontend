@@ -1,0 +1,33 @@
+name: Billing infrastructure checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - terraform/billing/**
+      - .github/workflows/billing-iac.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.14.4
+      - name: Test budget decisions and shutdown failures without cloud access
+        run: python3 -m unittest discover -s terraform/billing/tests -v
+      - name: Check Terraform formatting
+        run: terraform -chdir=terraform/billing fmt -check
+      - name: Initialize providers without accessing production state
+        run: terraform -chdir=terraform/billing init -backend=false -lockfile=readonly
+      - name: Validate infrastructure
+        run: terraform -chdir=terraform/billing validate
