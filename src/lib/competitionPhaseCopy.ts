@@ -37,7 +37,8 @@ export const PHASE_COPY: Record<CompetitionPhase, PhaseCopy> = {
   },
   settling: {
     label: "Counting votes",
-    blurb: "Voting has closed. Results are announced once the votes are counted.",
+    blurb:
+      "Voting has closed. Results are announced once the votes are counted.",
   },
   settled: { label: "Settled", blurb: "The prize has been paid out." },
   cancelled: {

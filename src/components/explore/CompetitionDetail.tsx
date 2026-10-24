@@ -285,8 +285,7 @@ const CompetitionDetail: React.FC = () => {
   const canEdit = isEditablePhase(storedPhase);
   const canCancel = canTransition(storedPhase, "cancelled");
   const canSettle =
-    canManage &&
-    isVotingClosed(storedPhase, competition.votingDeadline, now);
+    canManage && isVotingClosed(storedPhase, competition.votingDeadline, now);
 
   // The hero's call to action. `null` means "no actionable button" — the hero
   // then falls back to phase/sign-in/creator copy instead.
