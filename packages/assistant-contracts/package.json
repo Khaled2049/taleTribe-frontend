@@ -14,7 +14,7 @@
     "check": "node scripts/check-fixtures.mjs && node scripts/generate.mjs --check"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "json-schema-to-typescript": "15.0.4"
