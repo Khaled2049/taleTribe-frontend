@@ -33,7 +33,7 @@
         "firebase-admin": "^14.5.0",
         "firebase-functions": "^7.4.0",
         "google-auth-library": "^11.3.1",
-        "nodemailer": "^10.1.1",
+        "nodemailer": "^10.2.1",
         "replicate": "^1.4.0",
         "typescript": "^5.7.3",
         "unique-names-generator": "^4.7.1",
@@ -42,7 +42,7 @@
     "devDependencies": {
         "@types/cors": "^2.8.19",
         "@types/express": "^5.0.0",
-        "@typescript-eslint/eslint-plugin": "^8.70.1",
+        "@typescript-eslint/eslint-plugin": "^8.72.0",
         "@typescript-eslint/parser": "^8.70.1",
         "eslint": "^8.57.1",
         "eslint-config-google": "^0.14.0",
