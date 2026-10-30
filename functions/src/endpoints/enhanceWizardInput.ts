@@ -22,7 +22,7 @@ export const enhanceWizardInput = onRequest(
       // ── Quota check (bypassed for BYOK users) ─────────────────────────────
       const access = await checkAiAccess(userId);
       if (!access.allowed) {
-        response.status(429).json({
+        response.status(access.suspended ? 403 : 429).json({
           error: access.reason || "Daily AI quota exceeded",
         });
         return;

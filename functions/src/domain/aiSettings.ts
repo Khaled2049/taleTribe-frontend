@@ -5,6 +5,7 @@ import * as logger from "firebase-functions/logger";
 import { defineSecret } from "firebase-functions/params";
 import { corsOptions } from "../infra/corsConfig";
 import { consumeDailyBudget } from "../infra/usageBudget";
+import { AI_SUSPENDED_MESSAGE, getAiSuspension, suspensionBlocks } from "./aiSuspension";
 
 export const encryptionKey = defineSecret("ENCRYPTION_KEY");
 
@@ -48,6 +49,8 @@ export interface AiAccessResult {
   byok: boolean;
   providerConfig: ProviderConfig | null;
   reason?: string;
+  /** An admin turned AI off for this member; endpoints answer 403 rather than a quota status. */
+  suspended?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -229,7 +232,11 @@ export async function deleteUserAiSettings(uid: string): Promise<void> {
  * is the same turn to the user, and was counted when the run began.
  */
 export async function describeAiAccess(userId: string): Promise<AiAccessResult> {
-  const settings = await getUserAiSettings(userId);
+  const [settings, suspension] = await Promise.all([getUserAiSettings(userId), getAiSuspension(userId)]);
+  if (suspensionBlocks(suspension, settings !== null)) {
+    const byok = settings !== null;
+    return { allowed: false, byok, providerConfig: null, reason: AI_SUSPENDED_MESSAGE, suspended: true };
+  }
   return settings
     ? { allowed: true, byok: true, providerConfig: settings }
     : { allowed: true, byok: false, providerConfig: null };
@@ -238,8 +245,8 @@ export async function describeAiAccess(userId: string): Promise<AiAccessResult> 
 export async function checkAiAccess(userId: string): Promise<AiAccessResult> {
   const access = await describeAiAccess(userId);
 
-  // A user on their own key spends no platform quota.
-  if (access.byok) {
+  // A suspended user is refused before spending; one on their own key spends no platform quota.
+  if (!access.allowed || access.byok) {
     return access;
   }
 

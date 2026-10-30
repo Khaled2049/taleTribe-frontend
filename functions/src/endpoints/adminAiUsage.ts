@@ -9,6 +9,7 @@ import { corsOptions } from "../infra/corsConfig";
 import { CreditProxyError, getCreditProxyAdmin } from "../creditProxy/transport";
 import { isUid, parseSort, parseUsageRange, usageFlags } from "../domain/aiUsage";
 import { getDailyAiQuotaLimit } from "../domain/aiSettings";
+import { getAiSuspensions } from "../domain/aiSuspension";
 
 const TOP_USERS = 25;
 
@@ -28,17 +29,18 @@ function usageError(response: Response, error: unknown, context: Record<string, 
   response.status(502).json({ error: "AI usage is unavailable right now" });
 }
 
-/** Account creation time and BYOK flag for up to 100 users, by uid. */
+/** Account creation time, BYOK flag and any AI suspension for up to 100 users, by uid. */
 async function accounts(uids: string[]) {
-  const [auth, docs] = await Promise.all([
+  const [auth, docs, suspensions] = await Promise.all([
     uids.length ? getAuth().getUsers(uids.map((uid) => ({ uid }))) : Promise.resolve({ users: [] }),
     uids.length
       ? getFirestore().getAll(...uids.map((uid) => getFirestore().collection("users").doc(uid)))
       : Promise.resolve([]),
+    getAiSuspensions(uids),
   ]);
   const created = new Map(auth.users.map((user) => [user.uid, new Date(user.metadata.creationTime)]));
   const byok = new Map(docs.map((doc) => [doc.id, doc.get("hasCustomAiProvider") === true]));
-  return { created, byok };
+  return { created, byok, suspensions };
 }
 
 /** GET /aiUsageSummary?from=YYYY-MM-DD&to=YYYY-MM-DD → { today, daily } */
@@ -88,13 +90,14 @@ const handleAiUsageUsers = requireAdmin(async (request, response, adminId, idTok
       idToken,
     );
     // The ledger's "platform" id and test ids are not accounts; skip them here.
-    const { created, byok } = await accounts(users.map((u) => u.userId).filter(isUid));
+    const { created, byok, suspensions } = await accounts(users.map((u) => u.userId).filter(isUid));
     response.set("Cache-Control", "no-store").status(200).json({
       dailyLimit: getDailyAiQuotaLimit(),
       users: users.map((user, rank) => ({
         ...user,
         accountCreatedAt: created.get(user.userId)?.toISOString() ?? null,
         byokConfigured: byok.get(user.userId) ?? false,
+        suspension: suspensions.get(user.userId) ?? null,
         flags: usageFlags({
           heavyDays: user.heavyDays,
           mostPurchasesInADay: user.mostPurchasesInADay,
@@ -136,6 +139,7 @@ const handleAiUsageUser = requireAdmin(async (request, response, adminId, idToke
       dailyLimit: getDailyAiQuotaLimit(),
       accountCreatedAt: account.created.get(uid)?.toISOString() ?? null,
       byokConfigured: account.byok.get(uid) ?? false,
+      suspension: account.suspensions.get(uid) ?? null,
     });
   } catch (error) {
     usageError(response, error, { adminId, targetId: uid });

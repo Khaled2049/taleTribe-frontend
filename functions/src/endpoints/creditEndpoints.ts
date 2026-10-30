@@ -4,6 +4,7 @@ import * as logger from "firebase-functions/logger";
 import { requireAuth } from "../infra/authService";
 import { callAgentPath } from "../agent/client";
 import { corsMiddlewareWithMaxAge } from "../infra/corsConfig";
+import { AI_SUSPENDED_MESSAGE, getAiSuspension } from "../domain/aiSuspension";
 
 // Allowed top-up amounts. Validated here AND in the Python agent service so a
 // crafted request can't mint an arbitrary balance. Keep in sync with
@@ -62,6 +63,12 @@ const handlePurchaseCredits = requireAuth(async (request, response, userId, idTo
       response.status(400).json({
         error: `credits must be one of: ${[...ALLOWED_CREDIT_TIERS].join(", ")}`,
       });
+      return;
+    }
+
+    // Any suspension stops top-ups: the credits only buy platform AI.
+    if (await getAiSuspension(userId)) {
+      response.status(403).json({ error: AI_SUSPENDED_MESSAGE });
       return;
     }
 

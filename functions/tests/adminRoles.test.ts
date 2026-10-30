@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { MAX_ROLE_LOOKUP, parseRoleChange, parseRoleLookup, withAdminClaim } from "../src/domain/adminRoles";
+import {
+  MAX_BAN_REASON,
+  MAX_ROLE_LOOKUP,
+  parseBanChange,
+  parseRoleChange,
+  parseRoleLookup,
+  withAdminClaim,
+} from "../src/domain/adminRoles";
 
 describe("parseRoleChange", () => {
   it("needs a uid and a boolean", () => {
@@ -27,5 +34,24 @@ describe("withAdminClaim", () => {
     assert.deepEqual(withAdminClaim({ beta: true }, true), { beta: true, admin: true });
     assert.deepEqual(withAdminClaim({ beta: true, admin: true }, false), { beta: true });
     assert.deepEqual(withAdminClaim(undefined, false), {});
+  });
+});
+
+describe("parseBanChange", () => {
+  it("trims the reason and lifts with only a uid", () => {
+    assert.deepEqual(parseBanChange({ uid: "u1", banned: true, reason: "  spam " }), {
+      uid: "u1",
+      banned: true,
+      reason: "spam",
+    });
+    assert.deepEqual(parseBanChange({ uid: "u1", banned: true }), { uid: "u1", banned: true, reason: null });
+    assert.deepEqual(parseBanChange({ uid: "u1", banned: false, reason: 9 }), { uid: "u1", banned: false });
+  });
+
+  it("refuses bad input", () => {
+    assert.equal(parseBanChange(null), null);
+    assert.equal(parseBanChange({ uid: "u1", banned: "yes" }), null);
+    assert.equal(parseBanChange({ uid: "u1", banned: true, reason: 9 }), null);
+    assert.equal(parseBanChange({ uid: "u1", banned: true, reason: "x".repeat(MAX_BAN_REASON + 1) }), null);
   });
 });

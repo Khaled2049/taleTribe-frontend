@@ -8,6 +8,16 @@ export interface AiUsageSummary {
 
 export type UsageFlag = "at_daily_limit" | "new_account" | "max_top_ups";
 
+/** `platform` stops platform-funded AI only; `all` also stops the member's own key. */
+export type AiSuspensionScope = "platform" | "all";
+
+export interface AiSuspension {
+  scope: AiSuspensionScope;
+  reason: string | null;
+  suspendedBy: string | null;
+  suspendedAt: string | null;
+}
+
 export interface TopUser {
   userId: string;
   platformRequests: number;
@@ -22,6 +32,7 @@ export interface TopUser {
   mostPurchasesInADay: number;
   accountCreatedAt: string | null;
   byokConfigured: boolean;
+  suspension: AiSuspension | null;
   flags: UsageFlag[];
 }
 
@@ -37,6 +48,7 @@ export interface UserAiUsage {
   dailyLimit: number;
   accountCreatedAt: string | null;
   byokConfigured: boolean;
+  suspension: AiSuspension | null;
 }
 
 async function get<T>(
@@ -72,4 +84,21 @@ export const adminAiUsageService = {
       { uid, from, to },
       "Could not load this member's AI usage",
     ),
+  async setSuspension(
+    uid: string,
+    change: { scope: AiSuspensionScope; reason: string } | null,
+  ) {
+    try {
+      await api.post(
+        "/setAiSuspension",
+        change
+          ? { uid, suspended: true, ...change }
+          : { uid, suspended: false },
+      );
+    } catch (error) {
+      throw new Error(
+        getApiErrorMessage(error, "Could not change this member's AI access"),
+      );
+    }
+  },
 };

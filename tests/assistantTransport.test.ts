@@ -139,6 +139,29 @@ describe("assistant browser transport", () => {
     await expect(run).rejects.not.toThrow(/private upstream detail/);
   });
 
+  it("tells an AI suspension apart from a story the assistant cannot see", async () => {
+    const runWith = (body: string) =>
+      collect(
+        streamAssistantRun("story-1", "Hello", new AbortController().signal, {
+          endpoint: "/assistant",
+          getIdToken: async () => "token",
+          fetcher: vi.fn(
+            async () => new Response(body, { status: 403 }),
+          ) as typeof fetch,
+        }),
+      );
+    const suspended = runWith(
+      '{"error":"private upstream detail","code":"ai_suspended"}',
+    );
+    await expect(suspended).rejects.toMatchObject({
+      failure: { code: "ai_suspended", message: expect.any(String) },
+    });
+    await expect(suspended).rejects.not.toThrow(/private upstream detail/);
+    await expect(runWith("not json")).rejects.toMatchObject({
+      failure: { code: "story_access_denied" },
+    });
+  });
+
   it("retries one transient gateway failure before reading the stream", async () => {
     const fetcherMock = vi
       .fn()

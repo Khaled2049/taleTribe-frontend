@@ -7,7 +7,7 @@ import { requireAdmin } from "../infra/authService";
 import { corsOptions } from "../infra/corsConfig";
 import { parseRoleChange, parseRoleLookup, withAdminClaim } from "../domain/adminRoles";
 
-/** POST /adminRoles { uids } → { admins } — which of these users hold the claim. */
+/** POST /adminRoles { uids } → { admins, banned } — who holds the claim and whose account is disabled. */
 const handleAdminRoles = requireAdmin(async (request, response) => {
   if (request.method !== "POST") {
     response.status(405).json({ error: "method not allowed" });
@@ -22,6 +22,7 @@ const handleAdminRoles = requireAdmin(async (request, response) => {
     const { users } = uids.length ? await getAuth().getUsers(uids.map((uid) => ({ uid }))) : { users: [] };
     response.set("Cache-Control", "no-store").status(200).json({
       admins: users.filter((user) => user.customClaims?.admin === true).map((user) => user.uid),
+      banned: users.filter((user) => user.disabled).map((user) => user.uid),
     });
   } catch (error) {
     logger.error("Failed to look up admin roles", { error });

@@ -256,7 +256,11 @@ export const useFirebaseAuth = () => {
       return { status: 200 };
     } catch (err) {
       console.log("err", err);
-      setError((err as Error).message);
+      setError(
+        (err as { code?: string }).code === "auth/user-disabled"
+          ? "This account has been suspended. Contact support if you think this is a mistake."
+          : (err as Error).message,
+      );
       return { status: "error" };
     }
   };

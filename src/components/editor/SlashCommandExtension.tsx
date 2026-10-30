@@ -11,7 +11,6 @@ import { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { PluginKey, type EditorState } from "@tiptap/pm/state";
 import {
   type LucideIcon,
-  MessageSquare,
   PenLine,
   Image,
   Heading1,
@@ -129,7 +128,6 @@ function createSuggestionPopup(content: HTMLElement, contextElement: Element) {
 export const slashCommandSuggestion = (
   onGenerateNextLine: () => Promise<void>,
   onGenerateImage: () => void,
-  onCoWrite: () => void,
   onSummarize: () => Promise<void>,
 ): Partial<SuggestionOptions> => ({
   char: "/",
@@ -137,15 +135,6 @@ export const slashCommandSuggestion = (
 
   items: ({ query }: { query: string }): SlashCommand[] => {
     const commands: SlashCommand[] = [
-      {
-        title: "Co-Write",
-        description: "Open interactive storytelling panel",
-        icon: MessageSquare,
-        command: ({ editor, range }: CommandContext) => {
-          editor.chain().focus().deleteRange(range).run();
-          onCoWrite();
-        },
-      },
       {
         title: "Generate Next Line",
         description: "AI generates suggestions for the next line",

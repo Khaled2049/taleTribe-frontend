@@ -24,7 +24,13 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 
 const OWNER = "owner-uid";
@@ -49,14 +55,18 @@ afterAll(() => env?.cleanup());
 beforeEach(() => env.clearFirestore());
 
 const as = (uid: string | null) =>
-  uid ? env.authenticatedContext(uid).firestore() : env.unauthenticatedContext().firestore();
+  uid
+    ? env.authenticatedContext(uid).firestore()
+    : env.unauthenticatedContext().firestore();
 
 describe("the stories path", () => {
   it("refuses a client reading or writing anything under a story", async () => {
     // The assistant keeps no Firestore transcript. Every story-owned domain is
     // in story-data, so the whole subtree is denied rather than scoped.
     const db = as(OWNER);
-    await assertFails(setDoc(doc(db, "stories", STORY, "chats", CHAT), { userId: OWNER }));
+    await assertFails(
+      setDoc(doc(db, "stories", STORY, "chats", CHAT), { userId: OWNER }),
+    );
     await assertFails(getDoc(doc(db, "stories", STORY, "chats", CHAT)));
     await assertFails(
       setDoc(doc(db, "stories", STORY, "chats", CHAT, "messages", "m1"), {
@@ -68,10 +78,14 @@ describe("the stories path", () => {
 
   it("refuses even a pre-existing session seeded behind the rules", async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), "stories", STORY, "chats", CHAT), { userId: OWNER });
+      await setDoc(doc(ctx.firestore(), "stories", STORY, "chats", CHAT), {
+        userId: OWNER,
+      });
     });
     await assertFails(getDoc(doc(as(OWNER), "stories", STORY, "chats", CHAT)));
-    await assertFails(getDoc(doc(as(STRANGER), "stories", STORY, "chats", CHAT)));
+    await assertFails(
+      getDoc(doc(as(STRANGER), "stories", STORY, "chats", CHAT)),
+    );
   });
 });
 
@@ -81,13 +95,23 @@ describe("the user document", () => {
       await setDoc(doc(ctx.firestore(), "users", OWNER), { username: "owner" });
     });
     const db = as(OWNER);
-    await assertSucceeds(setDoc(doc(db, "users", OWNER), { username: "renamed" }, { merge: true }));
-    await assertFails(
-      setDoc(doc(db, "users", OWNER), { hasCustomAiProvider: true }, { merge: true }),
+    await assertSucceeds(
+      setDoc(doc(db, "users", OWNER), { username: "renamed" }, { merge: true }),
     );
-    await assertFails(setDoc(doc(db, "users", OWNER), { isAdmin: true }, { merge: true }));
+    await assertFails(
+      setDoc(
+        doc(db, "users", OWNER),
+        { hasCustomAiProvider: true },
+        { merge: true },
+      ),
+    );
+    await assertFails(
+      setDoc(doc(db, "users", OWNER), { isAdmin: true }, { merge: true }),
+    );
     // Zeroing a quota counter would buy unlimited embedding passes.
-    await assertFails(setDoc(doc(db, "users", OWNER), { indexUsage: 0 }, { merge: true }));
+    await assertFails(
+      setDoc(doc(db, "users", OWNER), { indexUsage: 0 }, { merge: true }),
+    );
   });
 
   it("refuses reading another user's document", async () => {
@@ -99,12 +123,22 @@ describe("rate limit counters", () => {
   it("allows a monotonic bump on your own bucket but not a reset", async () => {
     const id = `${OWNER}_2026-08-16`;
     const db = as(OWNER);
-    await assertSucceeds(setDoc(doc(db, "userActivity", id), { userId: OWNER, messageCount: 1 }));
     await assertSucceeds(
-      setDoc(doc(db, "userActivity", id), { userId: OWNER, messageCount: 2 }, { merge: true }),
+      setDoc(doc(db, "userActivity", id), { userId: OWNER, messageCount: 1 }),
+    );
+    await assertSucceeds(
+      setDoc(
+        doc(db, "userActivity", id),
+        { userId: OWNER, messageCount: 2 },
+        { merge: true },
+      ),
     );
     await assertFails(
-      setDoc(doc(db, "userActivity", id), { userId: OWNER, messageCount: 0 }, { merge: true }),
+      setDoc(
+        doc(db, "userActivity", id),
+        { userId: OWNER, messageCount: 0 },
+        { merge: true },
+      ),
     );
   });
 
@@ -150,7 +184,10 @@ describe("collections that moved to story-data", () => {
   const denied: [string, string[]][] = [
     ["a story document", ["stories", STORY]],
     ["a chapter", ["stories", STORY, "chapters", "c1"]],
-    ["a chapter comment", ["stories", STORY, "chapters", "c1", "comments", "x"]],
+    [
+      "a chapter comment",
+      ["stories", STORY, "chapters", "c1", "comments", "x"],
+    ],
     ["a character", ["stories", STORY, "characters", "x"]],
     ["a competition", ["competitions", "x"]],
     ["a guestbook entry", ["users", OWNER, "guestbook", "x"]],
@@ -170,5 +207,18 @@ describe("collections that moved to story-data", () => {
 
   it("refuses a client deleting a book club record", async () => {
     await assertFails(deleteDoc(doc(as(OWNER), "bookClubs", "club-1")));
+  });
+});
+
+describe("AI suspensions", () => {
+  it("refuses a member reading, lifting or writing their own suspension", async () => {
+    const db = as(OWNER);
+    await assertFails(getDoc(doc(db, "aiSuspensions", OWNER)));
+    await assertFails(deleteDoc(doc(db, "aiSuspensions", OWNER)));
+    await assertFails(
+      setDoc(doc(db, "aiSuspensions", OWNER), { scope: "platform" }),
+    );
+    await assertFails(getDoc(doc(db, "aiSuspensionChanges", "c1")));
+    await assertFails(getDoc(doc(db, "userBanChanges", "c1")));
   });
 });

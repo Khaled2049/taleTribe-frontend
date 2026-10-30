@@ -18,6 +18,7 @@ export type AssistantFailureCode =
   | ErrorCode
   | "malformed_stream"
   | "network_error"
+  | "ai_suspended"
   | "request_too_large"
   | "unauthenticated"
   | "unsupported_capability";
@@ -279,6 +280,29 @@ export function toAssistantRunResult(
           : undefined,
     },
   };
+}
+
+/**
+ * Like `assistantFailureForStatus`, but tells an admin AI suspension apart from
+ * a story 403. Only the code is read; the message stays ours, never the body's.
+ */
+export async function assistantFailureForResponse(
+  response: Response,
+): Promise<AssistantFailure> {
+  if (response.status === 403) {
+    const body = (await response.json().catch(() => null)) as {
+      code?: unknown;
+    } | null;
+    if (body?.code === "ai_suspended") {
+      return {
+        code: "ai_suspended",
+        message:
+          "AI features are turned off for your account. Contact support if you think this is a mistake.",
+      };
+    }
+    return assistantFailureForStatus(403);
+  }
+  return assistantFailureForStatus(response.status);
 }
 
 export function assistantFailureForStatus(status: number): AssistantFailure {
