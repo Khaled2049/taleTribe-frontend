@@ -23,3 +23,17 @@ export function withAdminClaim(claims: Record<string, unknown> | undefined, admi
   else delete next.admin;
   return next;
 }
+
+export const MAX_BAN_REASON = 500;
+
+export type BanChange = { uid: string; banned: true; reason: string | null } | { uid: string; banned: false };
+
+export function parseBanChange(body: unknown): BanChange | null {
+  const { uid, banned, reason } = (body ?? {}) as Record<string, unknown>;
+  if (!isUid(uid) || typeof banned !== "boolean") return null;
+  if (!banned) return { uid, banned };
+  if (reason !== undefined && reason !== null && typeof reason !== "string") return null;
+  const trimmed = typeof reason === "string" ? reason.trim() : "";
+  if (trimmed.length > MAX_BAN_REASON) return null;
+  return { uid, banned, reason: trimmed || null };
+}

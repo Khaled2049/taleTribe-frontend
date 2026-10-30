@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Ban } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useProfileNames } from "@/hooks/queries/useUserQueries";
@@ -30,10 +30,23 @@ const FLAG_LABELS: Record<UsageFlag, string> = {
 };
 const UID = /^[A-Za-z0-9_-]{1,128}$/;
 
-function FlagBadges({ flags }: { flags: UsageFlag[] }) {
-  if (!flags.length) return <span className="text-ns-ink-muted">—</span>;
+function FlagBadges({
+  flags,
+  suspended,
+}: {
+  flags: UsageFlag[];
+  suspended: boolean;
+}) {
+  if (!flags.length && !suspended)
+    return <span className="text-ns-ink-muted">—</span>;
   return (
     <ul className="flex flex-col gap-1">
+      {suspended && (
+        <li className="flex items-center gap-1.5 whitespace-nowrap text-ns-destructive">
+          <Ban size={14} aria-hidden="true" />
+          AI suspended
+        </li>
+      )}
       {flags.map((flag) => (
         <li
           key={flag}
@@ -89,7 +102,10 @@ function TopUsers({
     ["Tokens", (u) => formatCompact(u.tokens)],
     ["Top-ups", (u) => number.format(u.purchasedCredits)],
     ["Days at limit", (u) => number.format(u.heavyDays)],
-    ["Flags", (u) => <FlagBadges flags={u.flags} />],
+    [
+      "Flags",
+      (u) => <FlagBadges flags={u.flags} suspended={u.suspension !== null} />,
+    ],
   ];
 
   return (

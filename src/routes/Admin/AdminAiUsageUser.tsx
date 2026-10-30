@@ -28,6 +28,7 @@ import {
   type RANGES,
 } from "./usageCharts";
 import type { UsageColumn } from "./usageColumns";
+import { AiAccessControl } from "./AiAccessControl";
 
 type Row = UsageDay & Omit<MemberUsageDay, "day">;
 
@@ -166,6 +167,13 @@ export default function AdminAiUsageUser() {
               </dd>
             </div>
           </dl>
+          <AiAccessControl
+            uid={uid}
+            who={name ? `@${name}` : "this member"}
+            suspension={usage.data.suspension}
+            isSelf={uid === user!.uid}
+            viewerId={user!.uid}
+          />
 
           <RangePicker value={rangeDays} onChange={setRangeDays}>
             {(usage.error || local.error) && (

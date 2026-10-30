@@ -146,7 +146,6 @@ interface TipTapEditorProps {
   userId?: string;
   onEditorReady?: (editor: Editor | null) => void;
   onTransaction?: (transaction: Transaction) => void;
-  onOpenCoWrite?: () => void;
   onSummarize: () => Promise<void>;
   onLink: () => void;
   /** Page scale in percent. */
@@ -163,7 +162,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   userId,
   onEditorReady,
   onTransaction,
-  onOpenCoWrite,
   onSummarize,
   onLink,
   zoom = 100,
@@ -335,14 +333,13 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
             ...slashCommandSuggestion(
               async () => fetchNextLineSuggestions(editorInstance),
               openImagePrompt,
-              () => onOpenCoWrite?.(),
               () => onSummarizeRef.current(),
             ),
           }),
         ];
       },
     });
-  }, [fetchNextLineSuggestions, openImagePrompt, onOpenCoWrite]);
+  }, [fetchNextLineSuggestions, openImagePrompt]);
 
   // ── Editor instance ────────────────────────────────────────────────────────
 

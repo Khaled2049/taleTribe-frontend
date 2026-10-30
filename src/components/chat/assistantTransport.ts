@@ -7,7 +7,7 @@ import {
   type AssistantContinuation,
 } from "@novelsync/assistant-contracts";
 import {
-  assistantFailureForStatus,
+  assistantFailureForResponse,
   type AssistantFailure,
 } from "./assistantRunModel";
 
@@ -158,7 +158,9 @@ export async function* streamAssistantRun(
   }
 
   if (!response.ok) {
-    throw new AssistantRequestError(assistantFailureForStatus(response.status));
+    throw new AssistantRequestError(
+      await assistantFailureForResponse(response),
+    );
   }
   if (!response.body) {
     throw new AssistantRequestError({

@@ -16,7 +16,8 @@ export async function verifyAuthContext(request: Request): Promise<AuthContext |
 
   const idToken = authHeader.split("Bearer ")[1];
   try {
-    const decodedToken = await getAuth().verifyIdToken(idToken);
+    // Checking revocation also refuses a disabled (banned) account before its token expires.
+    const decodedToken = await getAuth().verifyIdToken(idToken, true);
     return { userId: decodedToken.uid, idToken };
   } catch (error) {
     logger.error("Error verifying auth token", error);

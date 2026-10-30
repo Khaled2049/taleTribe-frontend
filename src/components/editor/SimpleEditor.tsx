@@ -1,7 +1,5 @@
 import "../style.css";
 import {
-  lazy,
-  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -19,7 +17,6 @@ import {
   PenLine,
   Save,
   ScrollText,
-  Sparkles,
   Upload,
   X,
 } from "lucide-react";
@@ -85,16 +82,6 @@ import { nextChapterPosition } from "@/utils/chapterPosition";
 import { loadWorkspace } from "@/lib/workspaceLoad";
 import { Button } from "@/components/ui/button";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
-// Co-Write only renders when opened; `?wizard=true` opens it on mount.
-const loadInteractiveStoryPanel = () =>
-  import("@/components/editor/InteractiveStoryPanel");
-const InteractiveStoryPanel = lazy(() =>
-  loadInteractiveStoryPanel().then((m) => ({
-    default: m.InteractiveStoryPanel,
-  })),
-);
-const preloadCoWrite = () => void loadInteractiveStoryPanel().catch(() => {});
-import { useCoWrite } from "@/hooks/useCoWrite";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useFullscreen } from "@/hooks/useFullscreen";
 import { useFocusModeStore } from "@/stores/focusModeStore";
@@ -140,7 +127,6 @@ export function SimpleEditor() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const openInteractivePanelOnMount = searchParams.get("wizard") === "true";
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
   const { uid } = useAuthIdentity();
@@ -175,15 +161,6 @@ export function SimpleEditor() {
     revisionChanged: () => void;
     unregister: () => void;
   } | null>(null);
-  const {
-    isInteractivePanelOpen,
-    setIsInteractivePanelOpen,
-    interactivePanelMode,
-    setInteractivePanelMode,
-    coWriteTurnCount,
-    setCoWriteTurnCount,
-    openCoWrite,
-  } = useCoWrite({ openInteractivePanelOnMount, editor });
 
   // Dialog states
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -1274,7 +1251,6 @@ export function SimpleEditor() {
                       onTransaction={(transaction) =>
                         bridgeRegistrationRef.current?.transaction(transaction)
                       }
-                      onOpenCoWrite={openCoWrite}
                       onSummarize={handleSummarizeChapter}
                       onLink={applyLink}
                     />
@@ -1312,40 +1288,8 @@ export function SimpleEditor() {
               </div>
             )}
 
-            {state.currentChapter && (!focusMode || isInteractivePanelOpen) && (
+            {state.currentChapter && !focusMode && (
               <div className="flex-shrink-0 border-t border-ns-border bg-ns-surface">
-                {isInteractivePanelOpen && editor && (
-                  <div className="border-b border-ns-border bg-transparent px-3 py-3 sm:px-4 sm:py-4">
-                    <div className="mx-auto w-full max-w-4xl">
-                      <Suspense
-                        fallback={
-                          <div className="flex items-center gap-2 font-ui text-xs text-ns-ink-muted">
-                            <Loader className="w-3.5 h-3.5 animate-spin" />
-                            Opening Co-Write…
-                          </div>
-                        }
-                      >
-                        <InteractiveStoryPanel
-                          storyId={state.story?.id || ""}
-                          chapterId={state.currentChapter?.id || ""}
-                          editor={editor}
-                          mode={interactivePanelMode}
-                          turnCount={coWriteTurnCount}
-                          onClose={() => {
-                            setIsInteractivePanelOpen(false);
-                            setCoWriteTurnCount(0);
-                          }}
-                          onChoiceInserted={() => {
-                            setInteractivePanelMode("continuation");
-                            setCoWriteTurnCount((n) => n + 1);
-                            handleEditorSave(editor.getHTML());
-                          }}
-                        />
-                      </Suspense>
-                    </div>
-                  </div>
-                )}
-
                 <div
                   className={`${
                     focusMode ? "hidden" : "hidden sm:flex"
@@ -1363,17 +1307,6 @@ export function SimpleEditor() {
                     >
                       <Maximize2 className="w-3.5 h-3.5 flex-shrink-0" />
                       <span className="hidden lg:inline">Focus</span>
-                    </button>
-                    <button
-                      onClick={openCoWrite}
-                      onPointerEnter={preloadCoWrite}
-                      onFocus={preloadCoWrite}
-                      title="Co-Write with AI"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-ns border border-ns-border font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink hover:border-ns-border-strong active:scale-[0.97] transition-all duration-150 whitespace-nowrap"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span className="hidden lg:inline">Co-Write</span>
-                      <span className="lg:hidden">AI</span>
                     </button>
                     <button
                       onClick={() => {
@@ -1444,22 +1377,13 @@ export function SimpleEditor() {
                     />
                     <WordCount editor={editor} />
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={enterFocusMode}
                       className="inline-flex justify-center rounded-ns border border-ns-border px-2 py-1.5 text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
                       aria-label="Enter focus mode"
                     >
                       <Maximize2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={openCoWrite}
-                      onPointerEnter={preloadCoWrite}
-                      onFocus={preloadCoWrite}
-                      className="inline-flex justify-center rounded-ns border border-ns-border px-2 py-1.5 text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
-                      aria-label="Open Co-Write"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => {

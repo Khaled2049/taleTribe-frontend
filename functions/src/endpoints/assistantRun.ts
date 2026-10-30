@@ -94,6 +94,10 @@ export async function handleAssistantRun(request: Request, response: Response) {
     const access = assistantRunConsumesQuota(req.body)
       ? await checkAiAccess(userId)
       : await describeAiAccess(userId);
+    if (access.suspended) {
+      res.status(403).json({ error: access.reason, code: "ai_suspended" });
+      return;
+    }
     if (!access.allowed) {
       // 402, not 429: the browser maps 402 to quota_exceeded and reserves 429
       // for rate limiting, which would tell a user who has spent the day's

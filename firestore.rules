@@ -157,6 +157,19 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // AI suspensions and their history, written by the setAiSuspension Function only.
+    match /aiSuspensions/{uid} {
+      allow read, write: if false;
+    }
+    match /aiSuspensionChanges/{changeId} {
+      allow read, write: if false;
+    }
+
+    // Platform bans and lifts, written by the setUserBan Function only.
+    match /userBanChanges/{changeId} {
+      allow read, write: if false;
+    }
+
     match /mcpAccess/{uid} {
       function isValidMcpRequest() {
         return request.resource.data.status == 'requested'

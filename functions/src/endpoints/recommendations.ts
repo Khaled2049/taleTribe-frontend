@@ -26,6 +26,7 @@ import * as logger from "firebase-functions/logger";
 import { z } from "zod";
 import { requireAuth } from "../infra/authService";
 import { corsOptions } from "../infra/corsConfig";
+import { AI_SUSPENDED_MESSAGE, getAiSuspension } from "../domain/aiSuspension";
 import {
   callRecommendationService,
   RecommendationServiceError,
@@ -175,6 +176,11 @@ const handleExplainRecommendations = requireAuth(
     }
 
     try {
+      // Explanations are a platform-funded LLM call whatever key the member has.
+      if (await getAiSuspension(userId)) {
+        response.status(403).json({ error: AI_SUSPENDED_MESSAGE });
+        return;
+      }
       const result = await callRecommendationService(
         "/recommend/explain",
         {

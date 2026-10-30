@@ -24,6 +24,8 @@ export { listInvites, reviewInvite } from "./endpoints/adminInvites";
 export { listMcpAccess, reviewMcpAccess } from "./endpoints/adminMcpAccess";
 export { adminRoles, setAdminRole } from "./endpoints/adminRoles";
 export { aiUsageSummary, aiUsageUser, aiUsageUsers } from "./endpoints/adminAiUsage";
+export { setAiSuspension } from "./endpoints/adminAiSuspension";
+export { setUserBan } from "./endpoints/adminBans";
 export {
   saveAiSettings,
   deleteAiSettings,

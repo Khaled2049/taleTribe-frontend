@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Search, Shield } from "lucide-react";
+import { Ban, Search, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { adminRoleService } from "@/cloudFunctions/adminRoles";
@@ -18,22 +18,28 @@ import {
 } from "@/services/AdminMemberService";
 import { InviteRequests } from "./InviteRequests";
 import { McpAccessRequests } from "./McpAccessRequests";
+import { BanDialog } from "./BanDialog";
 
 const control =
   "rounded-ns border border-ns-border bg-ns-elevated px-3 py-2 text-sm text-ns-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ns-accent disabled:opacity-50";
 
 type RoleChange = { member: AdminMember; admin: boolean };
+type BanChange = { member: AdminMember; banned: boolean };
 
 function MemberRow({
   member,
   isAdmin,
+  isBanned,
   isSelf,
   onChangeRole,
+  onChangeBan,
 }: {
   member: AdminMember;
   isAdmin: boolean | undefined;
+  isBanned: boolean | undefined;
   isSelf: boolean;
   onChangeRole: (change: RoleChange) => void;
+  onChangeBan: (change: BanChange) => void;
 }) {
   const name = `${member.firstName} ${member.lastName}`.trim();
   return (
@@ -72,6 +78,10 @@ function MemberRow({
           <span className="inline-flex items-center gap-1 font-semibold text-ns-gold">
             <Shield size={14} aria-hidden="true" /> Admin
           </span>
+        ) : isBanned ? (
+          <span className="inline-flex items-center gap-1 font-semibold text-ns-destructive">
+            <Ban size={14} aria-hidden="true" /> Banned
+          </span>
         ) : (
           <span className="text-ns-ink-secondary">Member</span>
         )}
@@ -89,13 +99,27 @@ function MemberRow({
           <span className="text-ns-ink-secondary">You</span>
         ) : (
           isAdmin !== undefined && (
-            <button
-              type="button"
-              onClick={() => onChangeRole({ member, admin: !isAdmin })}
-              className={`${control} ${isAdmin ? "text-ns-destructive" : ""}`}
-            >
-              {isAdmin ? "Remove admin" : "Make admin"}
-            </button>
+            <span className="flex gap-2">
+              {!isBanned && (
+                <button
+                  type="button"
+                  onClick={() => onChangeRole({ member, admin: !isAdmin })}
+                  className={`${control} ${isAdmin ? "text-ns-destructive" : ""}`}
+                >
+                  {isAdmin ? "Remove admin" : "Make admin"}
+                </button>
+              )}
+              {/* An admin loses the role before they can be banned. */}
+              {!isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => onChangeBan({ member, banned: !isBanned })}
+                  className={`${control} ${isBanned ? "" : "text-ns-destructive"}`}
+                >
+                  {isBanned ? "Unban" : "Ban"}
+                </button>
+              )}
+            </span>
           )
         )}
       </td>
@@ -107,24 +131,28 @@ function MemberPage({
   members,
   viewerId,
   onChangeRole,
+  onChangeBan,
 }: {
   members: AdminMember[];
   viewerId: string;
   onChangeRole: (change: RoleChange) => void;
+  onChangeBan: (change: BanChange) => void;
 }) {
   const uids = members.map((member) => member.userId);
   const roles = useQuery({
     queryKey: ["admin", viewerId, "roles", uids],
-    queryFn: () => adminRoleService.admins(uids),
+    queryFn: () => adminRoleService.statuses(uids),
     enabled: uids.length > 0,
   });
   return members.map((member) => (
     <MemberRow
       key={member.userId}
       member={member}
-      isAdmin={roles.data?.has(member.userId)}
+      isAdmin={roles.data?.admins.has(member.userId)}
+      isBanned={roles.data?.banned.has(member.userId)}
       isSelf={member.userId === viewerId}
       onChangeRole={onChangeRole}
+      onChangeBan={onChangeBan}
     />
   ));
 }
@@ -133,6 +161,7 @@ function MemberList({ viewerId }: { viewerId: string }) {
   const queryClient = useQueryClient();
   const [roleChange, setRoleChange] = useState<RoleChange | null>(null);
   const [roleError, setRoleError] = useState("");
+  const [banChange, setBanChange] = useState<BanChange | null>(null);
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const members = useInfiniteQuery({
@@ -247,6 +276,7 @@ function MemberList({ viewerId }: { viewerId: string }) {
                         setRoleError("");
                         setRoleChange(change);
                       }}
+                      onChangeBan={setBanChange}
                     />
                   ))}
                 </tbody>
@@ -289,6 +319,11 @@ function MemberList({ viewerId }: { viewerId: string }) {
           </p>
         )}
       </ConfirmDialog>
+      <BanDialog
+        change={banChange}
+        viewerId={viewerId}
+        onClose={() => setBanChange(null)}
+      />
     </>
   );
 }
