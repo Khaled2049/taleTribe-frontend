@@ -17,6 +17,14 @@ import {
 } from "lucide-react";
 import { PlotEvent, PlotLine } from "@/types/IPlot";
 import { STORY_BEAT_OPTIONS, PACING_OPTIONS } from "./plotOptions";
+import { ChapterSelect } from "./ChapterSelect";
+import type { ChapterOption } from "./plotChapters";
+import type { EventSaveStatus } from "./eventSaveQueue";
+
+const failed = (states: ReadonlyMap<string, EventSaveStatus>, id: string) => {
+  const state = states.get(id)?.state;
+  return state === "error" || state === "conflict";
+};
 
 // Tension color — semantic heat map
 function getTensionColor(level: number): string {
@@ -29,7 +37,7 @@ function getTensionColor(level: number): string {
 // Field column tracks for the md+ spreadsheet layout (excludes the left
 // rail). Below md the fields stack into a single labelled column.
 const FIELDS_COLS =
-  "md:[grid-template-columns:minmax(150px,1.3fr)_minmax(240px,2.4fr)_130px_84px_124px_158px_96px]";
+  "md:[grid-template-columns:minmax(150px,1.3fr)_minmax(240px,2.4fr)_140px_130px_84px_124px_158px_96px]";
 
 interface PlotGridProps {
   plotLine: PlotLine;
@@ -37,12 +45,15 @@ interface PlotGridProps {
   onDeleteEvent: (eventId: string) => void;
   onAddEvent: () => void;
   onOpenEditor: (event: PlotEvent) => void;
+  chapters: ChapterOption[];
+  saveStates: ReadonlyMap<string, EventSaveStatus>;
 }
 
 const cellInput =
   "w-full bg-transparent px-2 py-1.5 font-ui text-sm text-ns-ink placeholder-ns-ink-muted focus:outline-none focus:bg-ns-surface rounded-ns transition-colors";
-const cellSelect =
-  "w-full bg-transparent px-1.5 py-1.5 font-ui text-xs text-ns-ink focus:outline-none focus:bg-ns-surface rounded-ns transition-colors cursor-pointer capitalize";
+const cellSelectBase =
+  "w-full bg-transparent px-1.5 py-1.5 font-ui text-xs text-ns-ink focus:outline-none focus:bg-ns-surface rounded-ns transition-colors cursor-pointer";
+const cellSelect = `${cellSelectBase} capitalize`;
 const headerCell =
   "px-2 py-2 font-ui text-[10px] font-semibold uppercase tracking-widest text-white/90 border-r border-white/15 flex items-center";
 
@@ -71,6 +82,8 @@ const PlotGrid: React.FC<PlotGridProps> = ({
   onDeleteEvent,
   onAddEvent,
   onOpenEditor,
+  chapters,
+  saveStates,
 }) => {
   const updateTime = (event: PlotEvent, timeGap: string) => {
     const timeConstraint = timeGap
@@ -82,13 +95,14 @@ const PlotGrid: React.FC<PlotGridProps> = ({
   return (
     <div className="border border-ns-border rounded-ns-lg overflow-hidden shadow-ns-sm bg-ns-elevated">
       <div className="overflow-x-auto">
-        <div className="md:min-w-[1080px]">
+        <div className="md:min-w-[1150px]">
           {/* ── Header row (md+ only) ── */}
           <div className="hidden md:flex bg-ns-accent text-white sticky top-0 z-10">
             <div className="w-11 flex-shrink-0 border-r border-white/15" />
             <div className={`flex-1 grid ${FIELDS_COLS}`}>
               <div className={headerCell}>Plot point</div>
               <div className={headerCell}>Main plot</div>
+              <div className={headerCell}>Chapter</div>
               <div className={headerCell}>Time</div>
               <div className={`${headerCell} justify-center`}>Tension</div>
               <div className={headerCell}>Pacing</div>
@@ -137,6 +151,10 @@ const PlotGrid: React.FC<PlotGridProps> = ({
                             dragSnapshot.isDragging
                               ? "shadow-ns-xl ring-1 ring-ns-accent bg-ns-elevated"
                               : "hover:bg-ns-surface-hover"
+                          } ${
+                            failed(saveStates, event.id)
+                              ? "ring-1 ring-inset ring-ns-destructive"
+                              : ""
                           }`}
                         >
                           {/* Left rail: drag handle + index */}
@@ -183,6 +201,18 @@ const PlotGrid: React.FC<PlotGridProps> = ({
                                 placeholder="What happens here…"
                                 rows={2}
                                 className={`${cellInput} resize-none leading-snug`}
+                              />
+                            </Field>
+
+                            <Field label="Chapter">
+                              <ChapterSelect
+                                chapters={chapters}
+                                value={event.chapterId}
+                                onChange={(chapterId) =>
+                                  onUpdateEvent({ ...event, chapterId })
+                                }
+                                aria-label={`Chapter for ${event.name || "event"}`}
+                                className={cellSelectBase}
                               />
                             </Field>
 
@@ -281,7 +311,7 @@ const PlotGrid: React.FC<PlotGridProps> = ({
                                   onClick={() => onOpenEditor(event)}
                                   className="p-1 rounded-ns text-ns-ink-muted hover:text-ns-ink hover:bg-ns-surface transition-colors"
                                   aria-label="Open full editor"
-                                  title="Characters, location, dependencies…"
+                                  title="Characters, location, status…"
                                 >
                                   <Settings2 className="w-3.5 h-3.5" />
                                 </button>

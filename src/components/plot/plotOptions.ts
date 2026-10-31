@@ -1,4 +1,4 @@
-import { StoryBeatType, PacingType } from "@/types/IPlot";
+import { StoryBeatType, PacingType, PlotEventStatus } from "@/types/IPlot";
 
 // Shared select options for plot event metadata, used by both the
 // EventEditModal and the PlotGrid spreadsheet view.
@@ -29,4 +29,10 @@ export const PACING_OPTIONS: {
     description: "Balanced narrative flow",
   },
   { value: "fast", label: "Fast", description: "Action-packed, quick cuts" },
+];
+
+export const STATUS_OPTIONS: { value: PlotEventStatus; label: string }[] = [
+  { value: "planned", label: "Planned" },
+  { value: "in_progress", label: "In progress" },
+  { value: "written", label: "Written" },
 ];

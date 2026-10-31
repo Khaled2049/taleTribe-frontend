@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Book, ChevronDown, PlusCircle, Trash2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DragDropContext, DropResult } from "@hello-pangea/dnd";
@@ -20,7 +20,7 @@ import {
   DEFAULT_PLOT_EVENT_VALUES,
   PLOT_TEMPLATES,
 } from "@/types/IPlot";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/queries/queryKeys";
 import { useCharacters } from "@/hooks/queries/useCharacterQueries";
 import { usePlaces } from "@/hooks/queries/usePlaceQueries";
@@ -31,14 +31,23 @@ import {
   useDeletePlotLine,
   usePlots,
   useReorderEvents,
-  useUpdateEvent,
   useUpdatePlotLineMeta,
 } from "@/hooks/queries/usePlotQueries";
+import { workspaceChapterIndexQuery } from "@/hooks/queries/workspaceStory";
+import { useEventSaveQueue } from "./useEventSaveQueue";
+import {
+  type EventSaveState,
+  eventsInState,
+  lineSaveState,
+  withLocalEdits,
+} from "./eventSaveQueue";
+import { SaveIndicator } from "./SaveIndicator";
+import { chapterOptions } from "./plotChapters";
 import { useParams } from "react-router-dom";
 import { useAuthContext } from "@/contexts/AuthContext";
 
-/** Inline grid edits coalesce into one write per event after this idle gap. */
-const INLINE_SAVE_DEBOUNCE_MS = 600;
+const failedLine = (state: EventSaveState | null) =>
+  state === "error" || state === "conflict";
 
 const PlotTimeline: React.FC = () => {
   const { storyId } = useParams<{ storyId: string }>();
@@ -55,14 +64,24 @@ const PlotTimeline: React.FC = () => {
   const updatePlotLineMeta = useUpdatePlotLineMeta(storyId);
   const deletePlotLineMutation = useDeletePlotLine(storyId);
   const addEventMutation = useAddEvent(storyId);
-  const updateEventMutation = useUpdateEvent(storyId);
   const deleteEventMutation = useDeleteEvent(storyId);
   const reorderEventsMutation = useReorderEvents(storyId);
 
+  const { queue, statuses } = useEventSaveQueue(storyId);
+  // Every event with a local value has a status, so `statuses` tracks them.
   const plotLines: PlotLine[] = useMemo(
-    () => rawPlotLines ?? [],
-    [rawPlotLines],
+    () =>
+      withLocalEdits(rawPlotLines ?? [], (id) =>
+        statuses.has(id) ? (queue?.local(id) ?? null) : null,
+      ),
+    [rawPlotLines, queue, statuses],
   );
+
+  const { data: chapterIndex } = useQuery({
+    ...workspaceChapterIndexQuery(user?.uid ?? "", storyId ?? ""),
+    enabled: !!user?.uid && !!storyId,
+  });
+  const chapters = useMemo(() => chapterOptions(chapterIndex), [chapterIndex]);
 
   const templates: TemplateData[] = PLOT_TEMPLATES;
   const [isPlotLineModalOpen, setisPlotLineModalOpen] = useState(false);
@@ -75,24 +94,8 @@ const PlotTimeline: React.FC = () => {
 
   const [activePlotLineId, setActivePlotLineId] = useState<string | null>(null);
 
-  // Debounced per-event persistence for inline cell edits, keyed plotLineId:eventId.
-  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const pendingEdits = useRef<
-    Record<string, { plotLineId: string; event: PlotEvent }>
-  >({});
-
-  // Navigating away mid-debounce must not lose the last keystrokes — flush, don't drop.
-  const flushPendingRef = useRef<() => void>(() => {});
-  flushPendingRef.current = () => {
-    for (const key of Object.keys(pendingEdits.current)) {
-      clearTimeout(saveTimers.current[key]);
-      delete saveTimers.current[key];
-      const pending = pendingEdits.current[key];
-      delete pendingEdits.current[key];
-      updateEventMutation.mutate({ ...pending, revalidate: false });
-    }
-  };
-  useEffect(() => () => flushPendingRef.current(), []);
+  // Leaving the page sends debounced edits now rather than waiting out the timer.
+  useEffect(() => () => queue?.flush(), [queue]);
 
   // Keep an active plotline selected as the list changes
   useEffect(() => {
@@ -135,13 +138,10 @@ const PlotTimeline: React.FC = () => {
     });
   };
 
-  // Inline cell edit. The cache is written on the keystroke so the grid stays
-  // responsive; the network write is debounced per event, so typing across cells
-  // collapses into one write per event instead of one per character.
-  const updateEventInline = (plotLineId: string, updatedEvent: PlotEvent) => {
+  // The cache is written on each keystroke so the grid stays responsive; the
+  // save queue debounces the network write per event.
+  const writeEventLocally = (plotLineId: string, event: PlotEvent) => {
     if (!storyId) return;
-    const event = { ...updatedEvent, updatedAt: new Date().toISOString() };
-
     queryClient.setQueryData<PlotLine[]>(
       queryKeys.plots.byStory(storyId),
       (old) =>
@@ -154,26 +154,35 @@ const PlotTimeline: React.FC = () => {
             : line,
         ),
     );
+  };
 
-    const timerKey = `${plotLineId}:${event.id}`;
-    if (saveTimers.current[timerKey]) {
-      clearTimeout(saveTimers.current[timerKey]);
+  const updateEventInline = (plotLineId: string, updatedEvent: PlotEvent) => {
+    const event = { ...updatedEvent, updatedAt: new Date().toISOString() };
+    writeEventLocally(plotLineId, event);
+    queue?.schedule(plotLineId, event);
+  };
+
+  const retrySaves = (plotLineId: string) =>
+    queue?.retry(eventsInState(statuses, plotLineId, "error"));
+
+  // Drops the conflicting local edits and takes the server's copy.
+  const reloadConflicts = (plotLineId: string) => {
+    if (!storyId) return;
+    for (const id of eventsInState(statuses, plotLineId, "conflict")) {
+      queue?.discard(id);
     }
-    pendingEdits.current[timerKey] = { plotLineId, event };
-    saveTimers.current[timerKey] = setTimeout(() => {
-      delete saveTimers.current[timerKey];
-      delete pendingEdits.current[timerKey];
-      // No settle-time refetch: other cells may still be inside their debounce,
-      // and server state would momentarily revert them under the user's cursor.
-      updateEventMutation.mutate({ plotLineId, event, revalidate: false });
-    }, INLINE_SAVE_DEBOUNCE_MS);
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.plots.byStory(storyId),
+    });
   };
 
   const deleteEvent = (plotLineId: string, eventId: string) => {
     if (!storyId) return;
-    const siblings = plotLines.find((line) => line.id === plotLineId)?.events;
-    const revision = siblings?.find((event) => event.id === eventId)?.revision;
-    deleteEventMutation.mutate({ plotLineId, eventId, revision, siblings });
+    const revision = plotLines
+      .find((line) => line.id === plotLineId)
+      ?.events.find((event) => event.id === eventId)?.revision;
+    queue?.discard(eventId);
+    deleteEventMutation.mutate({ plotLineId, eventId, revision });
   };
 
   const removePlotline = (plotLineId: string) => {
@@ -188,11 +197,11 @@ const PlotTimeline: React.FC = () => {
     closeEditPlotLineModal();
   };
 
-  const handleSaveEvent = async () => {
-    if (!storyId || !editingEvent) return;
-    await updateEventMutation.mutateAsync({
-      plotLineId: editingEvent.plotLineId,
-      event: editingEvent.event,
+  const handleSaveEvent = () => {
+    if (!editingEvent) return;
+    writeEventLocally(editingEvent.plotLineId, editingEvent.event);
+    queue?.schedule(editingEvent.plotLineId, editingEvent.event, {
+      immediate: true,
     });
     closeEditEventModal();
   };
@@ -366,6 +375,16 @@ const PlotTimeline: React.FC = () => {
                       <span className="font-ui text-[10px] tabular-nums opacity-60">
                         {pl.events.length}
                       </span>
+                      {failedLine(lineSaveState(statuses, pl.id)) && (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-ns-destructive"
+                          title="Some changes in this plot line didn't save"
+                        >
+                          <span className="sr-only">
+                            Some changes in this plot line didn't save
+                          </span>
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -386,6 +405,11 @@ const PlotTimeline: React.FC = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <SaveIndicator
+                        state={lineSaveState(statuses, activePlotLine.id)}
+                        onRetry={() => retrySaves(activePlotLine.id)}
+                        onReload={() => reloadConflicts(activePlotLine.id)}
+                      />
                       <button
                         onClick={() => openEditPlotlineModal(activePlotLine)}
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-ns border border-ns-border text-ns-ink-secondary font-ui text-xs hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
@@ -415,6 +439,8 @@ const PlotTimeline: React.FC = () => {
                       onOpenEditor={(ev) =>
                         openEditEventModal(activePlotLine.id, ev)
                       }
+                      chapters={chapters}
+                      saveStates={statuses}
                     />
                   </DragDropContext>
                 </div>
@@ -441,6 +467,7 @@ const PlotTimeline: React.FC = () => {
         setEditingEvent={setEditingEvent}
         characters={characters}
         places={places}
+        chapters={chapters}
       />
     </div>
   );

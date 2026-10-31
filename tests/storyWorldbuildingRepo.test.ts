@@ -87,28 +87,25 @@ describe("StoryWorldbuildingRepo If-Match", () => {
     expect(calls[1].ifMatch).toBe("9");
   });
 
-  it("counts a reorder's line bump and renumbering as own writes", async () => {
+  it("counts a reorder's line bump as an own write, and leaves events alone", async () => {
     const repo = new StoryWorldbuildingRepo();
     const before = { ...line(3), events: [event("e1", 7), event("e2", 3)] };
-    respondWith([event("e2", 4), event("e1", 8)], line(4), event("e1", 9));
+    respondWith([event("e2", 3), event("e1", 7)], line(4), event("e1", 8));
 
     await repo.reorderEvents("s1", before, ["e2", "e1"]);
     await repo.updatePlotMeta("s1", { ...line(3), name: "Renamed" });
     await repo.updateEvent("s1", "l1", event("e1", 7));
 
-    expect(calls.map((call) => call.ifMatch)).toEqual(["3", "4", "8"]);
+    expect(calls.map((call) => call.ifMatch)).toEqual(["3", "4", "7"]);
   });
 
-  it("does not adopt another writer's change carried by a renumbered sibling", async () => {
+  it("does not adopt another writer's change carried by a sibling after a delete", async () => {
     const repo = new StoryWorldbuildingRepo();
-    respondWith([event("e1", 3)], event("e1", 4));
+    respondWith([event("e1", 3)], event("e1", 2));
 
-    await repo.deleteEvent("s1", "l1", "e2", 1, [
-      event("e1", 1),
-      event("e2", 1),
-    ]);
+    await repo.deleteEvent("s1", "l1", "e2", 1);
     await repo.updateEvent("s1", "l1", event("e1", 1));
 
-    expect(calls.map((call) => call.ifMatch)).toEqual(["1", "2"]);
+    expect(calls.map((call) => call.ifMatch)).toEqual(["1", "1"]);
   });
 });

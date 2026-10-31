@@ -45,21 +45,6 @@ export class StoryWorldbuildingRepo {
     if (x.revision) this.written.set(`${kind}:${x.id}`, x.revision);
     return x;
   }
-  private renumbered(
-    before: { id: string; revision?: number }[] | undefined,
-    after: PlotEvent[],
-  ) {
-    const known = new Map(
-      (before ?? []).map((e) => [
-        e.id,
-        Math.max(e.revision ?? 0, this.written.get(`event:${e.id}`) ?? 0),
-      ]),
-    );
-    for (const e of after) {
-      const k = known.get(e.id);
-      if (k) this.written.set(`event:${e.id}`, k + 1);
-    }
-  }
   private rev(kind: string, id: string, snapshot?: number): number {
     const rev = Math.max(snapshot ?? 0, this.written.get(`${kind}:${id}`) ?? 0);
     if (!rev)
@@ -258,7 +243,6 @@ export class StoryWorldbuildingRepo {
     lineId: string,
     id: string,
     revision?: number,
-    siblings?: { id: string; revision?: number }[],
   ) {
     const events = (
       await this.request<PlotEvent[]>(
@@ -268,7 +252,6 @@ export class StoryWorldbuildingRepo {
         this.rev("event", id, revision),
       )
     ).map((x) => this.event(x));
-    this.renumbered(siblings, events);
     this.written.delete(`event:${id}`);
     return events;
   }
@@ -282,7 +265,6 @@ export class StoryWorldbuildingRepo {
         revision,
       )
     ).map((x) => this.event(x));
-    this.renumbered(line.events, events);
     this.written.set(`plot:${line.id}`, revision + 1);
     return events;
   }
