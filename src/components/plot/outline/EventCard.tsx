@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { AlertTriangle, ChevronDown } from "lucide-react";
 import type { Character, Place } from "@novelsync/story-data-client";
 import type { PlotEvent } from "@/types/IPlot";
 import { type CardMenuItem, EventMenu } from "./EventMenu";
@@ -21,7 +21,35 @@ interface EventCardProps {
   menu: CardMenuItem[];
   /** Rendered before the body, e.g. a drag handle. */
   handle?: React.ReactNode;
+  requires?: { id: string; name: string }[];
+  enables?: { id: string; name: string }[];
+  /** Prerequisites placed after this event and not marked intentional. */
+  late?: number;
+  onOpenEvent?: (eventId: string) => void;
 }
+
+const linkList = (
+  items: { id: string; name: string }[],
+  onOpen?: (id: string) => void,
+) =>
+  items.length === 0
+    ? "—"
+    : items.map((item, i) => (
+        <React.Fragment key={item.id}>
+          {i > 0 && ", "}
+          {onOpen ? (
+            <button
+              type="button"
+              onClick={() => onOpen(item.id)}
+              className="text-ns-accent hover:underline"
+            >
+              {item.name || "Untitled event"}
+            </button>
+          ) : (
+            item.name || "Untitled event"
+          )}
+        </React.Fragment>
+      ));
 
 const inlineField =
   "w-full bg-transparent rounded-ns px-1 -mx-1 focus:outline-none focus:bg-ns-surface focus:ring-1 focus:ring-ns-accent";
@@ -36,6 +64,10 @@ export const EventCard: React.FC<EventCardProps> = ({
   onChange,
   menu,
   handle,
+  requires = [],
+  enables = [],
+  late = 0,
+  onOpenEvent,
 }) => {
   const [open, setOpen] = useState(false);
   const failed = saveState === "error" || saveState === "conflict";
@@ -96,6 +128,26 @@ export const EventCard: React.FC<EventCardProps> = ({
         />
 
         <div className="flex flex-wrap items-center justify-between gap-2">
+          {(requires.length > 0 || enables.length > 0 || late > 0) && (
+            <span className="inline-flex items-center gap-1 font-ui text-[11px] text-ns-ink-muted">
+              {late > 0 && (
+                <AlertTriangle
+                  className="w-3.5 h-3.5 text-ns-destructive"
+                  aria-label={
+                    late === 1
+                      ? "A prerequisite comes later in the manuscript"
+                      : `${late} prerequisites come later in the manuscript`
+                  }
+                />
+              )}
+              {[
+                requires.length > 0 && `needs ${requires.length}`,
+                enables.length > 0 && `enables ${enables.length}`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          )}
           <EventStatusControl
             size="sm"
             value={event.status}
@@ -137,6 +189,14 @@ export const EventCard: React.FC<EventCardProps> = ({
             <dt className="text-ns-ink-muted">Time</dt>
             <dd className="text-ns-ink-secondary">
               {event.timeConstraint?.timeGap || "—"}
+            </dd>
+            <dt className="text-ns-ink-muted">Requires</dt>
+            <dd className="text-ns-ink-secondary">
+              {linkList(requires, onOpenEvent)}
+            </dd>
+            <dt className="text-ns-ink-muted">Enables</dt>
+            <dd className="text-ns-ink-secondary">
+              {linkList(enables, onOpenEvent)}
             </dd>
           </dl>
         )}

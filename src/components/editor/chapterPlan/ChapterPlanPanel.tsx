@@ -137,6 +137,14 @@ export const ChapterPlanPanel: React.FC<ChapterPlanPanelProps> = ({
           characters={characters}
           places={places}
           chapters={options}
+          lines={plotLines}
+          onOpenEvent={(eventId) => {
+            const line = plotLines.find((l) =>
+              l.events.some((e) => e.id === eventId),
+            );
+            setEditing(null);
+            navigate(plotEventPath(storyId, line?.id, eventId));
+          }}
         />,
         document.body,
       )}

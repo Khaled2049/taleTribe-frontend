@@ -1,4 +1,4 @@
-import { PlotEvent, StoryBeatType, PacingType } from "@/types/IPlot";
+import { PlotEvent, PlotLine, StoryBeatType, PacingType } from "@/types/IPlot";
 import { useEffect, useRef, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Character } from "@novelsync/story-data-client";
@@ -7,6 +7,7 @@ import { MultiSelectCharacters } from "./MultiSelectCharacters";
 import { LocationSelect } from "./LocationSelect";
 import { STORY_BEAT_OPTIONS, PACING_OPTIONS } from "./plotOptions";
 import { ChapterSelect } from "./ChapterSelect";
+import { RequirementsEditor } from "./RequirementsEditor";
 import { EventStatusControl } from "./EventStatusControl";
 import type { ChapterOption } from "./plotChapters";
 
@@ -26,6 +27,9 @@ interface EventEditModalProps {
   characters?: Character[];
   places?: Place[];
   chapters: ChapterOption[];
+  /** Every plot line; enables the Links tab for requirements. */
+  lines?: PlotLine[];
+  onOpenEvent?: (eventId: string) => void;
 }
 
 const TENSION_LABELS: Record<number, string> = {
@@ -50,6 +54,8 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
   characters = [],
   places = [],
   chapters,
+  lines,
+  onOpenEvent,
 }) => {
   const [activeTab, setActiveTab] = useState("basic");
   // Track whether a click started on the backdrop, so dragging/selecting from
@@ -141,10 +147,13 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-3 mb-4">
+            <TabsList
+              className={`grid w-full mb-4 ${lines ? "grid-cols-4" : "grid-cols-3"}`}
+            >
               <TabsTrigger value="basic">Basic</TabsTrigger>
               <TabsTrigger value="characters">Characters</TabsTrigger>
               <TabsTrigger value="tension">Tension</TabsTrigger>
+              {lines && <TabsTrigger value="links">Links</TabsTrigger>}
             </TabsList>
 
             <TabsContent value="basic" className="space-y-4">
@@ -330,6 +339,18 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
                 />
               </div>
             </TabsContent>
+
+            {lines && (
+              <TabsContent value="links">
+                <RequirementsEditor
+                  event={event}
+                  lines={lines}
+                  chapters={chapters}
+                  onChange={(dependencies) => updateEvent({ dependencies })}
+                  onOpenEvent={onOpenEvent}
+                />
+              </TabsContent>
+            )}
           </Tabs>
 
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-6 border-t border-ns-border mt-4">

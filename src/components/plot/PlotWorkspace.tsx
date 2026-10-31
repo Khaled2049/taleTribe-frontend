@@ -275,6 +275,16 @@ const PlotWorkspace: React.FC = () => {
 
   const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null);
 
+  // Following a requirement link: select its line (for the grid), then scroll
+  // to and mark the event, closing the dialog it was opened from.
+  const openEvent = (eventId: string) => {
+    const line = plotLines.find((l) => l.events.some((e) => e.id === eventId));
+    if (!line) return;
+    closeEditEventModal();
+    setActivePlotLineId(line.id);
+    setHighlightedEventId(eventId);
+  };
+
   // Chapter reorders and line moves update the cache at once and roll back on
   // failure; the server's answer (every line) replaces it on success.
   const runMove = async (action: MoveAction) => {
@@ -675,6 +685,7 @@ const PlotWorkspace: React.FC = () => {
               onAddPlotLine={addPlotLine}
               onEditLine={openEditPlotlineModal}
               onDeleteLine={setPlotLineToDelete}
+              onOpenEvent={openEvent}
             />
           ) : (
             <PlotGridView
@@ -735,6 +746,8 @@ const PlotWorkspace: React.FC = () => {
         characters={characters}
         places={places}
         chapters={chapters}
+        lines={plotLines}
+        onOpenEvent={openEvent}
       />
     </div>
   );

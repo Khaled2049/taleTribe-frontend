@@ -25,6 +25,7 @@ import {
   type PlotFilter,
 } from "./outlineGroups";
 import { PlotFilters } from "./PlotFilters";
+import { enabledBy, lateRequirements, manuscriptOrder } from "../requirements";
 import {
   describeMove,
   type MoveAction,
@@ -54,6 +55,7 @@ interface OutlineViewProps {
   onAddPlotLine: () => void;
   onEditLine: (line: PlotLine) => void;
   onDeleteLine: (line: PlotLine) => void;
+  onOpenEvent: (eventId: string) => void;
 }
 
 const chapterTag = (chapters: ChapterOption[], id: string | null) => {
@@ -92,6 +94,7 @@ export const OutlineView: React.FC<OutlineViewProps> = ({
   onAddPlotLine,
   onEditLine,
   onDeleteLine,
+  onOpenEvent,
 }) => {
   const [filter, setFilter] = useState<PlotFilter>({});
   const key = collapsedKey(storyId, group);
@@ -118,6 +121,17 @@ export const OutlineView: React.FC<OutlineViewProps> = ({
   };
 
   const filtering = isFiltering(filter);
+  const order = useMemo(
+    () => manuscriptOrder(lines, chapters),
+    [lines, chapters],
+  );
+  const names = useMemo(
+    () =>
+      new Map(
+        lines.flatMap((l) => l.events.map((e) => [e.id, e.name] as const)),
+      ),
+    [lines],
+  );
   const shownLines = useMemo(() => filterLines(lines, filter), [lines, filter]);
   const sections = useMemo(
     () =>
@@ -306,6 +320,20 @@ export const OutlineView: React.FC<OutlineViewProps> = ({
                               highlighted={highlightedEventId === event.id}
                               onChange={(next) => onChange(line.id, next)}
                               menu={cardMenu(section, index, line, event)}
+                              requires={event.dependencies
+                                .filter((d) => names.has(d.eventId))
+                                .map((d) => ({
+                                  id: d.eventId,
+                                  name: names.get(d.eventId) ?? "",
+                                }))}
+                              enables={enabledBy(lines, event.id).map(
+                                ({ event: next }) => ({
+                                  id: next.id,
+                                  name: next.name,
+                                }),
+                              )}
+                              late={lateRequirements(event, order).length}
+                              onOpenEvent={onOpenEvent}
                               handle={
                                 filtering ? undefined : (
                                   <span

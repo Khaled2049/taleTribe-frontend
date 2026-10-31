@@ -23,13 +23,17 @@ export interface TimeConstraint {
   timeGap?: string; // "2 days later", "moments before"
 }
 
-// Event dependency for cause-effect relationships
+/**
+ * A "requires" link. On `dependencies` it names a prerequisite; on
+ * `dependents` (derived by the server) an event that requires this one.
+ */
 export interface EventDependency {
   eventId: string;
   plotLineId: string;
-  relationshipType:
-    "causes" | "requires" | "blocks" | "enables" | "contradicts";
+  relationshipType: "requires";
   description?: string;
+  /** The writer accepted that this prerequisite comes later in the manuscript. */
+  outOfOrderOk?: boolean;
 }
 
 export interface PlotEvent {
@@ -42,7 +46,7 @@ export interface PlotEvent {
   characterIds: string[];
   locationId: string | null;
 
-  // Dependencies (bidirectional for fast lookups)
+  // Requirements; `dependents` is the server's reverse view of them.
   dependencies: EventDependency[];
   dependents: EventDependency[];
 
