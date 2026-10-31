@@ -1,5 +1,21 @@
-import React from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { Columns3, Pencil, Trash2 } from "lucide-react";
+import type { Character, Place } from "@novelsync/story-data-client";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type { CardMenuItem } from "../outline/EventMenu";
+import {
+  type ColumnId,
+  OPTIONAL_COLUMNS,
+  rememberColumns,
+  rememberedColumns,
+  visibleColumns,
+} from "./plotColumns";
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd";
 import type { PlotEvent, PlotLine } from "@/types/IPlot";
 import PlotGrid from "../PlotGrid";
@@ -21,10 +37,11 @@ interface PlotGridViewProps {
   chapters: ChapterOption[];
   statuses: ReadonlyMap<string, EventSaveStatus>;
   highlightedEventId: string | null;
+  characters: Character[];
+  places: Place[];
   onChange: (lineId: string, event: PlotEvent) => void;
-  onDeleteEvent: (lineId: string, eventId: string) => void;
   onAddEvent: (lineId: string) => void;
-  onOpenEditor: (lineId: string, event: PlotEvent) => void;
+  menuFor: (line: PlotLine, event: PlotEvent, index: number) => CardMenuItem[];
   onEditLine: (line: PlotLine) => void;
   onDeleteLine: (line: PlotLine) => void;
   onRetry: (lineId: string) => void;
@@ -40,10 +57,11 @@ export const PlotGridView: React.FC<PlotGridViewProps> = ({
   chapters,
   statuses,
   highlightedEventId,
+  characters,
+  places,
   onChange,
-  onDeleteEvent,
   onAddEvent,
-  onOpenEditor,
+  menuFor,
   onEditLine,
   onDeleteLine,
   onRetry,
@@ -51,6 +69,15 @@ export const PlotGridView: React.FC<PlotGridViewProps> = ({
   onDragEnd,
 }) => {
   const active = lines.find((line) => line.id === activeLineId) ?? null;
+  const [chosen, setChosen] = useState<Set<ColumnId>>(rememberedColumns);
+  const columns = useMemo(() => visibleColumns(chosen), [chosen]);
+  const toggleColumn = (id: ColumnId) => {
+    const next = new Set(chosen);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setChosen(next);
+    rememberColumns(next);
+  };
   return (
     <>
       <div className="flex items-center gap-1 overflow-x-auto border-b border-ns-border">
@@ -99,6 +126,31 @@ export const PlotGridView: React.FC<PlotGridViewProps> = ({
               )}
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-ns border border-ns-border text-ns-ink-secondary font-ui text-xs hover:bg-ns-surface-hover hover:text-ns-ink transition-colors">
+                  <Columns3 className="w-3.5 h-3.5" aria-hidden />
+                  Columns
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="border border-ns-border bg-ns-elevated shadow-ns-lg rounded-ns-lg p-1 min-w-[220px]"
+                >
+                  <DropdownMenuLabel className="px-3 py-1.5 font-ui text-[10px] uppercase tracking-widest text-ns-ink-muted">
+                    Extra columns
+                  </DropdownMenuLabel>
+                  {OPTIONAL_COLUMNS.map((column) => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      checked={chosen.has(column.id)}
+                      onCheckedChange={() => toggleColumn(column.id)}
+                      onSelect={(e) => e.preventDefault()}
+                      className="font-ui text-sm text-ns-ink"
+                    >
+                      {column.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <SaveIndicator
                 state={lineSaveState(statuses, active.id)}
                 onRetry={() => onRetry(active.id)}
@@ -124,11 +176,13 @@ export const PlotGridView: React.FC<PlotGridViewProps> = ({
           <DragDropContext onDragEnd={onDragEnd}>
             <PlotGrid
               plotLine={active}
+              columns={columns}
               onUpdateEvent={(event) => onChange(active.id, event)}
-              onDeleteEvent={(id) => onDeleteEvent(active.id, id)}
               onAddEvent={() => onAddEvent(active.id)}
-              onOpenEditor={(event) => onOpenEditor(active.id, event)}
+              menuFor={(event, index) => menuFor(active, event, index)}
               chapters={chapters}
+              characters={characters}
+              places={places}
               saveStates={statuses}
               highlightedEventId={highlightedEventId}
             />

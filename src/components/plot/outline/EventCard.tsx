@@ -1,26 +1,13 @@
 import React, { useState } from "react";
-import { ChevronDown, MoreHorizontal } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { Character, Place } from "@novelsync/story-data-client";
 import type { PlotEvent } from "@/types/IPlot";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { type CardMenuItem, EventMenu } from "./EventMenu";
 import { EventStatusControl } from "../EventStatusControl";
 import { PACING_OPTIONS, STORY_BEAT_OPTIONS } from "../plotOptions";
 import type { EventSaveState } from "../eventSaveQueue";
 
-export interface CardMenuItem {
-  label: string;
-  onSelect: () => void;
-  destructive?: boolean;
-  disabled?: boolean;
-  /** Draws a separator above this item. */
-  separated?: boolean;
-}
+export type { CardMenuItem };
 
 interface EventCardProps {
   event: PlotEvent;
@@ -89,34 +76,12 @@ export const EventCard: React.FC<EventCardProps> = ({
           >
             Tension {event.tensionLevel}
           </span>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              id={`plot-event-${event.id}-menu`}
-              aria-label={`Actions for ${name}`}
-              className="flex-shrink-0 mt-2 p-1.5 rounded-ns text-ns-ink-muted hover:text-ns-ink hover:bg-ns-surface-hover"
-            >
-              <MoreHorizontal className="w-4 h-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="border border-ns-border bg-ns-elevated shadow-ns-lg rounded-ns-lg p-1 min-w-[200px]"
-            >
-              {menu.map((item) => (
-                <React.Fragment key={item.label}>
-                  {item.separated && <DropdownMenuSeparator />}
-                  <DropdownMenuItem
-                    onSelect={item.onSelect}
-                    disabled={item.disabled}
-                    className={`px-3 py-2 rounded-ns cursor-pointer font-ui text-sm data-[disabled]:opacity-40 data-[disabled]:cursor-default ${
-                      item.destructive ? "text-ns-destructive" : "text-ns-ink"
-                    }`}
-                  >
-                    {item.label}
-                  </DropdownMenuItem>
-                </React.Fragment>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <EventMenu
+            eventId={event.id}
+            eventName={name}
+            items={menu}
+            className="mt-2"
+          />
         </div>
 
         <textarea

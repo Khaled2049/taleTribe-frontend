@@ -377,6 +377,45 @@ const PlotWorkspace: React.FC = () => {
     },
   ];
 
+  // The grid's row menu: the same actions as an outline card, ordered by plot line.
+  const gridMenuFor = (
+    line: PlotLine,
+    event: PlotEvent,
+    index: number,
+  ): CardMenuItem[] => {
+    const swap = (to: number) => {
+      const ids = line.events.map((e) => e.id);
+      ids.splice(index, 1);
+      ids.splice(to, 0, event.id);
+      void runMove({ kind: "lineOrder", lineId: line.id, orderedIds: ids });
+    };
+    return [
+      {
+        label: "Move up",
+        disabled: index === 0,
+        onSelect: () => swap(index - 1),
+      },
+      {
+        label: "Move down",
+        disabled: index === line.events.length - 1,
+        onSelect: () => swap(index + 1),
+      },
+      {
+        label: "Assign chapter…",
+        separated: true,
+        onSelect: () => setMoveTarget({ mode: "chapter", line, event }),
+      },
+      {
+        label: "Move to plot line…",
+        disabled: plotLines.length < 2,
+        onSelect: () => setMoveTarget({ mode: "line", line, event }),
+      },
+      ...menuFor(line, event).map((item, i) =>
+        i === 0 ? { ...item, separated: true } : item,
+      ),
+    ];
+  };
+
   const confirmPlotLineDelete = async () => {
     const line = plotLineToDelete;
     if (!storyId || !line) return;
@@ -645,10 +684,11 @@ const PlotWorkspace: React.FC = () => {
               chapters={chapters}
               statuses={statuses}
               highlightedEventId={highlightedEventId}
+              characters={characters}
+              places={places}
               onChange={updateEventInline}
-              onDeleteEvent={deleteEvent}
               onAddEvent={(lineId) => addEvent(lineId)}
-              onOpenEditor={openEditEventModal}
+              menuFor={gridMenuFor}
               onEditLine={openEditPlotlineModal}
               onDeleteLine={setPlotLineToDelete}
               onRetry={retrySaves}
