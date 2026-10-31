@@ -47,6 +47,7 @@ interface PlotGridProps {
   onOpenEditor: (event: PlotEvent) => void;
   chapters: ChapterOption[];
   saveStates: ReadonlyMap<string, EventSaveStatus>;
+  highlightedEventId?: string | null;
 }
 
 const cellInput =
@@ -84,6 +85,7 @@ const PlotGrid: React.FC<PlotGridProps> = ({
   onOpenEditor,
   chapters,
   saveStates,
+  highlightedEventId,
 }) => {
   const updateTime = (event: PlotEvent, timeGap: string) => {
     const timeConstraint = timeGap
@@ -144,6 +146,7 @@ const PlotGrid: React.FC<PlotGridProps> = ({
                         dragSnapshot: DraggableStateSnapshot,
                       ) => (
                         <div
+                          id={`plot-event-${event.id}`}
                           ref={dragProvided.innerRef}
                           {...dragProvided.draggableProps}
                           style={dragProvided.draggableProps.style}
@@ -154,7 +157,9 @@ const PlotGrid: React.FC<PlotGridProps> = ({
                           } ${
                             failed(saveStates, event.id)
                               ? "ring-1 ring-inset ring-ns-destructive"
-                              : ""
+                              : highlightedEventId === event.id
+                                ? "bg-ns-accent-subtle"
+                                : ""
                           }`}
                         >
                           {/* Left rail: drag handle + index */}

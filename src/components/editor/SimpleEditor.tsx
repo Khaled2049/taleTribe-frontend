@@ -87,6 +87,7 @@ import { useFullscreen } from "@/hooks/useFullscreen";
 import { useFocusModeStore } from "@/stores/focusModeStore";
 import { toast } from "sonner";
 import { usePlotLines } from "@/components/plot/usePlotLines";
+import { EditorSidePanel } from "@/components/editor/chapterPlan/EditorSidePanel";
 import { eventsInChapter } from "@/components/plot/plotChapters";
 import { chapterDeleteText } from "@/components/plot/plotDeleteCopy";
 import { summarizeChapter } from "@/cloudFunctions/ai";
@@ -1139,6 +1140,11 @@ export function SimpleEditor() {
     onSplitIntoChapters: handleSplitRequest,
     storyPublished: isPublished,
   };
+  const sidePanel = storyId ? (
+    <EditorSidePanel storyId={storyId} sidebar={sidebarPanelProps} />
+  ) : (
+    <SidebarPanel {...sidebarPanelProps} />
+  );
 
   return (
     <div className="relative w-full h-full bg-ns-bg flex overflow-hidden">
@@ -1180,9 +1186,7 @@ export function SimpleEditor() {
             >
               <X className="w-4 h-4" />
             </button>
-            <div className="w-80 h-full">
-              <SidebarPanel {...sidebarPanelProps} />
-            </div>
+            <div className="w-80 h-full">{sidePanel}</div>
           </div>
 
           {/* ── Left Sidebar Toggle ── */}
@@ -1463,9 +1467,9 @@ export function SimpleEditor() {
             open={!isLgUp && state.leftSidebarOpen}
             onClose={closeChaptersPanel}
             side="left"
-            title={isSingleDocument ? "Outline" : "Chapters"}
+            title={isSingleDocument ? "Outline and plan" : "Chapters and plan"}
           >
-            <SidebarPanel {...sidebarPanelProps} />
+            {sidePanel}
           </SlideOverPanel>
 
           <ConfirmDialog

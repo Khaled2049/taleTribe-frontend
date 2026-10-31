@@ -44,7 +44,7 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { toast } from "sonner";
 import { storyWorldbuildingRepo } from "@novelsync/story-data-client";
 import { chapterOptions } from "./plotChapters";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useAuthContext } from "@/contexts/AuthContext";
 
 const failedLine = (state: EventSaveState | null) =>
@@ -66,7 +66,7 @@ const PlotTimeline: React.FC = () => {
   const addEventMutation = useAddEvent(storyId);
   const reorderEventsMutation = useReorderEvents(storyId);
 
-  const { plotLines, rawPlotLines, queue, statuses, deletes } =
+  const { plotLines, rawPlotLines, queue, statuses, deletes, updateEvent } =
     usePlotLines(storyId);
 
   const { data: chapterIndex } = useQuery({
@@ -85,23 +85,56 @@ const PlotTimeline: React.FC = () => {
   } | null>(null);
 
   const [activePlotLineId, setActivePlotLineId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [highlightedEventId, setHighlightedEventId] = useState<string | null>(
+    null,
+  );
+
+  // "Open in Plot" from the editor lands here with ?line=&event=: select the
+  // line, then scroll to and briefly mark the event. The params are consumed.
+  const targetLine = searchParams.get("line");
+  const targetEvent = searchParams.get("event");
+  useEffect(() => {
+    if (!targetLine || !plotLines.some((line) => line.id === targetLine)) {
+      return;
+    }
+    setActivePlotLineId(targetLine);
+    setHighlightedEventId(targetEvent);
+    setSearchParams({}, { replace: true });
+  }, [targetLine, targetEvent, plotLines, setSearchParams]);
+
+  useEffect(() => {
+    if (!highlightedEventId) return;
+    const frame = requestAnimationFrame(() =>
+      document
+        .getElementById(`plot-event-${highlightedEventId}`)
+        ?.scrollIntoView({ block: "center", behavior: "smooth" }),
+    );
+    const timer = setTimeout(() => setHighlightedEventId(null), 2500);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+  }, [highlightedEventId]);
 
   // Leaving the page sends debounced edits now rather than waiting out the timer.
   useEffect(() => () => queue?.flush(), [queue]);
 
-  // Keep an active plotline selected as the list changes
+  // Keep an active plotline selected as the list changes. Stands aside while
+  // a ?line= target is being applied, or it would pick the first line over it.
   useEffect(() => {
     if (plotLines.length === 0) {
       setActivePlotLineId(null);
       return;
     }
+    if (targetLine && plotLines.some((p) => p.id === targetLine)) return;
     if (
       !activePlotLineId ||
       !plotLines.some((p) => p.id === activePlotLineId)
     ) {
       setActivePlotLineId(plotLines[0].id);
     }
-  }, [plotLines, activePlotLineId]);
+  }, [plotLines, activePlotLineId, targetLine]);
 
   const addPlotLine = async () => {
     if (!storyId) return;
@@ -130,28 +163,11 @@ const PlotTimeline: React.FC = () => {
     });
   };
 
-  // The cache is written on each keystroke so the grid stays responsive; the
-  // save queue debounces the network write per event.
-  const writeEventLocally = (plotLineId: string, event: PlotEvent) => {
-    if (!storyId) return;
-    queryClient.setQueryData<PlotLine[]>(
-      queryKeys.plots.byStory(storyId),
-      (old) =>
-        (old ?? []).map((line) =>
-          line.id === plotLineId
-            ? {
-                ...line,
-                events: line.events.map((e) => (e.id === event.id ? event : e)),
-              }
-            : line,
-        ),
-    );
-  };
-
   const updateEventInline = (plotLineId: string, updatedEvent: PlotEvent) => {
-    const event = { ...updatedEvent, updatedAt: new Date().toISOString() };
-    writeEventLocally(plotLineId, event);
-    queue?.schedule(plotLineId, event);
+    updateEvent(plotLineId, {
+      ...updatedEvent,
+      updatedAt: new Date().toISOString(),
+    });
   };
 
   const retrySaves = (plotLineId: string) =>
@@ -253,8 +269,7 @@ const PlotTimeline: React.FC = () => {
 
   const handleSaveEvent = () => {
     if (!editingEvent) return;
-    writeEventLocally(editingEvent.plotLineId, editingEvent.event);
-    queue?.schedule(editingEvent.plotLineId, editingEvent.event, {
+    updateEvent(editingEvent.plotLineId, editingEvent.event, {
       immediate: true,
     });
     closeEditEventModal();
@@ -495,6 +510,7 @@ const PlotTimeline: React.FC = () => {
                       }
                       chapters={chapters}
                       saveStates={statuses}
+                      highlightedEventId={highlightedEventId}
                     />
                   </DragDropContext>
                 </div>

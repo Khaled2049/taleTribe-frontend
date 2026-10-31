@@ -16,7 +16,7 @@ import {
   showsDraftMarks,
 } from "@/lib/chapterRelease";
 
-interface SidebarPanelProps {
+export interface SidebarPanelProps {
   chapters: ChapterSummary[];
   currentChapterId: string;
   chapterTitle: string;

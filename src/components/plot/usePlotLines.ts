@@ -1,6 +1,7 @@
-import { useMemo, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { usePlots } from "@/hooks/queries/usePlotQueries";
+import { queryKeys } from "@/hooks/queries/queryKeys";
 import type { PlotEvent, PlotLine } from "@/types/IPlot";
 import { DeferredDeletes } from "./deferredDeletes";
 import { withLocalEdits } from "./eventSaveQueue";
@@ -60,5 +61,37 @@ export function usePlotLines(storyId: string | undefined) {
       ),
     [rawPlotLines, queue, statuses, hidden],
   );
-  return { plotLines, rawPlotLines, query, queue, statuses, deletes };
+  // The cache is written at once so every view stays in step; the save queue
+  // debounces the network write per event.
+  const updateEvent = useCallback(
+    (lineId: string, event: PlotEvent, { immediate = false } = {}) => {
+      if (!storyId || !queue) return;
+      queryClient.setQueryData<PlotLine[]>(
+        queryKeys.plots.byStory(storyId),
+        (old) =>
+          (old ?? []).map((line) =>
+            line.id === lineId
+              ? {
+                  ...line,
+                  events: line.events.map((e) =>
+                    e.id === event.id ? event : e,
+                  ),
+                }
+              : line,
+          ),
+      );
+      queue.schedule(lineId, event, { immediate });
+    },
+    [queryClient, queue, storyId],
+  );
+
+  return {
+    plotLines,
+    rawPlotLines,
+    query,
+    queue,
+    statuses,
+    deletes,
+    updateEvent,
+  };
 }
