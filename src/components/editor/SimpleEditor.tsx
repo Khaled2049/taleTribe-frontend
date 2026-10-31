@@ -86,6 +86,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useFullscreen } from "@/hooks/useFullscreen";
 import { useFocusModeStore } from "@/stores/focusModeStore";
 import { toast } from "sonner";
+import api from "@/cloudFunctions";
 import { usePlotLines } from "@/components/plot/usePlotLines";
 import { EditorSidePanel } from "@/components/editor/chapterPlan/EditorSidePanel";
 import { eventsInChapter } from "@/components/plot/plotChapters";
@@ -321,6 +322,23 @@ export function SimpleEditor() {
           actions.updateChapterInList(savedChapter.id, { ...savedChapter });
           cacheChapter(savedChapter);
           bridgeRegistrationRef.current?.revisionChanged();
+          if (content !== base.content && savedChapter.revision) {
+            const savedStoryId = storyBaseRef.current.id;
+            // The save is complete; learning is optional and never delays the
+            // editor. The Function supplies the verified writer identity and
+            // their BYOK choice, then checks evidence and cost limits.
+            void api.post<{ status: string }>("/learnStoryVoice", {
+              storyId: savedStoryId,
+              chapterId: savedChapter.id,
+              sourceRevision: savedChapter.revision,
+            }).then(({ data }) => {
+              if (data.status === "updated") {
+                void queryClient.invalidateQueries({ queryKey: ["story-voice", savedStoryId] });
+                void queryClient.invalidateQueries({ queryKey: ["story-voice-history", savedStoryId] });
+                toast("Voice updated", { action: { label: "Review", onClick: () => navigate(`/create/${savedStoryId}/voice`) } });
+              }
+            }).catch(() => undefined);
+          }
         } catch (error) {
           chapterDirtyRef.current = true;
           // Retrying cannot succeed: the base revision stays stale until the
@@ -351,7 +369,7 @@ export function SimpleEditor() {
       }
       return chapterBaseRef.current?.revision;
     },
-    [actions, cacheChapter, replaceStory],
+    [actions, cacheChapter, navigate, queryClient, replaceStory],
   );
 
   // Initialize autosave hook
@@ -1122,6 +1140,16 @@ export function SimpleEditor() {
       {isReleased(chapterToRelease) ? "Move to draft" : "Release chapter"}
     </button>
   );
+  const chapterReferenceButton = state.currentChapter && storyId && (
+    <button type="button" disabled={!isOnline || saveState.status === "saving"}
+      onClick={() => {
+        void flushAndWait().then(() => navigate(`/create/${storyId}/voice?chapterId=${state.currentChapter?.id}`))
+          .catch(() => toast.error("Save this chapter before using it as a reference."));
+      }}
+      className="inline-flex items-center rounded-ns border border-ns-border px-3 py-1.5 font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover disabled:opacity-50">
+      Use chapter as reference
+    </button>
+  );
   const sidebarPanelProps = {
     chapters: state.chapters,
     currentChapterId: state.currentChapter?.id || "",
@@ -1350,6 +1378,7 @@ export function SimpleEditor() {
                     className="ml-auto flex items-center justify-end gap-2 flex-shrink-0"
                   >
                     {chapterReleaseButton}
+                    {chapterReferenceButton}
                     <button
                       title={isPublished ? "Unpublish story" : "Publish story"}
                       onClick={openPublishDialog}
@@ -1415,6 +1444,7 @@ export function SimpleEditor() {
                     className="flex items-center justify-end gap-2"
                   >
                     {chapterReleaseButton}
+                    {chapterReferenceButton}
                     <button
                       onClick={openPublishDialog}
                       disabled={isPublishing}

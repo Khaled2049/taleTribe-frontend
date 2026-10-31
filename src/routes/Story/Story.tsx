@@ -1,5 +1,5 @@
 import { Outlet, NavLink, Link } from "react-router-dom";
-import { BookOpen, Layers, Users, MapPin, ArrowLeft } from "lucide-react";
+import { BookOpen, Layers, Users, MapPin, ArrowLeft, AudioLines } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { StoryWorkspaceTabs } from "./components/StoryWorkspaceTabs";
 import { useFocusModeStore } from "@/stores/focusModeStore";
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { label: "Plot", path: "plot", icon: Layers, end: false },
   { label: "Characters", path: "characters", icon: Users, end: false },
   { label: "Places", path: "places", icon: MapPin, end: false },
+  { label: "Voice", path: "voice", icon: AudioLines, end: false },
 ] as const;
 
 const Story = () => {

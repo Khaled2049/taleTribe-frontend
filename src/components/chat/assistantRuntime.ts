@@ -121,6 +121,7 @@ export function createAssistantAdapter({
   transport,
   actionLedger,
   editsEnabled,
+  onVoiceUpdated,
 }: {
   storyId: string;
   activeRequest: ActiveRequestRef;
@@ -128,6 +129,7 @@ export function createAssistantAdapter({
   actionLedger: EditorActionLedger;
   /** Mirrors the server flag, so `/help` never lists a tool a run won't offer. */
   editsEnabled: boolean;
+  onVoiceUpdated?: (changeId: string) => void;
 }): ChatModelAdapter {
   return {
     async *run({ abortSignal, messages, unstable_getMessage }) {
@@ -171,6 +173,10 @@ export function createAssistantAdapter({
           { continuation, mode: roomQuestion ? "room" : undefined },
         )) {
           state = applyEvent(state, event);
+          if (event.type === "tool.completed" && event.part.name === "update_story_voice_profile") {
+            const result = objectValue(event.part.result);
+            if (result?.saved === true && typeof result.changeId === "string") onVoiceUpdated?.(result.changeId);
+          }
           // LocalRuntime already prepends the message's pre-run content to
           // every result it receives, so a resumed run must yield only its own
           // parts. Re-adding them here duplicates each paused toolCallId and
