@@ -56,6 +56,8 @@ const wreck: PlotLine = {
       pacing: "slow",
       storyBeat: "rising_action",
       orderIndex: 0,
+      chapterId: null,
+      status: "planned",
       revision: 7,
     },
   ],

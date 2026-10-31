@@ -29,7 +29,7 @@ function getTensionColor(level: number): string {
 // Field column tracks for the md+ spreadsheet layout (excludes the left
 // rail). Below md the fields stack into a single labelled column.
 const FIELDS_COLS =
-  "md:[grid-template-columns:minmax(150px,1.3fr)_minmax(240px,2.4fr)_70px_130px_84px_124px_158px_96px]";
+  "md:[grid-template-columns:minmax(150px,1.3fr)_minmax(240px,2.4fr)_130px_84px_124px_158px_96px]";
 
 interface PlotGridProps {
   plotLine: PlotLine;
@@ -89,7 +89,6 @@ const PlotGrid: React.FC<PlotGridProps> = ({
             <div className={`flex-1 grid ${FIELDS_COLS}`}>
               <div className={headerCell}>Plot point</div>
               <div className={headerCell}>Main plot</div>
-              <div className={`${headerCell} justify-center`}>Ch.</div>
               <div className={headerCell}>Time</div>
               <div className={`${headerCell} justify-center`}>Tension</div>
               <div className={headerCell}>Pacing</div>
@@ -184,24 +183,6 @@ const PlotGrid: React.FC<PlotGridProps> = ({
                                 placeholder="What happens here…"
                                 rows={2}
                                 className={`${cellInput} resize-none leading-snug`}
-                              />
-                            </Field>
-
-                            <Field label="Chapter" center>
-                              <input
-                                type="number"
-                                min={1}
-                                value={event.chapterNumber ?? ""}
-                                onChange={(e) =>
-                                  onUpdateEvent({
-                                    ...event,
-                                    chapterNumber: e.target.value
-                                      ? Number(e.target.value)
-                                      : undefined,
-                                  })
-                                }
-                                placeholder="—"
-                                className={`${cellInput} md:text-center tabular-nums md:w-16`}
                               />
                             </Field>
 

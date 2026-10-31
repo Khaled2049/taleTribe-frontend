@@ -24,6 +24,7 @@ export type {
   EventDependency,
   PacingType,
   PlotEvent,
+  PlotEventStatus,
   PlotLine,
   StoryBeatType,
   TimeConstraint,

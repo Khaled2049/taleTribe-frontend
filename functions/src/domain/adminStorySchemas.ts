@@ -83,7 +83,8 @@ const eventSchema = z.strictObject({
     .default("rising_action"),
   emotionalTone: z.string().trim().max(500).optional(),
   timeConstraint: timeConstraintSchema.optional(),
-  chapterNumber: z.number().int().min(1).max(STORY_LIMITS.chapters).optional(),
+  chapterKey: keySchema.nullable().default(null),
+  status: z.enum(["planned", "in_progress", "written"]).default("planned"),
   notes: optionalText,
 });
 

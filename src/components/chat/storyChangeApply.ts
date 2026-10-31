@@ -11,6 +11,7 @@ import {
   type PlotLine,
   type StoryWorldbuildingRepo,
 } from "@novelsync/story-data-client";
+import { DEFAULT_PLOT_EVENT_VALUES } from "@/types/IPlot";
 
 export type StoryChangeKind = "character" | "place" | "plot" | "event";
 
@@ -169,14 +170,8 @@ async function applyOne(
         line.events,
         (name) =>
           repo.addEvent(storyId, line.id, {
+            ...DEFAULT_PLOT_EVENT_VALUES,
             content: "",
-            characterIds: [],
-            locationId: null,
-            dependencies: [],
-            dependents: [],
-            tensionLevel: 5,
-            pacing: "moderate",
-            storyBeat: "rising_action",
             orderIndex: line.events.length,
             ...fields,
             name,

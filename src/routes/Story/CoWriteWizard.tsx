@@ -27,7 +27,11 @@ import { toast } from "sonner";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import { storyWorldbuildingRepo } from "@novelsync/story-data-client";
 import { storageService } from "@/services/StorageService";
-import { StoryBeatType, PLOT_TEMPLATES } from "@/types/IPlot";
+import {
+  DEFAULT_PLOT_EVENT_VALUES,
+  StoryBeatType,
+  PLOT_TEMPLATES,
+} from "@/types/IPlot";
 import { enhanceWizardInput, WizardEnhanceType } from "@/cloudFunctions/ai";
 import {
   STORY_CATEGORIES as CATEGORIES,
@@ -343,14 +347,9 @@ const CoWriteWizard: React.FC<CoWriteWizardProps> = ({
           const event = events[index];
           if (!event.name.trim()) continue;
           await storyWorldbuildingRepo.addEvent(storyId, line.id, {
+            ...DEFAULT_PLOT_EVENT_VALUES,
             name: event.name,
             content: event.content,
-            characterIds: [],
-            locationId: null,
-            dependencies: [],
-            dependents: [],
-            tensionLevel: 5,
-            pacing: "moderate",
             storyBeat: event.storyBeat,
             orderIndex: index,
           });
