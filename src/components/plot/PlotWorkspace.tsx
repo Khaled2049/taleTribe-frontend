@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Book, ChevronDown, PlusCircle, Trash2, Pencil } from "lucide-react";
+import { Book, ChevronDown, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DragDropContext, DropResult } from "@hello-pangea/dnd";
+import type { DropResult } from "@hello-pangea/dnd";
 
 import {
   DropdownMenu,
@@ -12,7 +12,15 @@ import {
 
 import { PlotLineEditModal } from "./PlotlineEditModal";
 import { EventEditModal } from "./EventEditModal";
-import PlotGrid from "./PlotGrid";
+import { PlotGridView } from "./grid/PlotGridView";
+import { OutlineView } from "./outline/OutlineView";
+import type { CardMenuItem } from "./outline/EventCard";
+import {
+  type PlotViewState,
+  rememberPlotView,
+  rememberedPlotView,
+  resolvePlotView,
+} from "./plotView";
 import {
   PlotEvent,
   PlotLine,
@@ -32,11 +40,7 @@ import {
   useUpdatePlotLineMeta,
 } from "@/hooks/queries/usePlotQueries";
 import { workspaceChapterIndexQuery } from "@/hooks/queries/workspaceStory";
-import {
-  type EventSaveState,
-  eventsInState,
-  lineSaveState,
-} from "./eventSaveQueue";
+import { eventsInState, lineSaveState } from "./eventSaveQueue";
 import { SaveIndicator } from "./SaveIndicator";
 import { EVENT_UNDO_MS, usePlotLines } from "./usePlotLines";
 import { plotLineDeleteLabel, plotLineDeleteText } from "./plotDeleteCopy";
@@ -47,10 +51,14 @@ import { chapterOptions } from "./plotChapters";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useAuthContext } from "@/contexts/AuthContext";
 
-const failedLine = (state: EventSaveState | null) =>
-  state === "error" || state === "conflict";
+const segment = (active: boolean) =>
+  `px-2.5 py-1 rounded-ns font-ui text-xs transition-colors ${
+    active
+      ? "bg-ns-elevated text-ns-ink font-medium shadow-ns-sm"
+      : "text-ns-ink-secondary hover:text-ns-ink"
+  }`;
 
-const PlotTimeline: React.FC = () => {
+const PlotWorkspace: React.FC = () => {
   const { storyId } = useParams<{ storyId: string }>();
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
@@ -86,6 +94,19 @@ const PlotTimeline: React.FC = () => {
 
   const [activePlotLineId, setActivePlotLineId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const { view, group } = resolvePlotView(searchParams, rememberedPlotView());
+  const setViewState = (patch: Partial<PlotViewState>) => {
+    const next = { view, group, ...patch };
+    rememberPlotView(next);
+    setSearchParams(
+      (params) => {
+        params.set("view", next.view);
+        params.set("group", next.group);
+        return params;
+      },
+      { replace: true },
+    );
+  };
   const [highlightedEventId, setHighlightedEventId] = useState<string | null>(
     null,
   );
@@ -100,7 +121,14 @@ const PlotTimeline: React.FC = () => {
     }
     setActivePlotLineId(targetLine);
     setHighlightedEventId(targetEvent);
-    setSearchParams({}, { replace: true });
+    setSearchParams(
+      (params) => {
+        params.delete("line");
+        params.delete("event");
+        return params;
+      },
+      { replace: true },
+    );
   }, [targetLine, targetEvent, plotLines, setSearchParams]);
 
   useEffect(() => {
@@ -142,7 +170,7 @@ const PlotTimeline: React.FC = () => {
     setActivePlotLineId(plotLine.id);
   };
 
-  const addEvent = (plotLineId: string) => {
+  const addEvent = (plotLineId: string, chapterId: string | null = null) => {
     if (!storyId || !user?.uid) return;
 
     const plotLine = plotLines.find((pl) => pl.id === plotLineId);
@@ -155,6 +183,7 @@ const PlotTimeline: React.FC = () => {
         ...DEFAULT_PLOT_EVENT_VALUES,
         name: "New Event",
         content: "",
+        chapterId,
         orderIndex,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -170,11 +199,11 @@ const PlotTimeline: React.FC = () => {
     });
   };
 
-  const retrySaves = (plotLineId: string) =>
+  const retrySaves = (plotLineId?: string) =>
     queue?.retry(eventsInState(statuses, plotLineId, "error"));
 
   // Drops the conflicting local edits and takes the server's copy.
-  const reloadConflicts = (plotLineId: string) => {
+  const reloadConflicts = (plotLineId?: string) => {
     if (!storyId) return;
     for (const id of eventsInState(statuses, plotLineId, "conflict")) {
       queue?.discard(id);
@@ -238,6 +267,19 @@ const PlotTimeline: React.FC = () => {
       },
     });
   };
+
+  const menuFor = (line: PlotLine, event: PlotEvent): CardMenuItem[] => [
+    {
+      label: "Edit details…",
+      onSelect: () => openEditEventModal(line.id, event),
+    },
+    {
+      label: "Delete",
+      destructive: true,
+      separated: true,
+      onSelect: () => deleteEvent(line.id, event.id),
+    },
+  ];
 
   const confirmPlotLineDelete = async () => {
     const line = plotLineToDelete;
@@ -352,19 +394,71 @@ const PlotTimeline: React.FC = () => {
     reorderEventsMutation.mutate({ plotLineId, orderedIds });
   };
 
-  const activePlotLine =
-    plotLines.find((pl) => pl.id === activePlotLineId) ?? null;
-
   return (
     <div className="h-full flex flex-col bg-ns-bg">
-      {/* ── Toolbar ── */}
-      <div className="flex-shrink-0 flex flex-wrap items-center gap-2 px-4 py-3 border-b border-ns-border bg-ns-surface overflow-x-auto">
-        {/* Page title */}
-        <span className="font-heading italic text-lg text-ns-ink mr-2 hidden sm:block">
-          Plot Grid
-        </span>
+      <div className="flex-shrink-0 flex flex-wrap items-center gap-2 px-4 py-3 border-b border-ns-border bg-ns-surface">
+        <h2 className="font-heading italic text-lg text-ns-ink mr-1">Plot</h2>
 
-        <div className="w-px h-5 bg-ns-border hidden sm:block" />
+        <div
+          role="group"
+          aria-label="View"
+          className="inline-flex rounded-ns border border-ns-border bg-ns-bg p-0.5"
+        >
+          <button
+            type="button"
+            aria-pressed={view === "outline"}
+            onClick={() => setViewState({ view: "outline" })}
+            className={segment(view === "outline")}
+          >
+            Outline
+          </button>
+          <button
+            type="button"
+            aria-pressed={view === "grid"}
+            onClick={() => setViewState({ view: "grid" })}
+            className={segment(view === "grid")}
+          >
+            Grid
+          </button>
+        </div>
+
+        {view === "outline" && (
+          <div
+            role="group"
+            aria-label="Group by"
+            className="inline-flex items-center gap-1 rounded-ns border border-ns-border bg-ns-bg p-0.5"
+          >
+            <span className="pl-1.5 font-ui text-[11px] text-ns-ink-muted">
+              By
+            </span>
+            <button
+              type="button"
+              aria-pressed={group === "chapters"}
+              onClick={() => setViewState({ group: "chapters" })}
+              className={segment(group === "chapters")}
+            >
+              Chapters
+            </button>
+            <button
+              type="button"
+              aria-pressed={group === "lines"}
+              onClick={() => setViewState({ group: "lines" })}
+              className={segment(group === "lines")}
+            >
+              Plot lines
+            </button>
+          </div>
+        )}
+
+        {view === "outline" && (
+          <SaveIndicator
+            state={lineSaveState(statuses)}
+            onRetry={() => retrySaves()}
+            onReload={() => reloadConflicts()}
+          />
+        )}
+
+        <div className="flex-1" />
 
         <button
           onClick={addPlotLine}
@@ -399,11 +493,9 @@ const PlotTimeline: React.FC = () => {
         </DropdownMenu>
       </div>
 
-      {/* ── Scrollable Content ── */}
       <div className="flex-1 overflow-auto">
         <div className="p-4 space-y-4 max-w-6xl mx-auto">
           {plotLines.length === 0 ? (
-            /* Empty state */
             <div className="flex flex-col items-center justify-center py-20 gap-4 animate-ns-fade-in">
               <div className="w-16 h-16 rounded-full bg-ns-accent-subtle flex items-center justify-center">
                 <Book className="w-7 h-7 text-ns-accent opacity-60" />
@@ -424,98 +516,41 @@ const PlotTimeline: React.FC = () => {
                 Add Plot Line
               </button>
             </div>
+          ) : view === "outline" && storyId ? (
+            <OutlineView
+              storyId={storyId}
+              group={group}
+              lines={plotLines}
+              chapters={chapters}
+              characters={characters}
+              places={places}
+              statuses={statuses}
+              highlightedEventId={highlightedEventId}
+              onChange={updateEventInline}
+              menuFor={menuFor}
+              onAddEvent={addEvent}
+              onAddPlotLine={addPlotLine}
+              onEditLine={openEditPlotlineModal}
+              onDeleteLine={setPlotLineToDelete}
+            />
           ) : (
-            <>
-              {/* Plot line switcher */}
-              <div className="flex items-center gap-1 overflow-x-auto border-b border-ns-border">
-                {plotLines.map((pl) => {
-                  const active = pl.id === activePlotLineId;
-                  return (
-                    <button
-                      key={pl.id}
-                      onClick={() => setActivePlotLineId(pl.id)}
-                      className={`inline-flex items-center gap-2 px-3 py-2 font-ui text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${
-                        active
-                          ? "border-ns-accent text-ns-accent font-medium"
-                          : "border-transparent text-ns-ink-secondary hover:text-ns-ink"
-                      }`}
-                    >
-                      <span className="font-heading italic">{pl.name}</span>
-                      <span className="font-ui text-[10px] tabular-nums opacity-60">
-                        {pl.events.length}
-                      </span>
-                      {failedLine(lineSaveState(statuses, pl.id)) && (
-                        <span
-                          className="w-1.5 h-1.5 rounded-full bg-ns-destructive"
-                          title="Some changes in this plot line didn't save"
-                        >
-                          <span className="sr-only">
-                            Some changes in this plot line didn't save
-                          </span>
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {activePlotLine && (
-                <div className="space-y-3">
-                  {/* Active plot line header */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="font-heading italic text-lg text-ns-ink truncate">
-                        {activePlotLine.name}
-                      </h3>
-                      {activePlotLine.description && (
-                        <p className="font-ui text-xs text-ns-ink-secondary truncate">
-                          {activePlotLine.description}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <SaveIndicator
-                        state={lineSaveState(statuses, activePlotLine.id)}
-                        onRetry={() => retrySaves(activePlotLine.id)}
-                        onReload={() => reloadConflicts(activePlotLine.id)}
-                      />
-                      <button
-                        onClick={() => openEditPlotlineModal(activePlotLine)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-ns border border-ns-border text-ns-ink-secondary font-ui text-xs hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                        Details
-                      </button>
-                      <button
-                        onClick={() => setPlotLineToDelete(activePlotLine)}
-                        className="p-1.5 rounded-ns border border-ns-border text-ns-ink-muted hover:text-ns-destructive hover:bg-ns-surface-hover transition-colors"
-                        aria-label="Delete plot line"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Grid */}
-                  <DragDropContext onDragEnd={handleDragEnd}>
-                    <PlotGrid
-                      plotLine={activePlotLine}
-                      onUpdateEvent={(ev) =>
-                        updateEventInline(activePlotLine.id, ev)
-                      }
-                      onDeleteEvent={(id) => deleteEvent(activePlotLine.id, id)}
-                      onAddEvent={() => addEvent(activePlotLine.id)}
-                      onOpenEditor={(ev) =>
-                        openEditEventModal(activePlotLine.id, ev)
-                      }
-                      chapters={chapters}
-                      saveStates={statuses}
-                      highlightedEventId={highlightedEventId}
-                    />
-                  </DragDropContext>
-                </div>
-              )}
-            </>
+            <PlotGridView
+              lines={plotLines}
+              activeLineId={activePlotLineId}
+              onSelectLine={setActivePlotLineId}
+              chapters={chapters}
+              statuses={statuses}
+              highlightedEventId={highlightedEventId}
+              onChange={updateEventInline}
+              onDeleteEvent={deleteEvent}
+              onAddEvent={(lineId) => addEvent(lineId)}
+              onOpenEditor={openEditEventModal}
+              onEditLine={openEditPlotlineModal}
+              onDeleteLine={setPlotLineToDelete}
+              onRetry={retrySaves}
+              onReload={reloadConflicts}
+              onDragEnd={handleDragEnd}
+            />
           )}
         </div>
       </div>
@@ -553,4 +588,4 @@ const PlotTimeline: React.FC = () => {
   );
 };
 
-export default PlotTimeline;
+export default PlotWorkspace;

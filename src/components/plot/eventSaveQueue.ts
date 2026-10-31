@@ -210,10 +210,13 @@ export class EventSaveQueue {
   }
 }
 
-/** One line's overall state for the save indicator; null when there is nothing to show. */
+/**
+ * The most serious state for the save indicator, for one line or (without a
+ * lineId) the whole story; null when there is nothing to show.
+ */
 export function lineSaveState(
   statuses: ReadonlyMap<string, EventSaveStatus>,
-  lineId: string,
+  lineId?: string,
 ): EventSaveState | null {
   let result: EventSaveState | null = null;
   const rank: Record<EventSaveState, number> = {
@@ -224,20 +227,20 @@ export function lineSaveState(
     conflict: 5,
   };
   for (const status of statuses.values()) {
-    if (status.lineId !== lineId) continue;
+    if (lineId && status.lineId !== lineId) continue;
     if (!result || rank[status.state] > rank[result]) result = status.state;
   }
   return result;
 }
 
-/** Events of a line in a given state, e.g. the failed ones to retry. */
+/** Events in a given state, in one line or (without a lineId) anywhere. */
 export function eventsInState(
   statuses: ReadonlyMap<string, EventSaveStatus>,
-  lineId: string,
+  lineId: string | undefined,
   state: EventSaveState,
 ): string[] {
   return [...statuses]
-    .filter(([, s]) => s.lineId === lineId && s.state === state)
+    .filter(([, s]) => (!lineId || s.lineId === lineId) && s.state === state)
     .map(([id]) => id);
 }
 
