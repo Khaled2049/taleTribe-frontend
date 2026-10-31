@@ -1,4 +1,4 @@
-export type PlotView = "outline" | "grid";
+export type PlotView = "outline" | "grid" | "shape";
 export type PlotGrouping = "chapters" | "lines";
 
 export interface PlotViewState {
@@ -16,7 +16,7 @@ export const DEFAULT_PLOT_VIEW: PlotViewState = {
 const VIEW_KEY = "tale-tribe:plot-view";
 
 const asView = (v: unknown): PlotView | undefined =>
-  v === "outline" || v === "grid" ? v : undefined;
+  v === "outline" || v === "grid" || v === "shape" ? v : undefined;
 const asGroup = (v: unknown): PlotGrouping | undefined =>
   v === "chapters" || v === "lines" ? v : undefined;
 

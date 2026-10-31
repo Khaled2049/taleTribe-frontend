@@ -14,6 +14,7 @@ import { PlotLineEditModal } from "./PlotlineEditModal";
 import { EventEditModal } from "./EventEditModal";
 import { PlotGridView } from "./grid/PlotGridView";
 import { OutlineView } from "./outline/OutlineView";
+import { TensionChart } from "./shape/TensionChart";
 import type { CardMenuItem } from "./outline/EventCard";
 import { applyMove, type MoveAction } from "./outline/moves";
 import { MoveEventDialog, type MoveTarget } from "./outline/MoveEventDialog";
@@ -565,6 +566,14 @@ const PlotWorkspace: React.FC = () => {
           >
             Grid
           </button>
+          <button
+            type="button"
+            aria-pressed={view === "shape"}
+            onClick={() => setViewState({ view: "shape" })}
+            className={segment(view === "shape")}
+          >
+            Shape
+          </button>
         </div>
 
         {view === "outline" && (
@@ -661,6 +670,21 @@ const PlotWorkspace: React.FC = () => {
                 Add Plot Line
               </button>
             </div>
+          ) : view === "shape" ? (
+            <TensionChart
+              lines={plotLines}
+              chapters={chapters}
+              onOpenEvent={(eventId) => {
+                const line = plotLines.find((l) =>
+                  l.events.some((e) => e.id === eventId),
+                );
+                const event = line?.events.find((e) => e.id === eventId);
+                if (line && event) openEditEventModal(line.id, event);
+              }}
+              onShowUnassigned={() =>
+                setViewState({ view: "outline", group: "chapters" })
+              }
+            />
           ) : view === "outline" && storyId ? (
             <OutlineView
               storyId={storyId}
