@@ -27,21 +27,22 @@ import { usePlaces } from "@/hooks/queries/usePlaceQueries";
 import {
   useAddEvent,
   useAddPlotLine,
-  useDeleteEvent,
   useDeletePlotLine,
-  usePlots,
   useReorderEvents,
   useUpdatePlotLineMeta,
 } from "@/hooks/queries/usePlotQueries";
 import { workspaceChapterIndexQuery } from "@/hooks/queries/workspaceStory";
-import { useEventSaveQueue } from "./useEventSaveQueue";
 import {
   type EventSaveState,
   eventsInState,
   lineSaveState,
-  withLocalEdits,
 } from "./eventSaveQueue";
 import { SaveIndicator } from "./SaveIndicator";
+import { EVENT_UNDO_MS, usePlotLines } from "./usePlotLines";
+import { plotLineDeleteLabel, plotLineDeleteText } from "./plotDeleteCopy";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { toast } from "sonner";
+import { storyWorldbuildingRepo } from "@novelsync/story-data-client";
 import { chapterOptions } from "./plotChapters";
 import { useParams } from "react-router-dom";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -54,7 +55,6 @@ const PlotTimeline: React.FC = () => {
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
 
-  const { data: rawPlotLines } = usePlots(storyId);
   // Characters and places come from the shared cache the Characters/Places pages
   // already populate — this page must not refetch them itself.
   const { data: characters = [] } = useCharacters(storyId);
@@ -64,18 +64,10 @@ const PlotTimeline: React.FC = () => {
   const updatePlotLineMeta = useUpdatePlotLineMeta(storyId);
   const deletePlotLineMutation = useDeletePlotLine(storyId);
   const addEventMutation = useAddEvent(storyId);
-  const deleteEventMutation = useDeleteEvent(storyId);
   const reorderEventsMutation = useReorderEvents(storyId);
 
-  const { queue, statuses } = useEventSaveQueue(storyId);
-  // Every event with a local value has a status, so `statuses` tracks them.
-  const plotLines: PlotLine[] = useMemo(
-    () =>
-      withLocalEdits(rawPlotLines ?? [], (id) =>
-        statuses.has(id) ? (queue?.local(id) ?? null) : null,
-      ),
-    [rawPlotLines, queue, statuses],
-  );
+  const { plotLines, rawPlotLines, queue, statuses, deletes } =
+    usePlotLines(storyId);
 
   const { data: chapterIndex } = useQuery({
     ...workspaceChapterIndexQuery(user?.uid ?? "", storyId ?? ""),
@@ -176,19 +168,81 @@ const PlotTimeline: React.FC = () => {
     });
   };
 
+  const [plotLineToDelete, setPlotLineToDelete] = useState<PlotLine | null>(
+    null,
+  );
+
+  // The delete reaches the server only when the undo window closes; until then
+  // the event is hidden, so Undo restores it with its links intact.
   const deleteEvent = (plotLineId: string, eventId: string) => {
-    if (!storyId) return;
-    const revision = plotLines
-      .find((line) => line.id === plotLineId)
-      ?.events.find((event) => event.id === eventId)?.revision;
-    queue?.discard(eventId);
-    deleteEventMutation.mutate({ plotLineId, eventId, revision });
+    if (!storyId || !queue || !deletes) return;
+    const name =
+      plotLines
+        .find((line) => line.id === plotLineId)
+        ?.events.find((event) => event.id === eventId)?.name || "Event";
+    const unsaved = queue.local(eventId);
+    queue.discard(eventId);
+
+    deletes.schedule(
+      eventId,
+      async () => {
+        const key = queryKeys.plots.byStory(storyId);
+        const revision = queryClient
+          .getQueryData<PlotLine[]>(key)
+          ?.find((line) => line.id === plotLineId)
+          ?.events.find((event) => event.id === eventId)?.revision;
+        try {
+          const events = await storyWorldbuildingRepo.deleteEvent(
+            storyId,
+            plotLineId,
+            eventId,
+            revision,
+          );
+          queryClient.setQueryData<PlotLine[]>(key, (old) =>
+            (old ?? []).map((line) =>
+              line.id === plotLineId ? { ...line, events } : line,
+            ),
+          );
+        } catch {
+          toast.error(`Couldn't delete “${name}”. It's back in the list.`);
+          await queryClient.invalidateQueries({ queryKey: key });
+        }
+      },
+      EVENT_UNDO_MS,
+    );
+
+    toast(`Deleted “${name}”`, {
+      duration: EVENT_UNDO_MS,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          if (!deletes.undo(eventId)) return;
+          if (unsaved) queue.schedule(plotLineId, unsaved);
+        },
+      },
+    });
   };
 
-  const removePlotline = (plotLineId: string) => {
-    if (!storyId) return;
-    const revision = plotLines.find((line) => line.id === plotLineId)?.revision;
-    deletePlotLineMutation.mutate({ id: plotLineId, revision });
+  const confirmPlotLineDelete = async () => {
+    const line = plotLineToDelete;
+    if (!storyId || !line) return;
+    // The cached line still holds events hidden by a pending delete; cancel
+    // those too, or they'd fire against a plot line that no longer exists.
+    const cached = rawPlotLines?.find((l) => l.id === line.id) ?? line;
+    for (const event of cached.events) {
+      queue?.discard(event.id);
+      deletes?.undo(event.id);
+    }
+    try {
+      await deletePlotLineMutation.mutateAsync({
+        id: line.id,
+        revision: line.revision,
+      });
+    } catch {
+      toast.error(`Couldn't delete “${line.name}”. Please try again.`);
+      return false;
+    }
+    setPlotLineToDelete(null);
   };
 
   const handleSavePlotLineModal = async () => {
@@ -418,7 +472,7 @@ const PlotTimeline: React.FC = () => {
                         Details
                       </button>
                       <button
-                        onClick={() => removePlotline(activePlotLine.id)}
+                        onClick={() => setPlotLineToDelete(activePlotLine)}
                         className="p-1.5 rounded-ns border border-ns-border text-ns-ink-muted hover:text-ns-destructive hover:bg-ns-surface-hover transition-colors"
                         aria-label="Delete plot line"
                       >
@@ -451,6 +505,16 @@ const PlotTimeline: React.FC = () => {
       </div>
 
       {/* ── Modals ── */}
+      <ConfirmDialog
+        open={plotLineToDelete !== null}
+        onOpenChange={(open) => !open && setPlotLineToDelete(null)}
+        title={`Delete “${plotLineToDelete?.name ?? ""}”?`}
+        description={plotLineDeleteText(plotLineToDelete?.events.length ?? 0)}
+        confirmLabel={plotLineDeleteLabel(plotLineToDelete?.events.length ?? 0)}
+        variant="danger"
+        onConfirm={confirmPlotLineDelete}
+      />
+
       <PlotLineEditModal
         isOpen={isPlotLineModalOpen}
         onClose={closeEditPlotLineModal}

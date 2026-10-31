@@ -140,63 +140,6 @@ export function useAddEvent(storyId: string | undefined) {
 // Event field edits go through the save queue (components/plot/useEventSaveQueue),
 // not a mutation here, so there is one save path that can't race itself.
 
-export function useDeleteEvent(storyId: string | undefined) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      plotLineId,
-      eventId,
-      revision,
-    }: {
-      plotLineId: string;
-      eventId: string;
-      revision?: number;
-    }) =>
-      storyWorldbuildingRepo.deleteEvent(
-        storyId!,
-        plotLineId,
-        eventId,
-        revision,
-      ),
-    onMutate: async ({ plotLineId, eventId }) => {
-      await queryClient.cancelQueries({
-        queryKey: queryKeys.plots.byStory(storyId!),
-      });
-      const prev = queryClient.getQueryData<PlotLine[]>(
-        queryKeys.plots.byStory(storyId!),
-      );
-      queryClient.setQueryData<PlotLine[]>(
-        queryKeys.plots.byStory(storyId!),
-        (old) =>
-          patchLine(old, plotLineId, (line) => ({
-            ...line,
-            events: line.events
-              .filter((e) => e.id !== eventId)
-              .map((e, index) => ({ ...e, orderIndex: index })),
-          })),
-      );
-      return { prev };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) {
-        queryClient.setQueryData(queryKeys.plots.byStory(storyId!), ctx.prev);
-      }
-    },
-    // The server reconciles by id and returns the authoritative array.
-    onSuccess: (events, { plotLineId }) => {
-      queryClient.setQueryData<PlotLine[]>(
-        queryKeys.plots.byStory(storyId!),
-        (old) => patchLine(old, plotLineId, (line) => ({ ...line, events })),
-      );
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.plots.byStory(storyId!),
-      });
-    },
-  });
-}
-
 export function useReorderEvents(storyId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({

@@ -1,4 +1,5 @@
 import type { ChapterSummary } from "@novelsync/story-data-client";
+import type { PlotLine } from "@/types/IPlot";
 
 export interface ChapterOption {
   id: string;
@@ -43,3 +44,14 @@ export const chapterSelectValue = (
 
 export const chapterIdFromSelect = (value: string): string | null =>
   value === UNASSIGNED ? null : value;
+
+/** Events planned for a chapter, across every plot line. */
+export const eventsInChapter = (
+  lines: PlotLine[] | undefined,
+  chapterId: string | null | undefined,
+) =>
+  chapterId
+    ? (lines ?? []).flatMap((line) =>
+        line.events.filter((event) => event.chapterId === chapterId),
+      )
+    : [];
