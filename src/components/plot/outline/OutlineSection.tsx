@@ -22,6 +22,8 @@ interface OutlineSectionProps {
   onAddPlotLine: () => void;
   onEditLine: (line: PlotLine) => void;
   onDeleteLine: (line: PlotLine) => void;
+  /** Rendered in place of the body while collapsed, so it can still take a drop. */
+  collapsedDrop?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -42,6 +44,7 @@ export const OutlineSection: React.FC<OutlineSectionProps> = ({
   onAddPlotLine,
   onEditLine,
   onDeleteLine,
+  collapsedDrop,
   children,
 }) => {
   const bodyId = `outline-section-${section.key}`;
@@ -177,6 +180,7 @@ export const OutlineSection: React.FC<OutlineSectionProps> = ({
         )}
       </header>
 
+      {collapsed && collapsedDrop}
       {!collapsed && (
         <div id={bodyId} className="px-3 pb-3 space-y-2">
           {children}

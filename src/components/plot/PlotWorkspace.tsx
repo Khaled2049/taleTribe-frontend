@@ -15,6 +15,8 @@ import { EventEditModal } from "./EventEditModal";
 import { PlotGridView } from "./grid/PlotGridView";
 import { OutlineView } from "./outline/OutlineView";
 import type { CardMenuItem } from "./outline/EventCard";
+import { applyMove, type MoveAction } from "./outline/moves";
+import { MoveEventDialog, type MoveTarget } from "./outline/MoveEventDialog";
 import {
   type PlotViewState,
   rememberPlotView,
@@ -46,7 +48,10 @@ import { EVENT_UNDO_MS, usePlotLines } from "./usePlotLines";
 import { plotLineDeleteLabel, plotLineDeleteText } from "./plotDeleteCopy";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { toast } from "sonner";
-import { storyWorldbuildingRepo } from "@novelsync/story-data-client";
+import {
+  StoryDataConflictError,
+  storyWorldbuildingRepo,
+} from "@novelsync/story-data-client";
 import { chapterOptions } from "./plotChapters";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -265,6 +270,97 @@ const PlotWorkspace: React.FC = () => {
           if (unsaved) queue.schedule(plotLineId, unsaved);
         },
       },
+    });
+  };
+
+  const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null);
+
+  // Chapter reorders and line moves update the cache at once and roll back on
+  // failure; the server's answer (every line) replaces it on success.
+  const runMove = async (action: MoveAction) => {
+    if (!storyId || action.kind === "none") return;
+    if (action.kind === "unassign") {
+      // The visible copy carries unsaved edits; the raw cache would drop them.
+      const found = plotLines
+        .flatMap((line) => line.events.map((event) => ({ line, event })))
+        .find(({ event }) => event.id === action.eventId);
+      if (found) assignChapter(found.line, found.event, null);
+      return;
+    }
+    if (action.kind === "lineOrder") {
+      reorderEventsMutation.mutate({
+        plotLineId: action.lineId,
+        orderedIds: action.orderedIds,
+      });
+      return;
+    }
+
+    const key = queryKeys.plots.byStory(storyId);
+    const before = queryClient.getQueryData<PlotLine[]>(key);
+    if (!before) return;
+    await queryClient.cancelQueries({ queryKey: key });
+    queryClient.setQueryData<PlotLine[]>(key, applyMove(before, action));
+    try {
+      let lines: PlotLine[];
+      if (action.kind === "chapterOrder") {
+        lines = await storyWorldbuildingRepo.reorderChapterEvents(
+          storyId,
+          action.chapterId,
+          action.orderedIds,
+          action.movedIn,
+        );
+        for (const { id } of action.movedIn) {
+          queue?.relocate(id, undefined, { chapterId: action.chapterId });
+        }
+      } else {
+        const from = before.find((l) => l.id === action.fromLineId);
+        const to = before.find((l) => l.id === action.toLineId);
+        const event = from?.events.find((e) => e.id === action.eventId);
+        if (!from || !to || !event) throw new Error("Plot line is not loaded.");
+        lines = await storyWorldbuildingRepo.moveEvent(
+          storyId,
+          from,
+          event,
+          to,
+          action.toIndex,
+        );
+        queue?.relocate(action.eventId, action.toLineId);
+      }
+      queryClient.setQueryData<PlotLine[]>(key, lines);
+    } catch (error) {
+      queryClient.setQueryData<PlotLine[]>(key, before);
+      if (error instanceof StoryDataConflictError) {
+        toast.error("The plan changed somewhere else. It's been refreshed.");
+        await queryClient.invalidateQueries({ queryKey: key });
+      } else {
+        toast.error("Couldn't move the event. It's back where it was.");
+      }
+    }
+  };
+
+  // Through the save queue like any edit; the server puts it at the end of the chapter.
+  const assignChapter = (
+    line: PlotLine,
+    event: PlotEvent,
+    chapterId: string | null,
+  ) => {
+    if (event.chapterId === chapterId) return;
+    updateEvent(
+      line.id,
+      { ...event, chapterId, chapterPosition: null },
+      { immediate: true },
+    );
+  };
+
+  const moveToLine = (line: PlotLine, event: PlotEvent, toLineId: string) => {
+    const to = plotLines.find((l) => l.id === toLineId);
+    if (!to) return;
+    void runMove({
+      kind: "moveLine",
+      fromLineId: line.id,
+      toLineId,
+      eventId: event.id,
+      toIndex: to.events.length,
     });
   };
 
@@ -521,6 +617,7 @@ const PlotWorkspace: React.FC = () => {
               storyId={storyId}
               group={group}
               lines={plotLines}
+              rawLines={rawPlotLines ?? []}
               chapters={chapters}
               characters={characters}
               places={places}
@@ -528,6 +625,13 @@ const PlotWorkspace: React.FC = () => {
               highlightedEventId={highlightedEventId}
               onChange={updateEventInline}
               menuFor={menuFor}
+              onMove={(action) => void runMove(action)}
+              onAssignChapter={(line, event) =>
+                setMoveTarget({ mode: "chapter", line, event })
+              }
+              onMoveToLine={(line, event) =>
+                setMoveTarget({ mode: "line", line, event })
+              }
               onAddEvent={addEvent}
               onAddPlotLine={addPlotLine}
               onEditLine={openEditPlotlineModal}
@@ -556,6 +660,14 @@ const PlotWorkspace: React.FC = () => {
       </div>
 
       {/* ── Modals ── */}
+      <MoveEventDialog
+        target={moveTarget}
+        onClose={() => setMoveTarget(null)}
+        chapters={chapters}
+        lines={plotLines}
+        onAssignChapter={assignChapter}
+        onMoveToLine={moveToLine}
+      />
       <ConfirmDialog
         open={plotLineToDelete !== null}
         onOpenChange={(open) => !open && setPlotLineToDelete(null)}

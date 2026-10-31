@@ -17,6 +17,7 @@ export interface CardMenuItem {
   label: string;
   onSelect: () => void;
   destructive?: boolean;
+  disabled?: boolean;
   /** Draws a separator above this item. */
   separated?: boolean;
 }
@@ -90,6 +91,7 @@ export const EventCard: React.FC<EventCardProps> = ({
           </span>
           <DropdownMenu>
             <DropdownMenuTrigger
+              id={`plot-event-${event.id}-menu`}
               aria-label={`Actions for ${name}`}
               className="flex-shrink-0 mt-2 p-1.5 rounded-ns text-ns-ink-muted hover:text-ns-ink hover:bg-ns-surface-hover"
             >
@@ -104,7 +106,8 @@ export const EventCard: React.FC<EventCardProps> = ({
                   {item.separated && <DropdownMenuSeparator />}
                   <DropdownMenuItem
                     onSelect={item.onSelect}
-                    className={`px-3 py-2 rounded-ns cursor-pointer font-ui text-sm ${
+                    disabled={item.disabled}
+                    className={`px-3 py-2 rounded-ns cursor-pointer font-ui text-sm data-[disabled]:opacity-40 data-[disabled]:cursor-default ${
                       item.destructive ? "text-ns-destructive" : "text-ns-ink"
                     }`}
                   >

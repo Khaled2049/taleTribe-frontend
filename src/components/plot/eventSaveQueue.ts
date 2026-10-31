@@ -103,6 +103,19 @@ export class EventSaveQueue {
     this.changed();
   }
 
+  /**
+   * Keeps an event's pending edit in step with a move made by another call:
+   * later saves go to its new plot line, and carry the fields the move set
+   * (a new chapterId), so they don't undo it.
+   */
+  relocate(eventId: string, lineId?: string, patch?: Partial<PlotEvent>) {
+    const entry = this.entries.get(eventId);
+    if (!entry) return;
+    if (lineId) entry.lineId = lineId;
+    if (patch && entry.latest) entry.latest = { ...entry.latest, ...patch };
+    this.changed();
+  }
+
   /** The local value the server may not have yet: unsent, in flight or failed. */
   local(eventId: string): PlotEvent | null {
     const entry = this.entries.get(eventId);
