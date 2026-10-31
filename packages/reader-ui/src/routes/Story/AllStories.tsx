@@ -31,6 +31,7 @@ import {
   StoryListRow,
 } from "./components/StoryCards.js";
 import { RecommendationCollection } from "../../components/recommendations/index.js";
+import { BookCoverFallback } from "../../components/story/BookCoverFallback.js";
 import type { RecommendationFilters } from "../../recommendations.js";
 import { getApiErrorMessage } from "../../errors.js";
 import {
@@ -93,10 +94,12 @@ const AllStories: React.FC = () => {
   const status = statusFromParam(searchParams.get("status"));
   const statusQuery = status ? `?status=${status}` : "";
   const [searchInput, setSearchInput] = useState("");
+  const [recommendationsOpen, setRecommendationsOpen] = useState(false);
   const [genreMenuOpen, setGenreMenuOpen] = useState(false);
   const [discoveryTitle, setDiscoveryTitle] = useState("");
   const [discoveryPrompt, setDiscoveryPrompt] = useState<string | undefined>();
   const genreMenuRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLFormElement | null>(null);
 
   const activeCategory =
     CATEGORIES.find((c) => c.value === selectedCategory) ?? CATEGORIES[0];
@@ -134,8 +137,20 @@ const AllStories: React.FC = () => {
   const forYou = useBehavioralRecommendations(
     identity.uid,
     recommendationFilters,
-    RECOMMENDATIONS_ENABLED && searchInput.trim() === "" && !discoveryActive,
+    RECOMMENDATIONS_ENABLED && recommendationsOpen && searchInput.trim() === "",
   );
+
+  useEffect(() => {
+    if (!recommendationsOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!searchRef.current?.contains(event.target as Node)) {
+        setRecommendationsOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () =>
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [recommendationsOpen]);
 
   const navigate = useNavigate();
 
@@ -199,6 +214,7 @@ const AllStories: React.FC = () => {
 
   const handleSearchChange = (value: string) => {
     setSearchInput(value);
+    setRecommendationsOpen(value.trim() === "");
     if (discover.data || discover.isError) {
       setDiscoveryTitle("");
       setDiscoveryPrompt(undefined);
@@ -215,6 +231,7 @@ const AllStories: React.FC = () => {
   const discoverPrompt = () => {
     const prompt = searchInput.trim();
     if (!signedIn || prompt.length < MIN_SEARCH_LENGTH) return;
+    setRecommendationsOpen(false);
     setDiscoveryTitle(`Discoveries for “${prompt}”`);
     setDiscoveryPrompt(prompt);
     discover.mutate({
@@ -230,6 +247,7 @@ const AllStories: React.FC = () => {
     (story: { title: string; author?: string | null }) => {
       if (!signedIn) return;
       setSearchInput("");
+      setRecommendationsOpen(false);
       setDiscoveryTitle(`More like ${story.title}`);
       setDiscoveryPrompt(undefined);
       runDiscovery({
@@ -248,35 +266,6 @@ const AllStories: React.FC = () => {
   );
   const cardSimilar =
     RECOMMENDATIONS_ENABLED && signedIn ? discoverSimilar : undefined;
-
-  // A single row at the head of the story list, above the grid, on every
-  // viewport. It stands down whenever search or AI discovery takes over the
-  // column, so only one shelf is ever competing for that slot.
-  const forYouShelf =
-    RECOMMENDATIONS_ENABLED &&
-    signedIn &&
-    searchInput.trim() === "" &&
-    !discoveryActive &&
-    (forYou.isLoading || forYou.data) ? (
-      <RecommendationCollection
-        variant="row"
-        eyebrow={
-          forYou.data?.mode === "behavioral"
-            ? "Chosen from your reading"
-            : "A good place to begin"
-        }
-        title={
-          forYou.data?.mode === "behavioral"
-            ? "For you"
-            : "Popular on TheTaleTribe"
-        }
-        data={forYou.data}
-        loading={forYou.isLoading}
-        error={forYou.error}
-        quietError
-        onSimilar={discoverSimilar}
-      />
-    ) : null;
 
   const handleNewStory = () => {
     if (user) {
@@ -335,27 +324,41 @@ const AllStories: React.FC = () => {
             {/* Search — matches title and author server-side, so it reaches
                 stories the infinite-scroll grid has not loaded yet. */}
             <form
+              ref={searchRef}
               role="search"
-              className="relative mb-2"
+              className="relative z-30 mb-2"
               onSubmit={(event) => {
                 event.preventDefault();
                 discoverPrompt();
               }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setRecommendationsOpen(false);
+              }}
             >
               <Search
                 size={16}
-                className="absolute left-0 top-1/2 -translate-y-1/2 text-ns-ink-muted pointer-events-none"
+                className="pointer-events-none absolute left-4 top-[22px] -translate-y-1/2 text-ns-ink-muted"
                 aria-hidden="true"
               />
               <input
                 type="search"
                 value={searchInput}
                 onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => {
+                  if (!searchInput.trim()) setRecommendationsOpen(true);
+                }}
                 placeholder="Search stories by title or author…"
                 aria-label="Search stories by title or author"
-                className={`w-full pl-6 py-2.5 font-ui text-sm bg-transparent border-0 border-b border-ns-border text-ns-ink placeholder:text-ns-ink-muted focus:outline-none focus:border-ns-accent transition-colors [&::-webkit-search-cancel-button]:hidden ${RECOMMENDATIONS_ENABLED && signedIn ? "pr-32" : "pr-8"}`}
+                aria-expanded={
+                  RECOMMENDATIONS_ENABLED &&
+                  signedIn &&
+                  recommendationsOpen &&
+                  !searchInput.trim()
+                }
+                aria-controls="story-search-recommendations"
+                className={`w-full rounded-ns border border-ns-border bg-ns-elevated py-3 pl-11 font-ui text-sm text-ns-ink shadow-sm outline-none transition-colors placeholder:text-ns-ink-muted focus:border-ns-accent focus:ring-2 focus:ring-ns-accent/15 [&::-webkit-search-cancel-button]:hidden ${RECOMMENDATIONS_ENABLED && signedIn ? "pr-32" : "pr-8"}`}
               />
-              <div className="absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1">
+              <div className="absolute right-3 top-[22px] flex -translate-y-1/2 items-center gap-1">
                 {searchInput && (
                   <button
                     type="button"
@@ -366,20 +369,122 @@ const AllStories: React.FC = () => {
                     <X size={14} />
                   </button>
                 )}
-                {RECOMMENDATIONS_ENABLED && signedIn && (
-                  <button
-                    type="submit"
-                    disabled={
-                      searchInput.trim().length < MIN_SEARCH_LENGTH ||
-                      discover.isPending
-                    }
-                    className="inline-flex items-center gap-1.5 rounded-full border border-ns-accent/30 bg-ns-accent/5 px-2.5 py-1 font-ui text-[10px] font-medium uppercase tracking-[0.08em] text-ns-accent transition-colors hover:bg-ns-accent/10 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    Discover
-                  </button>
-                )}
+                {RECOMMENDATIONS_ENABLED &&
+                  signedIn &&
+                  (searchInput.trim() ? (
+                    <button
+                      type="submit"
+                      disabled={
+                        searchInput.trim().length < MIN_SEARCH_LENGTH ||
+                        discover.isPending
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-full bg-ns-accent/10 px-2.5 py-1 font-ui text-xs font-medium text-ns-accent transition-colors hover:bg-ns-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Discover
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setRecommendationsOpen((open) => !open)}
+                      aria-expanded={recommendationsOpen}
+                      aria-controls="story-search-recommendations"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-ns-accent/10 px-2.5 py-1 font-ui text-xs font-medium text-ns-accent transition-colors hover:bg-ns-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ns-accent"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      For you
+                    </button>
+                  ))}
               </div>
+              {RECOMMENDATIONS_ENABLED &&
+                signedIn &&
+                recommendationsOpen &&
+                !searchInput.trim() && (
+                  <section
+                    id="story-search-recommendations"
+                    aria-label="Recommended stories"
+                    className="absolute left-0 right-0 top-full mt-2 max-h-[min(70vh,32rem)] overflow-y-auto rounded-ns border border-ns-border bg-ns-elevated p-3 shadow-ns-lg sm:p-4"
+                  >
+                    <div className="mb-3 flex items-start justify-between gap-3 border-b border-ns-border pb-3">
+                      <div>
+                        <h2 className="font-heading text-lg font-medium text-ns-ink">
+                          {forYou.data?.mode === "behavioral"
+                            ? "For you"
+                            : "Popular on TheTaleTribe"}
+                        </h2>
+                        <p className="font-ui text-xs text-ns-ink-muted">
+                          {forYou.data?.mode === "behavioral"
+                            ? "Chosen from your reading"
+                            : "A good place to begin"}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRecommendationsOpen(false)}
+                        aria-label="Close recommendations"
+                        className="rounded-full p-1 text-ns-ink-muted hover:bg-ns-surface hover:text-ns-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-ns-accent"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    {forYou.isLoading ? (
+                      <p className="py-5 font-ui text-sm text-ns-ink-muted">
+                        Finding stories for you…
+                      </p>
+                    ) : forYou.isError ? (
+                      <p className="py-5 font-ui text-sm text-ns-ink-secondary">
+                        Recommendations are unavailable right now. Try searching
+                        for a story.
+                      </p>
+                    ) : forYou.data?.items.length ? (
+                      <div className="grid gap-1 sm:grid-cols-2">
+                        {forYou.data.items.map((item) => (
+                          <Link
+                            key={item.id}
+                            to={storyPath(item.story_id, item.title)}
+                            onClick={() => setRecommendationsOpen(false)}
+                            className="group flex min-w-0 items-center gap-3 rounded-ns p-2 no-underline transition-colors hover:bg-ns-surface focus-visible:bg-ns-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-ns-accent"
+                          >
+                            <span className="h-16 w-11 shrink-0 overflow-hidden rounded-sm bg-ns-surface shadow-sm">
+                              {item.cover_url ? (
+                                <img
+                                  src={item.cover_url}
+                                  alt=""
+                                  loading="lazy"
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <BookCoverFallback
+                                  title={item.title}
+                                  author={item.author}
+                                  size="tiny"
+                                />
+                              )}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block truncate font-ui text-sm font-medium text-ns-ink group-hover:text-ns-accent">
+                                {item.title}
+                              </span>
+                              <span className="block truncate font-ui text-xs text-ns-ink-muted">
+                                {item.author || "TheTaleTribe author"}
+                              </span>
+                              {item.core_premise && (
+                                <span className="mt-1 block truncate font-body text-xs text-ns-ink-secondary">
+                                  {item.core_premise}
+                                </span>
+                              )}
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="py-5 font-ui text-sm text-ns-ink-secondary">
+                        No recommendations yet. Search by title or author to
+                        explore stories.
+                      </p>
+                    )}
+                  </section>
+                )}
             </form>
             <div className="mb-6 min-h-4">
               {RECOMMENDATIONS_ENABLED && searchInput.trim().length >= 2 && (
@@ -476,8 +581,6 @@ const AllStories: React.FC = () => {
                 </Link>
               </p>
             )}
-
-            {forYouShelf}
 
             {discover.isError && (
               <div className="mb-6 flex items-center justify-between gap-4 rounded-ns border border-ns-destructive/20 bg-ns-elevated px-4 py-3 font-ui text-sm text-ns-ink-secondary">
