@@ -1,14 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Book, ChevronDown, PlusCircle } from "lucide-react";
+import { Book, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DropResult } from "@hello-pangea/dnd";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { TemplatePreviewDialog } from "./TemplatePreviewDialog";
 
 import { PlotLineEditModal } from "./PlotlineEditModal";
 import { EventEditModal } from "./EventEditModal";
@@ -24,13 +19,7 @@ import {
   rememberedPlotView,
   resolvePlotView,
 } from "./plotView";
-import {
-  PlotEvent,
-  PlotLine,
-  TemplateData,
-  DEFAULT_PLOT_EVENT_VALUES,
-  PLOT_TEMPLATES,
-} from "@/types/IPlot";
+import { PlotEvent, PlotLine, DEFAULT_PLOT_EVENT_VALUES } from "@/types/IPlot";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/queries/queryKeys";
 import { useCharacters } from "@/hooks/queries/useCharacterQueries";
@@ -89,7 +78,7 @@ const PlotWorkspace: React.FC = () => {
   });
   const chapters = useMemo(() => chapterOptions(chapterIndex), [chapterIndex]);
 
-  const templates: TemplateData[] = PLOT_TEMPLATES;
+  const [templateOpen, setTemplateOpen] = useState(false);
   const [isPlotLineModalOpen, setisPlotLineModalOpen] = useState(false);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [editingPlotLine, setEditingPlotLine] = useState<PlotLine | null>(null);
@@ -483,34 +472,43 @@ const PlotWorkspace: React.FC = () => {
     setEditingEvent(null);
   };
 
-  const addPlotLineFromTemplate = async (template: TemplateData) => {
-    if (!storyId || !user) {
-      console.error("No storyId or user provided");
-      return;
-    }
-
+  const createTemplate = async (
+    destination:
+      { kind: "new"; name: string } | { kind: "existing"; lineId: string },
+    events: Omit<PlotEvent, "id" | "revision">[],
+  ) => {
+    if (!storyId) return;
     try {
-      const plotLine = await addPlotLineMutation.mutateAsync(template.name);
-
-      // Sequential: each addEvent is an arrayUnion on the same document.
-      for (const [idx, e] of template.events.entries()) {
-        await addEventMutation.mutateAsync({
-          plotLineId: plotLine.id,
-          event: {
-            ...DEFAULT_PLOT_EVENT_VALUES,
-            content: e.content,
-            name: e.name,
-            orderIndex: idx,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            userId: user.uid,
-          },
-        });
+      let firstEventId: string | null = null;
+      if (destination.kind === "new") {
+        const line = await storyWorldbuildingRepo.addPlotWithEvents(
+          storyId,
+          { name: destination.name },
+          events,
+        );
+        setActivePlotLineId(line.id);
+        firstEventId = line.events[0]?.id ?? null;
+      } else {
+        const created = await storyWorldbuildingRepo.addEvents(
+          storyId,
+          destination.lineId,
+          events,
+        );
+        setActivePlotLineId(destination.lineId);
+        firstEventId = created[0]?.id ?? null;
       }
-
-      setActivePlotLineId(plotLine.id);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.plots.byStory(storyId),
+      });
+      setViewState({ view: "outline", group: "lines" });
+      setHighlightedEventId(firstEventId);
+      toast.success("Template events created");
     } catch (error) {
-      console.error("Error adding plot line from template:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not create template events",
+      );
       throw error;
     }
   };
@@ -622,31 +620,21 @@ const PlotWorkspace: React.FC = () => {
           Add Plot Line
         </button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className="inline-flex items-center gap-1.5 h-auto px-3 py-1.5 bg-transparent border border-ns-border text-ns-ink-secondary font-ui text-xs font-normal rounded-ns hover:bg-ns-surface-hover hover:text-ns-ink transition-all duration-150 shadow-none"
-            >
-              <Book className="w-3.5 h-3.5" />
-              Templates
-              <ChevronDown className="w-3 h-3 ml-0.5 opacity-60" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="border border-ns-border bg-ns-elevated shadow-ns-lg rounded-ns-lg p-1 min-w-[200px]">
-            {templates.map((template, idx) => (
-              <DropdownMenuItem
-                key={idx}
-                onSelect={() => addPlotLineFromTemplate(template)}
-                className="px-3 py-2 hover:bg-ns-surface-hover rounded-ns cursor-pointer font-ui text-sm text-ns-ink"
-              >
-                <span className="font-heading italic">{template.name}</span>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button
+          variant="outline"
+          onClick={() => setTemplateOpen(true)}
+          className="inline-flex items-center gap-1.5 h-auto px-3 py-1.5 bg-transparent border border-ns-border text-ns-ink-secondary font-ui text-xs font-normal rounded-ns hover:bg-ns-surface-hover hover:text-ns-ink transition-all duration-150 shadow-none"
+        >
+          <Book className="w-3.5 h-3.5" /> Templates
+        </Button>
       </div>
 
+      <TemplatePreviewDialog
+        open={templateOpen}
+        lines={plotLines}
+        onClose={() => setTemplateOpen(false)}
+        onCreate={createTemplate}
+      />
       <div className="flex-1 overflow-auto">
         <div className="p-4 space-y-4 max-w-6xl mx-auto">
           {plotLines.length === 0 ? (

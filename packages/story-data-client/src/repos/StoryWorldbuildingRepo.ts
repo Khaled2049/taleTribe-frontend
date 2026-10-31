@@ -175,6 +175,20 @@ export class StoryWorldbuildingRepo {
       ),
     );
   }
+  async addPlotWithEvents(
+    storyId: string,
+    line: { name: string; description?: string },
+    events: Omit<PlotEvent, "id" | "revision">[],
+  ) {
+    const created = await this.request<PlotLine>(
+      "POST",
+      `/v1/stories/${storyId}/plots/with-events`,
+      { line, events: events.map((event) => this.eventInput(event)) },
+    );
+    this.wrote("plot", created);
+    created.events.forEach((event) => this.wrote("event", event));
+    return this.line(created);
+  }
   async updatePlotMeta(storyId: string, line: PlotLine) {
     return this.line(
       this.wrote(
@@ -225,6 +239,19 @@ export class StoryWorldbuildingRepo {
         ),
       ),
     );
+  }
+  async addEvents(
+    storyId: string,
+    lineId: string,
+    events: Omit<PlotEvent, "id" | "revision">[],
+  ) {
+    const created = await this.request<PlotEvent[]>(
+      "POST",
+      `/v1/stories/${storyId}/plots/${lineId}/events/batch`,
+      { events: events.map((event) => this.eventInput(event)) },
+    );
+    created.forEach((event) => this.wrote("event", event));
+    return created.map((event) => this.event(event));
   }
   async updateEvent(storyId: string, lineId: string, x: PlotEvent) {
     return this.event(

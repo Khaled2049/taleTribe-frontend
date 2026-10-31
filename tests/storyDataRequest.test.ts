@@ -6,6 +6,7 @@ import {
   StoryDataConflictError,
   StoryDataError,
   isNotFound,
+  StoryWorldbuildingRepo,
 } from "../packages/story-data-client/src/index";
 
 type Call = { url: string; init: RequestInit };
@@ -40,6 +41,48 @@ beforeEach(() => {
   configure({ uid: "u1", token: "tok" });
 });
 
+describe("template batch client", () => {
+  it("uses the atomic line endpoint and strips server-owned fields", async () => {
+    vi.stubGlobal(
+      "fetch",
+      respond(201, {
+        id: "line",
+        name: "Outline",
+        description: "",
+        revision: 1,
+        events: [],
+      }),
+    );
+    const repo = new StoryWorldbuildingRepo();
+    await repo.addPlotWithEvents("story", { name: "Outline" }, [
+      {
+        name: "Setup",
+        content: "Edited",
+        chapterPosition: 2,
+        dependents: [],
+      } as never,
+    ]);
+    expect(calls[0].url).toContain("/v1/stories/story/plots/with-events");
+    const body = JSON.parse(calls[0].init.body as string);
+    expect(body.line).toEqual({ name: "Outline" });
+    expect(body.events[0]).toMatchObject({ name: "Setup", content: "Edited" });
+    expect(body.events[0]).not.toHaveProperty("chapterPosition");
+    expect(body.events[0]).not.toHaveProperty("dependents");
+  });
+
+  it("uses the existing line batch endpoint", async () => {
+    vi.stubGlobal("fetch", respond(201, []));
+    const repo = new StoryWorldbuildingRepo();
+    await repo.addEvents("story", "line", [
+      { name: "A beat", content: "" } as never,
+    ]);
+    expect(calls[0].url).toContain("/v1/stories/story/plots/line/events/batch");
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({
+      events: [{ name: "A beat", content: "" }],
+    });
+  });
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -61,9 +104,9 @@ describe("auth modes", () => {
     const fetchMock = respond(200, {});
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(request("/v1/stories", { auth: "required" })).rejects.toBeInstanceOf(
-      StoryDataAuthError,
-    );
+    await expect(
+      request("/v1/stories", { auth: "required" }),
+    ).rejects.toBeInstanceOf(StoryDataAuthError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -107,7 +150,11 @@ describe("headers", () => {
     expect(headersOf(calls[0])["Content-Type"]).toBeUndefined();
     expect(headersOf(calls[0])).toEqual({});
 
-    await request("/v1/stories", { method: "POST", body: { title: "x" }, auth: "none" });
+    await request("/v1/stories", {
+      method: "POST",
+      body: { title: "x" },
+      auth: "none",
+    });
     expect(headersOf(calls[1])["Content-Type"]).toBe("application/json");
     expect(calls[1].init.body).toBe(JSON.stringify({ title: "x" }));
   });
@@ -115,7 +162,11 @@ describe("headers", () => {
   it("sends If-Match only when a revision is given", async () => {
     vi.stubGlobal("fetch", respond(200, {}));
 
-    await request("/v1/stories/s1", { method: "PATCH", body: {}, auth: "required" });
+    await request("/v1/stories/s1", {
+      method: "PATCH",
+      body: {},
+      auth: "required",
+    });
     expect(headersOf(calls[0])["If-Match"]).toBeUndefined();
 
     await request("/v1/stories/s1", {
@@ -153,7 +204,9 @@ describe("errors", () => {
   // on `message.includes("(404)")` misses exactly the responses that say so.
   it("keeps status on the error when the server supplies a message", async () => {
     vi.stubGlobal("fetch", respond(404, { error: "story not found" }));
-    const error = await request("/v1/public/stories/s1").catch((e: unknown) => e);
+    const error = await request("/v1/public/stories/s1").catch(
+      (e: unknown) => e,
+    );
 
     expect(error).toBeInstanceOf(StoryDataError);
     expect((error as StoryDataError).message).toBe("story not found");
@@ -162,9 +215,9 @@ describe("errors", () => {
 
   it("falls back to a labelled message when the body has none", async () => {
     vi.stubGlobal("fetch", respond(500));
-    const error = await request("/v1/stories", { label: "Story request" }).catch(
-      (e: unknown) => e,
-    );
+    const error = await request("/v1/stories", {
+      label: "Story request",
+    }).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(StoryDataError);
     const failure = error as StoryDataError;
@@ -178,6 +231,8 @@ describe("configuration", () => {
     // Re-import in isolation so the module-level config starts empty.
     vi.resetModules();
     const fresh = await import("../packages/story-data-client/src/request");
-    await expect(fresh.request("/v1/stories")).rejects.toThrow(/not configured/);
+    await expect(fresh.request("/v1/stories")).rejects.toThrow(
+      /not configured/,
+    );
   });
 });
