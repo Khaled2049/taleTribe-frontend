@@ -19,7 +19,7 @@ const line = (revision: number) =>
     events: [],
   }) as unknown as PlotLine;
 
-let calls: { method: string; ifMatch: string | undefined }[];
+let calls: { method: string; ifMatch: string | undefined; body?: unknown }[];
 
 function respondWith(...bodies: unknown[]) {
   const queue = [...bodies];
@@ -30,6 +30,7 @@ function respondWith(...bodies: unknown[]) {
       calls.push({
         method: init.method ?? "GET",
         ifMatch: headers["If-Match"],
+        body: typeof init.body === "string" ? JSON.parse(init.body) : undefined,
       });
       const body = queue.shift();
       return Promise.resolve({
@@ -107,5 +108,49 @@ describe("StoryWorldbuildingRepo If-Match", () => {
     await repo.updateEvent("s1", "l1", event("e1", 1));
 
     expect(calls.map((call) => call.ifMatch)).toEqual(["1", "1"]);
+  });
+
+  it("never sends the server-owned chapterPosition", async () => {
+    const repo = new StoryWorldbuildingRepo();
+    respondWith(event("e1", 2));
+
+    await repo.updateEvent("s1", "l1", {
+      ...event("e1", 1),
+      chapterId: "c1",
+      chapterPosition: 4,
+    });
+
+    expect(calls[0].body).not.toHaveProperty("chapterPosition");
+    expect(calls[0].body).toHaveProperty("chapterId", "c1");
+  });
+
+  it("counts a chapter reorder's bump for moved-in events only", async () => {
+    const repo = new StoryWorldbuildingRepo();
+    // e2 was already in the chapter; its 9 came from another writer.
+    respondWith(
+      [{ ...line(1), events: [event("e1", 4), event("e2", 9)] }],
+      event("e1", 5),
+      event("e2", 3),
+    );
+
+    await repo.reorderChapterEvents("s1", "c1", ["e2", "e1"], [event("e1", 3)]);
+    await repo.updateEvent("s1", "l1", event("e1", 3));
+    await repo.updateEvent("s1", "l1", event("e2", 2));
+
+    expect(calls.map((call) => call.ifMatch)).toEqual([undefined, "4", "2"]);
+  });
+
+  it("counts a move's bump of both plot lines, not the event", async () => {
+    const repo = new StoryWorldbuildingRepo();
+    const from = line(3);
+    const to = { ...line(7), id: "l2" };
+    respondWith([], from, to, event("e1", 2));
+
+    await repo.moveEvent("s1", from, event("e1", 1), to, 0);
+    await repo.updatePlotMeta("s1", { ...from, name: "Renamed" });
+    await repo.updatePlotMeta("s1", { ...to, name: "Renamed" });
+    await repo.updateEvent("s1", "l2", event("e1", 1));
+
+    expect(calls.map((call) => call.ifMatch)).toEqual(["1", "4", "8", "1"]);
   });
 });

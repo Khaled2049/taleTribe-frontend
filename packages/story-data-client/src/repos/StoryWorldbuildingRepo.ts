@@ -203,6 +203,7 @@ export class StoryWorldbuildingRepo {
       revision: _revision,
       userId: _userId,
       dependents: _dependents,
+      chapterPosition: _chapterPosition,
       createdAt: _createdAt,
       updatedAt: _updatedAt,
       ...input
@@ -255,6 +256,58 @@ export class StoryWorldbuildingRepo {
     this.written.delete(`event:${id}`);
     return events;
   }
+  /** Counts a write this session caused, without adopting anyone else's. */
+  private bumped(kind: string, id: string, snapshot?: number) {
+    const known = Math.max(
+      snapshot ?? 0,
+      this.written.get(`${kind}:${id}`) ?? 0,
+    );
+    if (known) this.written.set(`${kind}:${id}`, known + 1);
+  }
+
+  /**
+   * Sets a chapter's event order. `orderedIds` must include every event already
+   * in the chapter; `movedIn` are the listed events coming from elsewhere,
+   * whose revisions the server bumps because their chapter changed.
+   */
+  async reorderChapterEvents(
+    storyId: string,
+    chapterId: string,
+    orderedIds: string[],
+    movedIn: { id: string; revision?: number }[] = [],
+  ) {
+    const lines = (
+      (await this.request<PlotLine[]>(
+        "POST",
+        `/v1/stories/${storyId}/plots/chapter-order`,
+        { chapterId, orderedIds },
+      )) ?? []
+    ).map((x) => this.line(x));
+    for (const event of movedIn) this.bumped("event", event.id, event.revision);
+    return lines;
+  }
+
+  /** Moves an event to another plot line at `toIndex`; both lines' revisions move. */
+  async moveEvent(
+    storyId: string,
+    from: PlotLine,
+    event: PlotEvent,
+    to: PlotLine,
+    toIndex: number,
+  ) {
+    const lines = (
+      (await this.request<PlotLine[]>(
+        "POST",
+        `/v1/stories/${storyId}/plots/${from.id}/events/${event.id}/move`,
+        { toPlotLineId: to.id, toIndex },
+        this.rev("event", event.id, event.revision),
+      )) ?? []
+    ).map((x) => this.line(x));
+    this.bumped("plot", from.id, from.revision);
+    if (to.id !== from.id) this.bumped("plot", to.id, to.revision);
+    return lines;
+  }
+
   async reorderEvents(storyId: string, line: PlotLine, orderedIds: string[]) {
     const revision = this.rev("plot", line.id, line.revision);
     const events = (

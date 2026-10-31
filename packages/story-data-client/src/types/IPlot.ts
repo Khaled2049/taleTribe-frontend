@@ -56,6 +56,8 @@ export interface PlotEvent {
   timeConstraint?: TimeConstraint;
   orderIndex: number;
   chapterId: string | null; // The chapter it is planned for; null when unassigned
+  /** Place among the chapter's events across plot lines; server-owned, never sent. */
+  chapterPosition?: number | null;
   status: PlotEventStatus;
 
   // Metadata
