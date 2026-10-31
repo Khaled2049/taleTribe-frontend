@@ -7,12 +7,13 @@ export type {
   EventDependency,
   PacingType,
   PlotEvent,
+  PlotEventStatus,
   PlotLine,
   StoryBeatType,
   TimeConstraint,
 } from "@novelsync/story-data-client";
 
-// Default values for migrating old events
+// Starting values for a new event. story-data returns every field on read.
 export const DEFAULT_PLOT_EVENT_VALUES: Omit<
   PlotEvent,
   "id" | "name" | "content"
@@ -25,34 +26,9 @@ export const DEFAULT_PLOT_EVENT_VALUES: Omit<
   pacing: "moderate",
   storyBeat: "rising_action",
   orderIndex: 0,
+  chapterId: null,
+  status: "planned",
 };
-
-/**
- * The single source of truth for plot-event defaulting. Early events were just
- * `{ id, name, content }`, so anything read out of Firestore has to be backfilled
- * before the UI sees it.
- *
- * Order matters: defaults first, then the stored event, so a real value is never
- * overwritten by a default. Migration happens on read only — it is not written
- * back unless the user edits the event.
- */
-export function ensureEventDefaults(
-  event: Partial<PlotEvent> & { id: string; name: string; content: string },
-  orderIndex: number,
-): PlotEvent {
-  return {
-    ...DEFAULT_PLOT_EVENT_VALUES,
-    ...event,
-    characterIds: event.characterIds ?? [],
-    locationId: event.locationId ?? null,
-    dependencies: event.dependencies ?? [],
-    dependents: event.dependents ?? [],
-    tensionLevel: event.tensionLevel ?? 5,
-    pacing: event.pacing ?? "moderate",
-    storyBeat: event.storyBeat ?? "rising_action",
-    orderIndex: event.orderIndex ?? orderIndex,
-  };
-}
 
 export interface TemplateItem {
   id: number;

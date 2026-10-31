@@ -19,7 +19,6 @@ import {
   TemplateData,
   DEFAULT_PLOT_EVENT_VALUES,
   PLOT_TEMPLATES,
-  ensureEventDefaults,
 } from "@/types/IPlot";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/queries/queryKeys";
@@ -60,15 +59,8 @@ const PlotTimeline: React.FC = () => {
   const deleteEventMutation = useDeleteEvent(storyId);
   const reorderEventsMutation = useReorderEvents(storyId);
 
-  // Legacy events are backfilled on read so the grid never sees a partial event.
   const plotLines: PlotLine[] = useMemo(
-    () =>
-      (rawPlotLines ?? []).map((line) => ({
-        ...line,
-        events: (line.events ?? []).map((event, index) =>
-          ensureEventDefaults(event, index),
-        ),
-      })),
+    () => rawPlotLines ?? [],
     [rawPlotLines],
   );
 

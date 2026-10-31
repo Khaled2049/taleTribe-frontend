@@ -1,9 +1,4 @@
-import {
-  PlotEvent,
-  StoryBeatType,
-  PacingType,
-  ensureEventDefaults,
-} from "@/types/IPlot";
+import { PlotEvent, StoryBeatType, PacingType } from "@/types/IPlot";
 import { useEffect, useRef, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Character } from "@novelsync/story-data-client";
@@ -79,11 +74,7 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
 
   if (!isOpen || !editingEvent) return null;
 
-  // Ensure event has all fields with defaults
-  const event = ensureEventDefaults(
-    editingEvent.event,
-    editingEvent.event.orderIndex ?? 0,
-  );
+  const event = editingEvent.event;
 
   const handleOverlayMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     pointerDownOnOverlay.current = e.target === e.currentTarget;

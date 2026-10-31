@@ -8,6 +8,9 @@ export type StoryBeatType =
   | "falling_action"
   | "resolution";
 
+// Writer-set progress of a planned event. Never inferred from the text.
+export type PlotEventStatus = "planned" | "in_progress" | "written";
+
 // Pacing types for scene rhythm
 export type PacingType = "slow" | "moderate" | "fast";
 
@@ -25,11 +28,7 @@ export interface EventDependency {
   eventId: string;
   plotLineId: string;
   relationshipType:
-    | "causes"
-    | "requires"
-    | "blocks"
-    | "enables"
-    | "contradicts";
+    "causes" | "requires" | "blocks" | "enables" | "contradicts";
   description?: string;
 }
 
@@ -56,7 +55,8 @@ export interface PlotEvent {
   // Chronological constraints
   timeConstraint?: TimeConstraint;
   orderIndex: number;
-  chapterNumber?: number; // Optional link to a chapter
+  chapterId: string | null; // The chapter it is planned for; null when unassigned
+  status: PlotEventStatus;
 
   // Metadata
   createdAt?: string;
