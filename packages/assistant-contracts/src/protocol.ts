@@ -150,8 +150,20 @@ export const storyChangeFieldsSchema = z
       .max(LIMITS.eventCharacters),
     locationId: z.string().min(1).max(LIMITS.idChars),
     notes: entityProse,
+    chapter: z.string().min(1).max(LIMITS.entityNameChars),
+    requires: z
+      .array(z.string().min(1).max(LIMITS.entityNameChars))
+      .max(LIMITS.eventRequirements),
   })
   .partial()
+  .strict();
+
+/** A name the model wrote, resolved by the agent. `id` is null for "unassigned". */
+export const boundReferenceSchema = z
+  .object({
+    id: z.string().min(1).max(LIMITS.idChars).nullable().optional(),
+    label: z.string().min(1).max(LIMITS.summaryChars),
+  })
   .strict();
 
 type StoryChangeField = keyof z.infer<typeof storyChangeFieldsSchema>;
@@ -191,6 +203,8 @@ export const STORY_CHANGE_FIELDS_BY_KIND: Record<
     "characterIds",
     "locationId",
     "notes",
+    "chapter",
+    "requires",
   ],
 };
 
@@ -202,6 +216,11 @@ export const storyChangeSchema = z
     fields: storyChangeFieldsSchema,
     baseRevision: z.number().int().nonnegative().optional(),
     label: z.string().min(1).max(LIMITS.entityNameChars),
+    boundChapter: boundReferenceSchema.optional(),
+    boundRequires: z
+      .array(boundReferenceSchema)
+      .max(LIMITS.eventRequirements)
+      .optional(),
   })
   .strict()
   // A field the kind does not own would be shown on the card and then dropped
@@ -217,6 +236,27 @@ export const storyChangeSchema = z
           message: `${kind} changes cannot set ${field}`,
         });
       }
+    }
+    // The browser saves the bound ids, so a name without its binding is unsavable.
+    if ((change.fields.chapter === undefined) !== !change.boundChapter) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["boundChapter"],
+        message: "boundChapter goes with chapter, and only with it",
+      });
+    }
+    const requires = change.fields.requires;
+    const bound = change.boundRequires;
+    if (
+      requires === undefined
+        ? bound !== undefined
+        : bound?.length !== requires.length || bound.some((ref) => !ref.id)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["boundRequires"],
+        message: "boundRequires must resolve every entry of requires",
+      });
     }
   });
 

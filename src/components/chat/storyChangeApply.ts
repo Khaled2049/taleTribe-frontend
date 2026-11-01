@@ -12,6 +12,7 @@ import {
   type StoryWorldbuildingRepo,
 } from "@novelsync/story-data-client";
 import { DEFAULT_PLOT_EVENT_VALUES } from "@/types/IPlot";
+import { eventLinks } from "./eventChangePreview";
 
 export type StoryChangeKind = "character" | "place" | "plot" | "event";
 
@@ -30,6 +31,11 @@ export type StoryChangeRepo = Pick<
   | "addEvent"
   | "updateEvent"
 >;
+
+export interface ApplyOptions {
+  /** Whether the plot save queue holds an edit to this event not yet saved. */
+  hasUnsavedEdit?: (eventId: string) => boolean;
+}
 
 export type StorySnapshot = {
   characters?: Character[];
@@ -122,6 +128,7 @@ async function applyOne(
   storyId: string,
   change: StoryChange,
   repo: StoryChangeRepo,
+  options: ApplyOptions,
 ): Promise<string> {
   const fields = change.fields;
   switch (changeKind(change)) {
@@ -162,9 +169,16 @@ async function applyOne(
           }),
       );
     case "event": {
+      // The writer's queued edit would 409 behind this save, or this one would
+      // overwrite it; theirs wins and the suggestion reports stale.
+      if (change.entityId && options.hasUnsavedEdit?.(change.entityId)) {
+        throw new StaleChange();
+      }
       const plots = await repo.getPlots(storyId);
       const line = plots.find((x) => x.id === change.plotLineId);
       if (!line) throw new StaleChange();
+      // Chapter and requirements are names as drafted; the bound ids are saved.
+      const { chapter: _chapter, requires: _requires, ...eventFields } = fields;
       return save(
         change,
         line.events,
@@ -173,11 +187,16 @@ async function applyOne(
             ...DEFAULT_PLOT_EVENT_VALUES,
             content: "",
             orderIndex: line.events.length,
-            ...fields,
+            ...eventFields,
+            ...eventLinks(change, undefined, plots),
             name,
           }),
         (current) =>
-          repo.updateEvent(storyId, line.id, { ...current, ...fields }),
+          repo.updateEvent(storyId, line.id, {
+            ...current,
+            ...eventFields,
+            ...eventLinks(change, current, plots),
+          }),
       );
     }
   }
@@ -194,6 +213,7 @@ export async function applyStoryChanges(
   storyId: string,
   proposal: ProposeStoryChangesArgs,
   repo: StoryChangeRepo,
+  options: ApplyOptions = {},
 ): Promise<StoryChangeResult[]> {
   const results: StoryChangeResult[] = [];
   let halted = false;
@@ -203,7 +223,7 @@ export async function applyStoryChanges(
       continue;
     }
     try {
-      const entityId = await applyOne(storyId, change, repo);
+      const entityId = await applyOne(storyId, change, repo, options);
       results.push({ index, status: "applied", entityId });
     } catch (error) {
       halted = true;

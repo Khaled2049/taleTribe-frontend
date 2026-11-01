@@ -9,7 +9,7 @@ import {
   useAuiState,
   type ToolCallMessagePartProps,
 } from "@assistant-ui/react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, LoaderCircle, Sparkles, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -24,6 +24,18 @@ import { usePlaces } from "@/hooks/queries/usePlaceQueries";
 import { usePlots } from "@/hooks/queries/usePlotQueries";
 import { queryKeys } from "@/hooks/queries/queryKeys";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { workspaceChapterIndexQuery } from "@/hooks/queries/workspaceStory";
+import { useAuthContext } from "@/contexts/AuthContext";
+import {
+  chapterOptions,
+  type ChapterOption,
+} from "@/components/plot/plotChapters";
+import { eventSaveQueueFor } from "@/components/plot/useEventSaveQueue";
+import {
+  chapterDiff,
+  outOfOrderWarnings,
+  requiresDiff,
+} from "./eventChangePreview";
 import type {
   EditorActionLedger,
   EditorActionState,
@@ -70,6 +82,8 @@ const FIELD_LABEL: Record<keyof StoryChangeFields, string> = {
   characterIds: "Characters",
   locationId: "Location",
   notes: "Notes",
+  chapter: "Chapter",
+  requires: "Requires",
 };
 
 function useAction(
@@ -106,13 +120,61 @@ function display(
   return String(value).replace(/_/g, " ");
 }
 
+function LinkDiff({
+  change,
+  field,
+  snapshot,
+  chapters,
+}: {
+  change: StoryChange;
+  field: "chapter" | "requires";
+  snapshot: StorySnapshot;
+  chapters: ChapterOption[];
+}) {
+  const lines = snapshot.plots ?? [];
+  if (field === "chapter") {
+    const diff = chapterDiff(change, lines, chapters);
+    if (!diff) return <p className="text-ns-ink-muted">No change</p>;
+    return (
+      <p className="text-ns-ink">
+        {diff.before && (
+          <span className="text-ns-ink-muted">{diff.before} → </span>
+        )}
+        {diff.after}
+      </p>
+    );
+  }
+  const diff = requiresDiff(change, lines);
+  if (!diff) return <p className="text-ns-ink-muted">No change</p>;
+  return (
+    <>
+      {diff.added.map((name) => (
+        <p key={`+${name}`} className="text-ns-ink">
+          + {name}
+        </p>
+      ))}
+      {diff.removed.map((name) => (
+        <p
+          key={`-${name}`}
+          className="text-ns-ink-muted line-through decoration-red-500/60"
+        >
+          <span className="sr-only">Removed: </span>
+          {name}
+        </p>
+      ))}
+    </>
+  );
+}
+
 function ChangeRow({
   change,
   snapshot,
+  chapters,
   outcome,
 }: {
   change: StoryChange;
   snapshot: StorySnapshot;
+  chapters: ChapterOption[];
   outcome?: "applied" | "stale" | "failed" | "skipped";
 }) {
   const create = isCreate(change);
@@ -120,6 +182,10 @@ function ChangeRow({
     Record<string, unknown> | undefined;
   const stale = outcome === undefined && isStale(change, snapshot) === true;
   const fields = Object.keys(change.fields) as (keyof StoryChangeFields)[];
+  const warnings =
+    outcome === undefined
+      ? outOfOrderWarnings(change, snapshot.plots ?? [], chapters)
+      : [];
   const outcomeText = {
     applied: "Saved",
     stale: "Changed since this was drafted — not saved",
@@ -140,6 +206,23 @@ function ChangeRow({
       </p>
       <dl className="mt-2 space-y-2">
         {fields.map((field) => {
+          if (field === "chapter" || field === "requires") {
+            return (
+              <div key={field}>
+                <dt className="font-ui text-[10px] font-semibold uppercase tracking-wide text-ns-ink-muted">
+                  {FIELD_LABEL[field]}
+                </dt>
+                <dd className="mt-0.5 font-ui text-xs leading-5">
+                  <LinkDiff
+                    change={change}
+                    field={field}
+                    snapshot={snapshot}
+                    chapters={chapters}
+                  />
+                </dd>
+              </div>
+            );
+          }
           const before = create
             ? ""
             : display(field, current?.[field], snapshot);
@@ -162,6 +245,16 @@ function ChangeRow({
           );
         })}
       </dl>
+      {warnings.length > 0 && (
+        <div className="mt-2 font-ui text-[11px] leading-4 text-amber-700 dark:text-amber-300">
+          <p>Out of order once saved:</p>
+          <ul className="list-disc pl-4">
+            {warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {(stale || outcome) && (
         <p
           role="status"
@@ -212,6 +305,7 @@ export function ApplyStoryChangesCard({
 }) {
   const queryClient = useQueryClient();
   const { isOnline } = useNetworkStatus();
+  const { user } = useAuthContext();
   const messageContent = useAuiState((state) => state.message.content);
   const isLastMessage = useAuiState((state) => state.message.isLast);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -233,6 +327,14 @@ export function ApplyStoryChangesCard({
   const characters = characterQuery.data;
   const places = placeQuery.data;
   const plots = plotQuery.data;
+  const chapterQuery = useQuery({
+    ...workspaceChapterIndexQuery(user?.uid ?? "", storyId ?? ""),
+    enabled: !!user?.uid && !!storyId,
+  });
+  const chapters = useMemo(
+    () => chapterOptions(chapterQuery.data),
+    [chapterQuery.data],
+  );
   // Accepting before these load would mean approving without the before-values.
   const loaded = Boolean(characters && places && plots);
   const loadFailed =
@@ -296,10 +398,12 @@ export function ApplyStoryChangesCard({
   const apply = useCallback(async () => {
     if (!storyId || !ledger || !approvalId || !proposal || !canApply) return;
     if (!ledger.beginApply(approvalId)) return;
+    const queue = eventSaveQueueFor(queryClient, storyId);
     const results = await applyStoryChanges(
       storyId,
       proposal,
       storyWorldbuildingRepo,
+      { hasUnsavedEdit: (eventId) => queue.local(eventId) !== null },
     );
     refresh();
     const saved = allApplied(results);
@@ -322,6 +426,7 @@ export function ApplyStoryChangesCard({
     canApply,
     ledger,
     proposal,
+    queryClient,
     refresh,
     respondToApproval,
     storyId,
@@ -385,6 +490,7 @@ export function ApplyStoryChangesCard({
               key={`${change.operation}:${change.entityId ?? change.label}`}
               change={change}
               snapshot={snapshot}
+              chapters={chapters}
               outcome={results?.find((item) => item.index === index)?.status}
             />
           ))}

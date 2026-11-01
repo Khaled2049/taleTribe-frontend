@@ -17,6 +17,10 @@ import {
   initialDockWidth,
 } from "./assistantDock";
 import {
+  pendingAssistantPrompt,
+  subscribeAssistantPrompt,
+} from "./assistantPrompt";
+import {
   AssistantDockPlaceholder,
   AssistantFab,
   AssistantRail,
@@ -82,6 +86,16 @@ export const FloatingChatButton: React.FC<FloatingChatButtonProps> = ({
   }, [desktopOpen]);
 
   const available = Boolean(currentStoryId) && ASSISTANT_UI_ENABLED;
+  const pendingPrompt = useSyncExternalStore(
+    subscribeAssistantPrompt,
+    pendingAssistantPrompt,
+  );
+  useEffect(() => {
+    if (!available || pendingPrompt?.storyId !== currentStoryId) return;
+    setOpenedByWriter(true);
+    if (isLgUp) setDesktopOpen(true);
+    else setMobileOpen(true);
+  }, [available, currentStoryId, isLgUp, pendingPrompt]);
   useEffect(() => {
     if (!available) return;
     const onKeyDown = (event: KeyboardEvent) => {
