@@ -10,7 +10,7 @@ const named = (name: string, fallback: string) =>
 export function developChapterPrompt(chapter: ChapterOption): string {
   return (
     `Help me develop the planned events for chapter ${chapter.number}, ` +
-    `${named(chapter.title, "Untitled")}. Look at what they require and what ` +
+    `${named(chapter.title, "Untitled")}. Look at what leads into them and what ` +
     "they set up, then suggest how to strengthen them."
   );
 }
@@ -27,5 +27,5 @@ export function strongerConsequencePrompt(
 }
 
 export const CHECK_OUTLINE_PROMPT =
-  "Review my whole outline for setups that are never paid off, events " +
-  "missing a prerequisite, and prerequisites that come too late.";
+  "Review my whole outline for setups that are never paid off, events that " +
+  "happen without a cause, and chapters where nothing changes.";

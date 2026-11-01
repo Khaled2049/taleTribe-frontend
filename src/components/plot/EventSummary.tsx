@@ -36,12 +36,6 @@ export const EventSummary: React.FC<EventSummaryProps> = ({
         <h4 className="font-ui text-sm font-medium text-ns-ink leading-snug break-words">
           {event.name || "Untitled event"}
         </h4>
-        <span
-          className="flex-shrink-0 font-ui text-[11px] tabular-nums text-ns-ink-muted"
-          title={`Tension ${event.tensionLevel} of 10`}
-        >
-          Tension {event.tensionLevel}
-        </span>
       </div>
       {event.content && (
         <div>

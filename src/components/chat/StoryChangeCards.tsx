@@ -31,11 +31,7 @@ import {
   type ChapterOption,
 } from "@/components/plot/plotChapters";
 import { eventSaveQueueFor } from "@/components/plot/useEventSaveQueue";
-import {
-  chapterDiff,
-  outOfOrderWarnings,
-  requiresDiff,
-} from "./eventChangePreview";
+import { chapterDiff } from "./eventChangePreview";
 import type {
   EditorActionLedger,
   EditorActionState,
@@ -75,7 +71,6 @@ const FIELD_LABEL: Record<keyof StoryChangeFields, string> = {
   history: "History",
   significance: "Significance",
   content: "What happens",
-  tensionLevel: "Tension",
   pacing: "Pacing",
   storyBeat: "Story beat",
   emotionalTone: "Emotional tone",
@@ -83,7 +78,6 @@ const FIELD_LABEL: Record<keyof StoryChangeFields, string> = {
   locationId: "Location",
   notes: "Notes",
   chapter: "Chapter",
-  requires: "Requires",
 };
 
 function useAction(
@@ -116,53 +110,27 @@ function display(
   if (field === "locationId") {
     return snapshot.places?.find((x) => x.id === value)?.name ?? "Unknown";
   }
-  if (field === "tensionLevel") return `${String(value)} / 10`;
   return String(value).replace(/_/g, " ");
 }
 
-function LinkDiff({
+function ChapterChange({
   change,
-  field,
   snapshot,
   chapters,
 }: {
   change: StoryChange;
-  field: "chapter" | "requires";
   snapshot: StorySnapshot;
   chapters: ChapterOption[];
 }) {
-  const lines = snapshot.plots ?? [];
-  if (field === "chapter") {
-    const diff = chapterDiff(change, lines, chapters);
-    if (!diff) return <p className="text-ns-ink-muted">No change</p>;
-    return (
-      <p className="text-ns-ink">
-        {diff.before && (
-          <span className="text-ns-ink-muted">{diff.before} → </span>
-        )}
-        {diff.after}
-      </p>
-    );
-  }
-  const diff = requiresDiff(change, lines);
+  const diff = chapterDiff(change, snapshot.plots ?? [], chapters);
   if (!diff) return <p className="text-ns-ink-muted">No change</p>;
   return (
-    <>
-      {diff.added.map((name) => (
-        <p key={`+${name}`} className="text-ns-ink">
-          + {name}
-        </p>
-      ))}
-      {diff.removed.map((name) => (
-        <p
-          key={`-${name}`}
-          className="text-ns-ink-muted line-through decoration-red-500/60"
-        >
-          <span className="sr-only">Removed: </span>
-          {name}
-        </p>
-      ))}
-    </>
+    <p className="text-ns-ink">
+      {diff.before && (
+        <span className="text-ns-ink-muted">{diff.before} → </span>
+      )}
+      {diff.after}
+    </p>
   );
 }
 
@@ -182,10 +150,6 @@ function ChangeRow({
     Record<string, unknown> | undefined;
   const stale = outcome === undefined && isStale(change, snapshot) === true;
   const fields = Object.keys(change.fields) as (keyof StoryChangeFields)[];
-  const warnings =
-    outcome === undefined
-      ? outOfOrderWarnings(change, snapshot.plots ?? [], chapters)
-      : [];
   const outcomeText = {
     applied: "Saved",
     stale: "Changed since this was drafted — not saved",
@@ -206,16 +170,15 @@ function ChangeRow({
       </p>
       <dl className="mt-2 space-y-2">
         {fields.map((field) => {
-          if (field === "chapter" || field === "requires") {
+          if (field === "chapter") {
             return (
               <div key={field}>
                 <dt className="font-ui text-[10px] font-semibold uppercase tracking-wide text-ns-ink-muted">
                   {FIELD_LABEL[field]}
                 </dt>
                 <dd className="mt-0.5 font-ui text-xs leading-5">
-                  <LinkDiff
+                  <ChapterChange
                     change={change}
-                    field={field}
                     snapshot={snapshot}
                     chapters={chapters}
                   />
@@ -245,16 +208,6 @@ function ChangeRow({
           );
         })}
       </dl>
-      {warnings.length > 0 && (
-        <div className="mt-2 font-ui text-[11px] leading-4 text-amber-700 dark:text-amber-300">
-          <p>Out of order once saved:</p>
-          <ul className="list-disc pl-4">
-            {warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
-        </div>
-      )}
       {(stale || outcome) && (
         <p
           role="status"

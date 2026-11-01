@@ -133,7 +133,6 @@ export const storyChangeFieldsSchema = z
     history: entityProse,
     significance: entityProse,
     content: entityProse,
-    tensionLevel: z.number().int().min(1).max(10),
     pacing: z.enum(["slow", "moderate", "fast"]),
     storyBeat: z.enum([
       "exposition",
@@ -151,9 +150,6 @@ export const storyChangeFieldsSchema = z
     locationId: z.string().min(1).max(LIMITS.idChars),
     notes: entityProse,
     chapter: z.string().min(1).max(LIMITS.entityNameChars),
-    requires: z
-      .array(z.string().min(1).max(LIMITS.entityNameChars))
-      .max(LIMITS.eventRequirements),
   })
   .partial()
   .strict();
@@ -196,7 +192,6 @@ export const STORY_CHANGE_FIELDS_BY_KIND: Record<
   event: [
     "name",
     "content",
-    "tensionLevel",
     "pacing",
     "storyBeat",
     "emotionalTone",
@@ -204,7 +199,6 @@ export const STORY_CHANGE_FIELDS_BY_KIND: Record<
     "locationId",
     "notes",
     "chapter",
-    "requires",
   ],
 };
 
@@ -217,10 +211,6 @@ export const storyChangeSchema = z
     baseRevision: z.number().int().nonnegative().optional(),
     label: z.string().min(1).max(LIMITS.entityNameChars),
     boundChapter: boundReferenceSchema.optional(),
-    boundRequires: z
-      .array(boundReferenceSchema)
-      .max(LIMITS.eventRequirements)
-      .optional(),
   })
   .strict()
   // A field the kind does not own would be shown on the card and then dropped
@@ -243,19 +233,6 @@ export const storyChangeSchema = z
         code: "custom",
         path: ["boundChapter"],
         message: "boundChapter goes with chapter, and only with it",
-      });
-    }
-    const requires = change.fields.requires;
-    const bound = change.boundRequires;
-    if (
-      requires === undefined
-        ? bound !== undefined
-        : bound?.length !== requires.length || bound.some((ref) => !ref.id)
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["boundRequires"],
-        message: "boundRequires must resolve every entry of requires",
       });
     }
   });

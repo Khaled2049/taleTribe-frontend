@@ -1,15 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Book, PlusCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { DropResult } from "@hello-pangea/dnd";
 
 import { TemplatePreviewDialog } from "./TemplatePreviewDialog";
 
 import { PlotLineEditModal } from "./PlotlineEditModal";
 import { EventEditModal } from "./EventEditModal";
-import { PlotGridView } from "./grid/PlotGridView";
 import { OutlineView } from "./outline/OutlineView";
-import { TensionChart } from "./shape/TensionChart";
 import type { CardMenuItem } from "./outline/EventCard";
 import { applyMove, type MoveAction } from "./outline/moves";
 import { MoveEventDialog, type MoveTarget } from "./outline/MoveEventDialog";
@@ -93,15 +90,12 @@ const PlotWorkspace: React.FC = () => {
     event: PlotEvent;
   } | null>(null);
 
-  const [activePlotLineId, setActivePlotLineId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const { view, group } = resolvePlotView(searchParams, rememberedPlotView());
-  const setViewState = (patch: Partial<PlotViewState>) => {
-    const next = { view, group, ...patch };
+  const { group } = resolvePlotView(searchParams, rememberedPlotView());
+  const setViewState = (next: PlotViewState) => {
     rememberPlotView(next);
     setSearchParams(
       (params) => {
-        params.set("view", next.view);
         params.set("group", next.group);
         return params;
       },
@@ -112,15 +106,14 @@ const PlotWorkspace: React.FC = () => {
     null,
   );
 
-  // "Open in Plot" from the editor lands here with ?line=&event=: select the
-  // line, then scroll to and briefly mark the event. The params are consumed.
+  // "Open in Plot" from the editor lands here with ?line=&event=: scroll to and
+  // briefly mark the event. The params are consumed.
   const targetLine = searchParams.get("line");
   const targetEvent = searchParams.get("event");
   useEffect(() => {
     if (!targetLine || !plotLines.some((line) => line.id === targetLine)) {
       return;
     }
-    setActivePlotLineId(targetLine);
     setHighlightedEventId(targetEvent);
     setSearchParams(
       (params) => {
@@ -149,26 +142,12 @@ const PlotWorkspace: React.FC = () => {
   // Leaving the page sends debounced edits now rather than waiting out the timer.
   useEffect(() => () => queue?.flush(), [queue]);
 
-  // Keep an active plotline selected as the list changes. Stands aside while
-  // a ?line= target is being applied, or it would pick the first line over it.
-  useEffect(() => {
-    if (plotLines.length === 0) {
-      setActivePlotLineId(null);
-      return;
-    }
-    if (targetLine && plotLines.some((p) => p.id === targetLine)) return;
-    if (
-      !activePlotLineId ||
-      !plotLines.some((p) => p.id === activePlotLineId)
-    ) {
-      setActivePlotLineId(plotLines[0].id);
-    }
-  }, [plotLines, activePlotLineId, targetLine]);
-
   const addPlotLine = async () => {
     if (!storyId) return;
     const plotLine = await addPlotLineMutation.mutateAsync("New PlotLine");
-    setActivePlotLineId(plotLine.id);
+    // An empty line has no chapter to sit under, so show the lines and name it.
+    setViewState({ group: "lines" });
+    openEditPlotlineModal(plotLine);
   };
 
   const addEvent = (plotLineId: string, chapterId: string | null = null) => {
@@ -270,16 +249,6 @@ const PlotWorkspace: React.FC = () => {
   };
 
   const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null);
-
-  // Following a requirement link: select its line (for the grid), then scroll
-  // to and mark the event, closing the dialog it was opened from.
-  const openEvent = (eventId: string) => {
-    const line = plotLines.find((l) => l.events.some((e) => e.id === eventId));
-    if (!line) return;
-    closeEditEventModal();
-    setActivePlotLineId(line.id);
-    setHighlightedEventId(eventId);
-  };
 
   // Chapter reorders and line moves update the cache at once and roll back on
   // failure; the server's answer (every line) replaces it on success.
@@ -395,45 +364,6 @@ const PlotWorkspace: React.FC = () => {
     },
   ];
 
-  // The grid's row menu: the same actions as an outline card, ordered by plot line.
-  const gridMenuFor = (
-    line: PlotLine,
-    event: PlotEvent,
-    index: number,
-  ): CardMenuItem[] => {
-    const swap = (to: number) => {
-      const ids = line.events.map((e) => e.id);
-      ids.splice(index, 1);
-      ids.splice(to, 0, event.id);
-      void runMove({ kind: "lineOrder", lineId: line.id, orderedIds: ids });
-    };
-    return [
-      {
-        label: "Move up",
-        disabled: index === 0,
-        onSelect: () => swap(index - 1),
-      },
-      {
-        label: "Move down",
-        disabled: index === line.events.length - 1,
-        onSelect: () => swap(index + 1),
-      },
-      {
-        label: "Assign chapter…",
-        separated: true,
-        onSelect: () => setMoveTarget({ mode: "chapter", line, event }),
-      },
-      {
-        label: "Move to plot line…",
-        disabled: plotLines.length < 2,
-        onSelect: () => setMoveTarget({ mode: "line", line, event }),
-      },
-      ...menuFor(line, event).map((item, i) =>
-        i === 0 ? { ...item, separated: true } : item,
-      ),
-    ];
-  };
-
   const confirmPlotLineDelete = async () => {
     const line = plotLineToDelete;
     if (!storyId || !line) return;
@@ -504,7 +434,6 @@ const PlotWorkspace: React.FC = () => {
           { name: destination.name },
           events,
         );
-        setActivePlotLineId(line.id);
         firstEventId = line.events[0]?.id ?? null;
       } else {
         const created = await storyWorldbuildingRepo.addEvents(
@@ -512,13 +441,12 @@ const PlotWorkspace: React.FC = () => {
           destination.lineId,
           events,
         );
-        setActivePlotLineId(destination.lineId);
         firstEventId = created[0]?.id ?? null;
       }
       await queryClient.invalidateQueries({
         queryKey: queryKeys.plots.byStory(storyId),
       });
-      setViewState({ view: "outline", group: "lines" });
+      setViewState({ group: "lines" });
       setHighlightedEventId(firstEventId);
       toast.success("Template events created");
     } catch (error) {
@@ -531,31 +459,6 @@ const PlotWorkspace: React.FC = () => {
     }
   };
 
-  const handleDragEnd = (result: DropResult) => {
-    const { source, destination } = result;
-
-    if (!destination) return;
-
-    if (
-      source.droppableId === destination.droppableId &&
-      source.index === destination.index
-    ) {
-      return;
-    }
-
-    if (source.droppableId !== destination.droppableId) return;
-
-    const plotLineId = source.droppableId;
-    const plotLine = plotLines.find((pl) => pl.id === plotLineId);
-    if (!plotLine || !storyId) return;
-
-    const orderedIds = plotLine.events.map((e) => e.id);
-    const [removed] = orderedIds.splice(source.index, 1);
-    orderedIds.splice(destination.index, 0, removed);
-
-    reorderEventsMutation.mutate({ plotLineId, orderedIds });
-  };
-
   return (
     <div className="h-full flex flex-col bg-ns-bg">
       <div className="flex-shrink-0 flex flex-wrap items-center gap-2 px-4 py-3 border-b border-ns-border bg-ns-surface">
@@ -563,70 +466,35 @@ const PlotWorkspace: React.FC = () => {
 
         <div
           role="group"
-          aria-label="View"
-          className="inline-flex rounded-ns border border-ns-border bg-ns-bg p-0.5"
+          aria-label="Group by"
+          className="inline-flex items-center gap-1 rounded-ns border border-ns-border bg-ns-bg p-0.5"
         >
+          <span className="pl-1.5 font-ui text-[11px] text-ns-ink-muted">
+            By
+          </span>
           <button
             type="button"
-            aria-pressed={view === "outline"}
-            onClick={() => setViewState({ view: "outline" })}
-            className={segment(view === "outline")}
+            aria-pressed={group === "chapters"}
+            onClick={() => setViewState({ group: "chapters" })}
+            className={segment(group === "chapters")}
           >
-            Outline
+            Chapters
           </button>
           <button
             type="button"
-            aria-pressed={view === "grid"}
-            onClick={() => setViewState({ view: "grid" })}
-            className={segment(view === "grid")}
+            aria-pressed={group === "lines"}
+            onClick={() => setViewState({ group: "lines" })}
+            className={segment(group === "lines")}
           >
-            Grid
-          </button>
-          <button
-            type="button"
-            aria-pressed={view === "shape"}
-            onClick={() => setViewState({ view: "shape" })}
-            className={segment(view === "shape")}
-          >
-            Shape
+            Plot lines
           </button>
         </div>
 
-        {view === "outline" && (
-          <div
-            role="group"
-            aria-label="Group by"
-            className="inline-flex items-center gap-1 rounded-ns border border-ns-border bg-ns-bg p-0.5"
-          >
-            <span className="pl-1.5 font-ui text-[11px] text-ns-ink-muted">
-              By
-            </span>
-            <button
-              type="button"
-              aria-pressed={group === "chapters"}
-              onClick={() => setViewState({ group: "chapters" })}
-              className={segment(group === "chapters")}
-            >
-              Chapters
-            </button>
-            <button
-              type="button"
-              aria-pressed={group === "lines"}
-              onClick={() => setViewState({ group: "lines" })}
-              className={segment(group === "lines")}
-            >
-              Plot lines
-            </button>
-          </div>
-        )}
-
-        {view === "outline" && (
-          <SaveIndicator
-            state={lineSaveState(statuses)}
-            onRetry={() => retrySaves()}
-            onReload={() => reloadConflicts()}
-          />
-        )}
+        <SaveIndicator
+          state={lineSaveState(statuses)}
+          onRetry={() => retrySaves()}
+          onReload={() => reloadConflicts()}
+        />
 
         <div className="flex-1" />
 
@@ -688,22 +556,7 @@ const PlotWorkspace: React.FC = () => {
                 Add Plot Line
               </button>
             </div>
-          ) : view === "shape" ? (
-            <TensionChart
-              lines={plotLines}
-              chapters={chapters}
-              onOpenEvent={(eventId) => {
-                const line = plotLines.find((l) =>
-                  l.events.some((e) => e.id === eventId),
-                );
-                const event = line?.events.find((e) => e.id === eventId);
-                if (line && event) openEditEventModal(line.id, event);
-              }}
-              onShowUnassigned={() =>
-                setViewState({ view: "outline", group: "chapters" })
-              }
-            />
-          ) : view === "outline" && storyId ? (
+          ) : storyId ? (
             <OutlineView
               storyId={storyId}
               group={group}
@@ -717,38 +570,14 @@ const PlotWorkspace: React.FC = () => {
               onChange={updateEventInline}
               menuFor={menuFor}
               onMove={(action) => void runMove(action)}
-              onAssignChapter={(line, event) =>
-                setMoveTarget({ mode: "chapter", line, event })
-              }
-              onMoveToLine={(line, event) =>
-                setMoveTarget({ mode: "line", line, event })
-              }
+              onAssignChapter={assignChapter}
+              onMoveToLine={(line, event) => setMoveTarget({ line, event })}
               onAddEvent={addEvent}
               onAddPlotLine={addPlotLine}
               onEditLine={openEditPlotlineModal}
               onDeleteLine={setPlotLineToDelete}
-              onOpenEvent={openEvent}
             />
-          ) : (
-            <PlotGridView
-              lines={plotLines}
-              activeLineId={activePlotLineId}
-              onSelectLine={setActivePlotLineId}
-              chapters={chapters}
-              statuses={statuses}
-              highlightedEventId={highlightedEventId}
-              characters={characters}
-              places={places}
-              onChange={updateEventInline}
-              onAddEvent={(lineId) => addEvent(lineId)}
-              menuFor={gridMenuFor}
-              onEditLine={openEditPlotlineModal}
-              onDeleteLine={setPlotLineToDelete}
-              onRetry={retrySaves}
-              onReload={reloadConflicts}
-              onDragEnd={handleDragEnd}
-            />
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -756,9 +585,7 @@ const PlotWorkspace: React.FC = () => {
       <MoveEventDialog
         target={moveTarget}
         onClose={() => setMoveTarget(null)}
-        chapters={chapters}
         lines={plotLines}
-        onAssignChapter={assignChapter}
         onMoveToLine={moveToLine}
       />
       <ConfirmDialog
@@ -788,8 +615,6 @@ const PlotWorkspace: React.FC = () => {
         characters={characters}
         places={places}
         chapters={chapters}
-        lines={plotLines}
-        onOpenEvent={openEvent}
       />
     </div>
   );

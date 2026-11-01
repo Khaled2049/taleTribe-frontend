@@ -24,7 +24,7 @@ interface EventMenuProps {
   className?: string;
 }
 
-/** An event's actions, the same in the outline and the grid. */
+/** An event's actions menu on an outline card. */
 export const EventMenu: React.FC<EventMenuProps> = ({
   eventId,
   eventName,

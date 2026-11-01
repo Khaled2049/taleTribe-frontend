@@ -14,28 +14,6 @@ export type PlotEventStatus = "planned" | "in_progress" | "written";
 // Pacing types for scene rhythm
 export type PacingType = "slow" | "moderate" | "fast";
 
-// Time constraint for chronological ordering
-export interface TimeConstraint {
-  type: "absolute" | "relative";
-  absoluteDate?: string; // ISO date or partial ("1985", "1985-06")
-  relativeToEventId?: string;
-  relativePosition?: "before" | "after" | "same_time";
-  timeGap?: string; // "2 days later", "moments before"
-}
-
-/**
- * A "requires" link. On `dependencies` it names a prerequisite; on
- * `dependents` (derived by the server) an event that requires this one.
- */
-export interface EventDependency {
-  eventId: string;
-  plotLineId: string;
-  relationshipType: "requires";
-  description?: string;
-  /** The writer accepted that this prerequisite comes later in the manuscript. */
-  outOfOrderOk?: boolean;
-}
-
 export interface PlotEvent {
   id: string;
   name: string;
@@ -46,18 +24,11 @@ export interface PlotEvent {
   characterIds: string[];
   locationId: string | null;
 
-  // Requirements; `dependents` is the server's reverse view of them.
-  dependencies: EventDependency[];
-  dependents: EventDependency[];
-
-  // Tension & Pacing
-  tensionLevel: number; // 1-10 scale
+  // Pacing
   pacing: PacingType;
   storyBeat: StoryBeatType;
   emotionalTone?: string;
 
-  // Chronological constraints
-  timeConstraint?: TimeConstraint;
   orderIndex: number;
   chapterId: string | null; // The chapter it is planned for; null when unassigned
   /** Place among the chapter's events across plot lines; server-owned, never sent. */

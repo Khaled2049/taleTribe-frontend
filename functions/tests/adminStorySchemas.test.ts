@@ -28,9 +28,7 @@ function validPayload() {
       {
         key: "elena",
         name: "Elena",
-        relationships: [
-          { characterKey: "marcus", type: "rival" as const },
-        ],
+        relationships: [{ characterKey: "marcus", type: "rival" as const }],
       },
       { key: "marcus", name: "Marcus" },
     ],
@@ -51,20 +49,12 @@ function validPayload() {
             key: "choice",
             name: "The Choice",
             content: "Elena chooses to stay.",
-            dependencies: [
-              {
-                plotKey: "main",
-                eventKey: "warning",
-                relationshipType: "requires" as const,
-              },
-            ],
           },
         ],
       },
     ],
   };
 }
-
 
 describe("createStoryByAdminSchema", () => {
   it("normalizes a valid full aggregate and removes duplicate tags", () => {
@@ -77,7 +67,10 @@ describe("createStoryByAdminSchema", () => {
 
   it("rejects unknown fields at every strict object boundary", () => {
     const payload = validPayload();
-    const result = createStoryByAdminSchema.safeParse({ ...payload, arbitrary: true });
+    const result = createStoryByAdminSchema.safeParse({
+      ...payload,
+      arbitrary: true,
+    });
     assert.equal(result.success, false);
   });
 
@@ -88,7 +81,28 @@ describe("createStoryByAdminSchema", () => {
     assert.equal(result.success, false);
     if (!result.success) {
       assert.equal(
-        result.error.issues.some((issue) => issue.message.includes("duplicate key")),
+        result.error.issues.some((issue) =>
+          issue.message.includes("duplicate key"),
+        ),
+        true,
+      );
+    }
+  });
+
+  it("accepts an event planned for a known chapter, rejects an unknown one", () => {
+    const payload = validPayload();
+    const [event] = payload.plots[0].events as Array<{ chapterKey?: string }>;
+    event.chapterKey = "chapter-1";
+    assert.equal(createStoryByAdminSchema.safeParse(payload).success, true);
+
+    event.chapterKey = "chapter-9";
+    const result = createStoryByAdminSchema.safeParse(payload);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(
+        result.error.issues.some((issue) =>
+          issue.message.includes("unknown chapter key"),
+        ),
         true,
       );
     }
@@ -96,13 +110,19 @@ describe("createStoryByAdminSchema", () => {
 
   it("rejects chapters above the word limit", () => {
     const payload = validPayload();
-    payload.chapters[0].content = Array.from({ length: 5_001 }, () => "word").join(" ");
+    payload.chapters[0].content = Array.from(
+      { length: 5_001 },
+      () => "word",
+    ).join(" ");
     assert.equal(createStoryByAdminSchema.safeParse(payload).success, false);
   });
 
   it("allows only HTTPS media URLs", () => {
     const payload = validPayload();
-    payload.story = { ...payload.story, coverImageUrl: "http://example.com/cover.jpg" } as typeof payload.story;
+    payload.story = {
+      ...payload.story,
+      coverImageUrl: "http://example.com/cover.jpg",
+    } as typeof payload.story;
     assert.equal(createStoryByAdminSchema.safeParse(payload).success, false);
   });
 });
@@ -118,5 +138,4 @@ describe("story import helpers", () => {
     const reordered = { ...parsed, story: { ...parsed.story } };
     assert.equal(requestHash(parsed), requestHash(reordered));
   });
-
 });

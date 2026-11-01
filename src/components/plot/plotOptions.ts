@@ -1,7 +1,7 @@
 import { StoryBeatType, PacingType, PlotEventStatus } from "@/types/IPlot";
 
 // Shared select options for plot event metadata, used by both the
-// EventEditModal and the PlotGrid spreadsheet view.
+// EventEditModal and the outline cards.
 
 export const STORY_BEAT_OPTIONS: { value: StoryBeatType; label: string }[] = [
   { value: "exposition", label: "Exposition" },

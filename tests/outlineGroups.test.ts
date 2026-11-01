@@ -132,25 +132,22 @@ describe("filterLines", () => {
 describe("resolvePlotView", () => {
   const params = (q: string) => new URLSearchParams(q);
 
-  it("defaults to the outline grouped by chapter", () => {
+  it("defaults to grouping by chapter", () => {
     expect(resolvePlotView(params(""), null)).toEqual(DEFAULT_PLOT_VIEW);
-    expect(DEFAULT_PLOT_VIEW).toEqual({ view: "outline", group: "chapters" });
+    expect(DEFAULT_PLOT_VIEW).toEqual({ group: "chapters" });
   });
 
   it("prefers the URL, then the remembered choice", () => {
-    const remembered = { view: "grid" as const, group: "lines" as const };
+    const remembered = { group: "lines" as const };
     expect(resolvePlotView(params(""), remembered)).toEqual(remembered);
-    expect(resolvePlotView(params("view=outline"), remembered)).toEqual({
-      view: "outline",
-      group: "lines",
+    expect(resolvePlotView(params("group=chapters"), remembered)).toEqual({
+      group: "chapters",
     });
   });
 
   it("ignores values it doesn't know", () => {
     expect(
-      resolvePlotView(params("view=kanban&group=mood"), {
-        view: "board" as never,
-      }),
+      resolvePlotView(params("group=mood"), { group: "board" as never }),
     ).toEqual(DEFAULT_PLOT_VIEW);
   });
 });

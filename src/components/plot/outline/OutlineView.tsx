@@ -11,7 +11,7 @@ import type { Character, Place } from "@novelsync/story-data-client";
 import type { PlotEvent, PlotLine } from "@/types/IPlot";
 import type { EventSaveStatus } from "../eventSaveQueue";
 import { lineSaveState } from "../eventSaveQueue";
-import { chapterFor, type ChapterOption } from "../plotChapters";
+import type { ChapterOption } from "../plotChapters";
 import type { PlotGrouping } from "../plotView";
 import { type CardMenuItem, EventCard } from "./EventCard";
 import { OutlineSection } from "./OutlineSection";
@@ -25,7 +25,6 @@ import {
   type PlotFilter,
 } from "./outlineGroups";
 import { PlotFilters } from "./PlotFilters";
-import { enabledBy, lateRequirements, manuscriptOrder } from "../requirements";
 import {
   describeMove,
   type MoveAction,
@@ -49,19 +48,17 @@ interface OutlineViewProps {
   /** Edit and delete; the move items are added here. */
   menuFor: (line: PlotLine, event: PlotEvent) => CardMenuItem[];
   onMove: (action: MoveAction) => void;
-  onAssignChapter: (line: PlotLine, event: PlotEvent) => void;
+  onAssignChapter: (
+    line: PlotLine,
+    event: PlotEvent,
+    chapterId: string | null,
+  ) => void;
   onMoveToLine: (line: PlotLine, event: PlotEvent) => void;
   onAddEvent: (lineId: string, chapterId: string | null) => void;
   onAddPlotLine: () => void;
   onEditLine: (line: PlotLine) => void;
   onDeleteLine: (line: PlotLine) => void;
-  onOpenEvent: (eventId: string) => void;
 }
-
-const chapterTag = (chapters: ChapterOption[], id: string | null) => {
-  const chapter = chapterFor(chapters, id);
-  return chapter ? `Ch ${chapter.label}` : "No chapter";
-};
 
 function collapsedKey(storyId: string, group: PlotGrouping) {
   return `tale-tribe:plot-collapsed:${storyId}:${group}`;
@@ -94,7 +91,6 @@ export const OutlineView: React.FC<OutlineViewProps> = ({
   onAddPlotLine,
   onEditLine,
   onDeleteLine,
-  onOpenEvent,
 }) => {
   const [filter, setFilter] = useState<PlotFilter>({});
   const key = collapsedKey(storyId, group);
@@ -121,17 +117,6 @@ export const OutlineView: React.FC<OutlineViewProps> = ({
   };
 
   const filtering = isFiltering(filter);
-  const order = useMemo(
-    () => manuscriptOrder(lines, chapters),
-    [lines, chapters],
-  );
-  const names = useMemo(
-    () =>
-      new Map(
-        lines.flatMap((l) => l.events.map((e) => [e.id, e.name] as const)),
-      ),
-    [lines],
-  );
   const shownLines = useMemo(() => filterLines(lines, filter), [lines, filter]);
   const sections = useMemo(
     () =>
@@ -201,12 +186,8 @@ export const OutlineView: React.FC<OutlineViewProps> = ({
           menuMove(event.id, here, { key: section.key, index: index + 1 }),
       },
       {
-        label: "Assign chapter…",
-        separated: true,
-        onSelect: () => onAssignChapter(line, event),
-      },
-      {
         label: "Move to plot line…",
+        separated: true,
         disabled: lines.length < 2,
         onSelect: () => onMoveToLine(line, event),
       },
@@ -312,7 +293,11 @@ export const OutlineView: React.FC<OutlineViewProps> = ({
                               tag={
                                 group === "chapters"
                                   ? line.name || "Untitled plot line"
-                                  : chapterTag(chapters, event.chapterId)
+                                  : undefined
+                              }
+                              chapters={chapters}
+                              onAssignChapter={(chapterId) =>
+                                onAssignChapter(line, event, chapterId)
                               }
                               characters={characters}
                               places={places}
@@ -320,20 +305,6 @@ export const OutlineView: React.FC<OutlineViewProps> = ({
                               highlighted={highlightedEventId === event.id}
                               onChange={(next) => onChange(line.id, next)}
                               menu={cardMenu(section, index, line, event)}
-                              requires={event.dependencies
-                                .filter((d) => names.has(d.eventId))
-                                .map((d) => ({
-                                  id: d.eventId,
-                                  name: names.get(d.eventId) ?? "",
-                                }))}
-                              enables={enabledBy(lines, event.id).map(
-                                ({ event: next }) => ({
-                                  id: next.id,
-                                  name: next.name,
-                                }),
-                              )}
-                              late={lateRequirements(event, order).length}
-                              onOpenEvent={onOpenEvent}
                               handle={
                                 filtering ? undefined : (
                                   <span

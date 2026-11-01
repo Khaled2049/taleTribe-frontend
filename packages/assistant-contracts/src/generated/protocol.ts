@@ -86,7 +86,6 @@ export namespace RunContract {
   export type History = (string | null)
   export type Significance = (string | null)
   export type Content = (string | null)
-  export type Tensionlevel = (number | null)
   export type Pacing = (("slow" | "moderate" | "fast") | null)
   export type Storybeat = (("exposition" | "inciting_incident" | "rising_action" | "midpoint" | "climax" | "falling_action" | "resolution") | null)
   export type Emotionaltone = (string | null)
@@ -97,15 +96,10 @@ export namespace RunContract {
    * The chapter the event is planned for: its exact title, its number in reading order, or its id. "unassigned" removes it from its chapter.
    */
   export type Chapter = (string | null)
-  /**
-   * Every event this one requires after the change, by exact name or id, from any plot line. This replaces the current list; [] clears it.
-   */
-  export type Requires = ([]|[string]|[string, string]|[string, string, string]|[string, string, string, string]|[string, string, string, string, string]|[string, string, string, string, string, string]|[string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string] | null)
   export type Baserevision1 = (number | null)
   export type Label = string
   export type Id = (string | null)
   export type Label1 = string
-  export type Boundrequires = ([]|[BoundReference]|[BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference]|[BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference, BoundReference] | null)
   export type Results = ([StoryChangeResult]|[StoryChangeResult, StoryChangeResult]|[StoryChangeResult, StoryChangeResult, StoryChangeResult]|[StoryChangeResult, StoryChangeResult, StoryChangeResult, StoryChangeResult]|[StoryChangeResult, StoryChangeResult, StoryChangeResult, StoryChangeResult, StoryChangeResult] | null)
   export type Index = number
   export type Status1 = ("applied" | "stale" | "failed" | "skipped")
@@ -242,9 +236,8 @@ export namespace RunContract {
   /**
    * A draft plus what the server bound: the target's revision and a label.
    *
-   * An event's ``chapter`` and ``requires`` are names as the model wrote them;
-   * ``bound_chapter`` and ``bound_requires`` are what they resolved to, which is
-   * what the browser saves and shows.
+   * An event's ``chapter`` is a name as the model wrote it; ``bound_chapter`` is
+   * what it resolved to, which is what the browser saves and shows.
    */
   export interface StoryChange {
   operation: Operation
@@ -254,7 +247,6 @@ export namespace RunContract {
   baseRevision?: Baserevision1
   label: Label
   boundChapter?: (BoundReference | null)
-  boundRequires?: Boundrequires
   }
   /**
    * Only the fields being set. Which ones apply depends on the entity kind.
@@ -273,7 +265,6 @@ export namespace RunContract {
   history?: History
   significance?: Significance
   content?: Content
-  tensionLevel?: Tensionlevel
   pacing?: Pacing
   storyBeat?: Storybeat
   emotionalTone?: Emotionaltone
@@ -281,7 +272,6 @@ export namespace RunContract {
   locationId?: Locationid
   notes?: Notes
   chapter?: Chapter
-  requires?: Requires
   }
   /**
    * A name the model wrote, resolved by the server: the row and its label.
@@ -583,8 +573,7 @@ export const LIMITS = {
   "entityNameChars": 200,
   "entityShortChars": 100,
   "entityProseChars": 4000,
-  "eventCharacters": 20,
-  "eventRequirements": 20
+  "eventCharacters": 20
 } as const;
 
 export type CapabilityGate = "always" | "edits" | "research";

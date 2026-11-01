@@ -4,11 +4,7 @@ import {
   type StoryChange,
 } from "@novelsync/assistant-contracts";
 import type { PlotEvent, PlotLine } from "@/types/IPlot";
-import {
-  chapterDiff,
-  outOfOrderWarnings,
-  requiresDiff,
-} from "@/components/chat/eventChangePreview";
+import { chapterDiff } from "@/components/chat/eventChangePreview";
 import {
   applyStoryChanges,
   type StoryChangeRepo,
@@ -31,9 +27,6 @@ const event = (overrides: Partial<PlotEvent> & { id: string }): PlotEvent => ({
   content: "",
   characterIds: [],
   locationId: null,
-  dependencies: [],
-  dependents: [],
-  tensionLevel: 5,
   pacing: "moderate",
   storyBeat: "rising_action",
   orderIndex: 0,
@@ -56,58 +49,23 @@ const lines: PlotLine[] = [
         chapterId: "ch-harbour",
         chapterPosition: 1,
         revision: 7,
-        dependencies: [
-          {
-            eventId: "ev-rumour",
-            plotLineId: "plot-letters",
-            relationshipType: "requires",
-            description: "She heard it first",
-            outOfOrderOk: true,
-          },
-        ],
       }),
-    ],
-  },
-  {
-    id: "plot-letters",
-    name: "Letters",
-    description: "",
-    revision: 1,
-    events: [
-      event({
-        id: "ev-letter",
-        name: "Finds the letter",
-        chapterId: "ch-ford",
-        chapterPosition: 1,
-      }),
-      event({ id: "ev-rumour", name: "Rumour spreads" }),
     ],
   },
 ];
 
-const updateConfront = (
-  extra: Pick<StoryChange, "boundChapter" | "boundRequires">,
-  fields: StoryChange["fields"],
+const moveConfront = (
+  boundChapter: StoryChange["boundChapter"],
+  chapter: string,
 ): StoryChange => ({
   operation: "event.update",
   entityId: "ev-confront",
   plotLineId: "plot-mutiny",
-  fields,
+  fields: { chapter },
   baseRevision: 7,
   label: "Mara confronts the captain",
-  ...extra,
+  boundChapter,
 });
-
-const moveAndRequire = updateConfront(
-  {
-    boundChapter: { id: "ch-pass", label: "3 · The Pass" },
-    boundRequires: [
-      { id: "ev-rumour", label: "Rumour spreads" },
-      { id: "ev-letter", label: "Finds the letter" },
-    ],
-  },
-  { chapter: "The Pass", requires: ["Rumour spreads", "Finds the letter"] },
-);
 
 function repo() {
   return {
@@ -120,28 +78,21 @@ function repo() {
   };
 }
 
-describe("assistant event changes with a chapter and requirements", () => {
-  it("saves the bound ids, keeping a kept requirement's note and mark", async () => {
+describe("assistant event changes with a chapter", () => {
+  it("saves the bound chapter id, never the drafted name", async () => {
     const fake = repo();
     const [result] = await applyStoryChanges(
       "story-1",
-      { summary: "Move it.", changes: [moveAndRequire] },
+      {
+        summary: "Move it.",
+        changes: [moveConfront({ id: "ch-pass", label: "3 · The Pass" }, "3")],
+      },
       fake as unknown as StoryChangeRepo,
     );
     expect(result.status).toBe("applied");
     const body = fake.updateEvent.mock.calls[0][2];
     expect(body).not.toHaveProperty("chapter");
-    expect(body).not.toHaveProperty("requires");
     expect(body.chapterId).toBe("ch-pass");
-    expect(body.dependencies).toEqual([
-      lines[0].events[0].dependencies[0],
-      {
-        eventId: "ev-letter",
-        plotLineId: "plot-letters",
-        relationshipType: "requires",
-        outOfOrderOk: false,
-      },
-    ]);
   });
 
   it("creates an event in its chapter, and unassigns with a null chapter", async () => {
@@ -153,15 +104,12 @@ describe("assistant event changes with a chapter and requirements", () => {
         changes: [
           {
             operation: "event.create",
-            plotLineId: "plot-letters",
+            plotLineId: "plot-mutiny",
             fields: { name: "Burns the letter", chapter: "2" },
             label: "Burns the letter",
             boundChapter: { id: "ch-ford", label: "2 · The Ford" },
           },
-          updateConfront(
-            { boundChapter: { label: "Unassigned" } },
-            { chapter: "unassigned" },
-          ),
+          moveConfront({ label: "Unassigned" }, "unassigned"),
         ],
       },
       fake as unknown as StoryChangeRepo,
@@ -177,7 +125,10 @@ describe("assistant event changes with a chapter and requirements", () => {
     const fake = repo();
     const [result] = await applyStoryChanges(
       "story-1",
-      { summary: "Move it.", changes: [moveAndRequire] },
+      {
+        summary: "Move it.",
+        changes: [moveConfront({ id: "ch-pass", label: "3 · The Pass" }, "3")],
+      },
       fake as unknown as StoryChangeRepo,
       { hasUnsavedEdit: (id) => id === "ev-confront" },
     );
@@ -185,50 +136,29 @@ describe("assistant event changes with a chapter and requirements", () => {
     expect(fake.updateEvent).not.toHaveBeenCalled();
   });
 
-  it("shows the chapter move and the requirements added and removed", () => {
-    expect(chapterDiff(moveAndRequire, lines, chapters)).toEqual({
-      before: "1 · The Harbour",
-      after: "3 · The Pass",
-    });
+  it("shows the chapter move, and nothing when it stays put", () => {
     expect(
-      requiresDiff(
-        updateConfront(
-          { boundRequires: [{ id: "ev-letter", label: "Finds the letter" }] },
-          { requires: ["Finds the letter"] },
-        ),
+      chapterDiff(
+        moveConfront({ id: "ch-pass", label: "3 · The Pass" }, "3"),
         lines,
+        chapters,
       ),
-    ).toEqual({ added: ["Finds the letter"], removed: ["Rumour spreads"] });
-    const unchanged = updateConfront(
-      { boundChapter: { id: "ch-harbour", label: "1 · The Harbour" } },
-      { chapter: "1" },
-    );
-    expect(chapterDiff(unchanged, lines, chapters)).toBeNull();
-  });
-
-  it("warns when a requirement would come after the event once saved", () => {
-    const backwards = updateConfront(
-      { boundRequires: [{ id: "ev-letter", label: "Finds the letter" }] },
-      { requires: ["Finds the letter"] },
-    );
-    expect(outOfOrderWarnings(backwards, lines, chapters)).toEqual([
-      "“Finds the letter” would come after this event.",
-    ]);
-    // Moved after its prerequisite, the order is fine.
-    expect(outOfOrderWarnings(moveAndRequire, lines, chapters)).toEqual([]);
-  });
-
-  it("refuses a chapter or requirement name the agent did not bind", () => {
-    const parse = (change: object) => storyChangeSchema.safeParse(change);
-    expect(parse(moveAndRequire).success).toBe(true);
-    expect(parse({ ...moveAndRequire, boundChapter: undefined }).success).toBe(
-      false,
-    );
+    ).toEqual({ before: "1 · The Harbour", after: "3 · The Pass" });
     expect(
-      parse({
-        ...moveAndRequire,
-        boundRequires: [{ id: "ev-rumour", label: "Rumour spreads" }],
-      }).success,
+      chapterDiff(
+        moveConfront({ id: "ch-harbour", label: "1 · The Harbour" }, "1"),
+        lines,
+        chapters,
+      ),
+    ).toBeNull();
+  });
+
+  it("refuses a chapter name the agent did not bind", () => {
+    const bound = moveConfront({ id: "ch-pass", label: "3 · The Pass" }, "3");
+    expect(storyChangeSchema.safeParse(bound).success).toBe(true);
+    expect(
+      storyChangeSchema.safeParse({ ...bound, boundChapter: undefined })
+        .success,
     ).toBe(false);
   });
 });

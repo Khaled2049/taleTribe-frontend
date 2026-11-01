@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { NO_AUTOFILL } from "@/lib/noAutofill";
 
 type Destination =
   { kind: "new"; name: string } | { kind: "existing"; lineId: string };
@@ -153,6 +154,7 @@ export function TemplatePreviewDialog({
                     </button>
                   </div>
                   <input
+                    {...NO_AUTOFILL}
                     aria-label={`Event ${index + 1} name`}
                     className={field}
                     value={row.name}
@@ -161,6 +163,7 @@ export function TemplatePreviewDialog({
                     }
                   />
                   <textarea
+                    {...NO_AUTOFILL}
                     aria-label={`Event ${index + 1} description`}
                     className={field}
                     rows={2}
@@ -184,6 +187,7 @@ export function TemplatePreviewDialog({
               </label>
               {destination === "new" && (
                 <input
+                  {...NO_AUTOFILL}
                   aria-label="New plot line name"
                   className={field}
                   value={name}

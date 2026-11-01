@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PlotLine } from "@/types/IPlot";
+import { NO_AUTOFILL } from "@/lib/noAutofill";
 
 interface PlotlineEditModalProps {
   isOpen: boolean;
@@ -35,13 +36,14 @@ export const PlotLineEditModal: React.FC<PlotlineEditModalProps> = ({
           <div className="space-y-4">
             <div>
               <label
-                htmlFor="name"
+                htmlFor="plot-line-title"
                 className="block text-sm font-medium text-gray-700"
               >
                 Name
               </label>
               <Input
-                id="name"
+                {...NO_AUTOFILL}
+                id="plot-line-title"
                 value={editingPlotLine.name}
                 onChange={(e) =>
                   setEditingPlotLine({
@@ -54,13 +56,14 @@ export const PlotLineEditModal: React.FC<PlotlineEditModalProps> = ({
             </div>
             <div>
               <label
-                htmlFor="description"
+                htmlFor="plot-line-summary"
                 className="block text-sm font-medium text-gray-700"
               >
                 Description
               </label>
               <Textarea
-                id="description"
+                {...NO_AUTOFILL}
+                id="plot-line-summary"
                 value={editingPlotLine.description}
                 onChange={(e) =>
                   setEditingPlotLine({

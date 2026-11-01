@@ -1,4 +1,4 @@
-import { PlotEvent, PlotLine, StoryBeatType, PacingType } from "@/types/IPlot";
+import { PlotEvent, StoryBeatType, PacingType } from "@/types/IPlot";
 import { useEffect, useRef, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Character } from "@novelsync/story-data-client";
@@ -7,9 +7,9 @@ import { MultiSelectCharacters } from "./MultiSelectCharacters";
 import { LocationSelect } from "./LocationSelect";
 import { STORY_BEAT_OPTIONS, PACING_OPTIONS } from "./plotOptions";
 import { ChapterSelect } from "./ChapterSelect";
-import { RequirementsEditor } from "./RequirementsEditor";
 import { EventStatusControl } from "./EventStatusControl";
 import type { ChapterOption } from "./plotChapters";
+import { NO_AUTOFILL } from "@/lib/noAutofill";
 
 const labelClass =
   "block font-ui text-sm font-medium text-ns-ink-secondary mb-2";
@@ -27,23 +27,7 @@ interface EventEditModalProps {
   characters?: Character[];
   places?: Place[];
   chapters: ChapterOption[];
-  /** Every plot line; enables the Links tab for requirements. */
-  lines?: PlotLine[];
-  onOpenEvent?: (eventId: string) => void;
 }
-
-const TENSION_LABELS: Record<number, string> = {
-  1: "Peaceful",
-  2: "Calm",
-  3: "Low",
-  4: "Mild",
-  5: "Moderate",
-  6: "Rising",
-  7: "High",
-  8: "Intense",
-  9: "Critical",
-  10: "Maximum",
-};
 
 export const EventEditModal: React.FC<EventEditModalProps> = ({
   isOpen,
@@ -54,8 +38,6 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
   characters = [],
   places = [],
   chapters,
-  lines,
-  onOpenEvent,
 }) => {
   const [activeTab, setActiveTab] = useState("basic");
   // Track whether a click started on the backdrop, so dragging/selecting from
@@ -115,13 +97,6 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
     });
   };
 
-  const getTensionColor = (level: number): string => {
-    if (level <= 3) return "bg-green-500";
-    if (level <= 5) return "bg-yellow-500";
-    if (level <= 7) return "bg-orange-500";
-    return "bg-red-500";
-  };
-
   return (
     <div
       className="fixed inset-0 z-50 bg-black/50 flex justify-center items-center p-4"
@@ -147,13 +122,10 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <TabsList
-              className={`grid w-full mb-4 ${lines ? "grid-cols-4" : "grid-cols-3"}`}
-            >
+            <TabsList className="grid w-full mb-4 grid-cols-3">
               <TabsTrigger value="basic">Basic</TabsTrigger>
               <TabsTrigger value="characters">Characters</TabsTrigger>
-              <TabsTrigger value="tension">Tension</TabsTrigger>
-              {lines && <TabsTrigger value="links">Links</TabsTrigger>}
+              <TabsTrigger value="pacing">Pacing</TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic" className="space-y-4">
@@ -162,6 +134,7 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
                   Event Name
                 </label>
                 <input
+                  {...NO_AUTOFILL}
                   id="event"
                   type="text"
                   value={event.name}
@@ -199,6 +172,7 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
                   What happens
                 </label>
                 <textarea
+                  {...NO_AUTOFILL}
                   id="content"
                   value={event.content}
                   onChange={(e) => updateEvent({ content: e.target.value })}
@@ -211,6 +185,7 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
                   Author Notes (private)
                 </label>
                 <textarea
+                  {...NO_AUTOFILL}
                   id="notes"
                   value={event.notes || ""}
                   onChange={(e) => updateEvent({ notes: e.target.value })}
@@ -240,36 +215,7 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
               </div>
             </TabsContent>
 
-            <TabsContent value="tension" className="space-y-6">
-              <div>
-                <label htmlFor="event-tension" className={labelClass}>
-                  Tension Level: {event.tensionLevel} -{" "}
-                  {TENSION_LABELS[event.tensionLevel]}
-                </label>
-                <div className="flex items-center gap-4">
-                  <input
-                    id="event-tension"
-                    type="range"
-                    min="1"
-                    max="10"
-                    value={event.tensionLevel}
-                    onChange={(e) =>
-                      updateEvent({ tensionLevel: parseInt(e.target.value) })
-                    }
-                    className="flex-1 h-2 accent-ns-accent cursor-pointer"
-                  />
-                  <div
-                    className={`w-8 h-8 rounded-full ${getTensionColor(event.tensionLevel)} flex items-center justify-center text-white font-ui font-bold text-sm`}
-                  >
-                    {event.tensionLevel}
-                  </div>
-                </div>
-                <div className="flex justify-between font-ui text-xs text-ns-ink-muted mt-1">
-                  <span>Peaceful</span>
-                  <span>Maximum</span>
-                </div>
-              </div>
-
+            <TabsContent value="pacing" className="space-y-6">
               <fieldset>
                 <legend className={labelClass}>Pacing</legend>
                 <div className="grid grid-cols-3 gap-2">
@@ -328,6 +274,7 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
                   Emotional Tone
                 </label>
                 <input
+                  {...NO_AUTOFILL}
                   id="event-tone"
                   type="text"
                   value={event.emotionalTone || ""}
@@ -339,18 +286,6 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
                 />
               </div>
             </TabsContent>
-
-            {lines && (
-              <TabsContent value="links">
-                <RequirementsEditor
-                  event={event}
-                  lines={lines}
-                  chapters={chapters}
-                  onChange={(dependencies) => updateEvent({ dependencies })}
-                  onOpenEvent={onOpenEvent}
-                />
-              </TabsContent>
-            )}
           </Tabs>
 
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-6 border-t border-ns-border mt-4">

@@ -1,22 +1,15 @@
-export type PlotView = "outline" | "grid" | "shape";
 export type PlotGrouping = "chapters" | "lines";
 
 export interface PlotViewState {
-  view: PlotView;
   group: PlotGrouping;
 }
 
 // The outline grouped by chapter opens by default. Whether writers more often
 // plan chapters first or events first is still open; flip it here.
-export const DEFAULT_PLOT_VIEW: PlotViewState = {
-  view: "outline",
-  group: "chapters",
-};
+export const DEFAULT_PLOT_VIEW: PlotViewState = { group: "chapters" };
 
 const VIEW_KEY = "tale-tribe:plot-view";
 
-const asView = (v: unknown): PlotView | undefined =>
-  v === "outline" || v === "grid" || v === "shape" ? v : undefined;
 const asGroup = (v: unknown): PlotGrouping | undefined =>
   v === "chapters" || v === "lines" ? v : undefined;
 
@@ -26,10 +19,6 @@ export function resolvePlotView(
   remembered: Partial<PlotViewState> | null,
 ): PlotViewState {
   return {
-    view:
-      asView(params.get("view")) ??
-      asView(remembered?.view) ??
-      DEFAULT_PLOT_VIEW.view,
     group:
       asGroup(params.get("group")) ??
       asGroup(remembered?.group) ??

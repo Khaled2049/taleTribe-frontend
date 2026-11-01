@@ -50,9 +50,6 @@ const wreck: PlotLine = {
       content: "Rain.",
       characterIds: ["char-1"],
       locationId: null,
-      dependencies: [],
-      dependents: [],
-      tensionLevel: 4,
       pacing: "slow",
       storyBeat: "rising_action",
       orderIndex: 0,
@@ -216,16 +213,15 @@ describe("applying an approved story proposal", () => {
       proposalOf({
         operation: "event.create",
         plotLineId: "plot-1",
-        fields: { name: "Landfall", tensionLevel: 8 },
+        fields: { name: "Landfall", storyBeat: "climax" },
         label: "Landfall",
       }),
       repo as unknown as StoryChangeRepo,
     );
     expect(repo.addEvent.mock.calls[0][2]).toMatchObject({
       name: "Landfall",
-      tensionLevel: 8,
       pacing: "moderate",
-      storyBeat: "rising_action",
+      storyBeat: "climax",
       orderIndex: 1,
       characterIds: [],
     });
@@ -239,7 +235,7 @@ describe("applying an approved story proposal", () => {
         operation: "event.update",
         entityId: "event-1",
         plotLineId: "plot-1",
-        fields: { tensionLevel: 9 },
+        fields: { pacing: "fast" },
         baseRevision: 7,
         label: "The storm",
       }),
@@ -248,7 +244,7 @@ describe("applying an approved story proposal", () => {
     expect(repo.updateEvent.mock.calls[0][2]).toMatchObject({
       content: "Rain.",
       characterIds: ["char-1"],
-      tensionLevel: 9,
+      pacing: "fast",
     });
   });
 });
@@ -274,7 +270,7 @@ describe("story-change contracts", () => {
       proposeStoryChangesSchema.safeParse(
         proposalOf({
           ...createHospital,
-          fields: { name: "Abandoned Hospital", tensionLevel: 8 },
+          fields: { name: "Abandoned Hospital", pacing: "fast" },
         }),
       ).success,
     ).toBe(false);

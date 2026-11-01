@@ -59,7 +59,6 @@ describe("template batch client", () => {
         name: "Setup",
         content: "Edited",
         chapterPosition: 2,
-        dependents: [],
       } as never,
     ]);
     expect(calls[0].url).toContain("/v1/stories/story/plots/with-events");
@@ -67,7 +66,6 @@ describe("template batch client", () => {
     expect(body.line).toEqual({ name: "Outline" });
     expect(body.events[0]).toMatchObject({ name: "Setup", content: "Edited" });
     expect(body.events[0]).not.toHaveProperty("chapterPosition");
-    expect(body.events[0]).not.toHaveProperty("dependents");
   });
 
   it("uses the existing line batch endpoint", async () => {

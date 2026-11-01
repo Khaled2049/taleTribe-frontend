@@ -21,13 +21,11 @@ export type {
 export type { IGuestbookReply } from "./types/IGuestbookReply.js";
 export type { Place } from "./types/IPlace.js";
 export type {
-  EventDependency,
   PacingType,
   PlotEvent,
   PlotEventStatus,
   PlotLine,
   StoryBeatType,
-  TimeConstraint,
 } from "./types/IPlot.js";
 export type { IReadingProgress } from "./types/IReadingProgress.js";
 export type {

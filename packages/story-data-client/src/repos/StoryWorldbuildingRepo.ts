@@ -216,7 +216,6 @@ export class StoryWorldbuildingRepo {
       id: _id,
       revision: _revision,
       userId: _userId,
-      dependents: _dependents,
       chapterPosition: _chapterPosition,
       createdAt: _createdAt,
       updatedAt: _updatedAt,

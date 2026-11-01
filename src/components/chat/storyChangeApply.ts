@@ -177,8 +177,8 @@ async function applyOne(
       const plots = await repo.getPlots(storyId);
       const line = plots.find((x) => x.id === change.plotLineId);
       if (!line) throw new StaleChange();
-      // Chapter and requirements are names as drafted; the bound ids are saved.
-      const { chapter: _chapter, requires: _requires, ...eventFields } = fields;
+      // The chapter is a name as drafted; the bound id is saved.
+      const { chapter: _chapter, ...eventFields } = fields;
       return save(
         change,
         line.events,
@@ -188,14 +188,14 @@ async function applyOne(
             content: "",
             orderIndex: line.events.length,
             ...eventFields,
-            ...eventLinks(change, undefined, plots),
+            ...eventLinks(change),
             name,
           }),
         (current) =>
           repo.updateEvent(storyId, line.id, {
             ...current,
             ...eventFields,
-            ...eventLinks(change, current, plots),
+            ...eventLinks(change),
           }),
       );
     }

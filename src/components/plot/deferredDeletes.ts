@@ -1,7 +1,6 @@
 /**
  * Deletes that wait out an undo window before reaching the server. Until then
- * the record stays in the cache and is only hidden, so Undo restores it exactly,
- * with its dependencies, which a server delete would have cascaded away.
+ * the record stays in the cache and is only hidden, so Undo restores it exactly.
  */
 export class DeferredDeletes {
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
