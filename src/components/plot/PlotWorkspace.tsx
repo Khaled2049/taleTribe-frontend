@@ -205,9 +205,6 @@ const PlotWorkspace: React.FC = () => {
       plotLines
         .find((line) => line.id === plotLineId)
         ?.events.find((event) => event.id === eventId)?.name || "Event";
-    const unsaved = queue.local(eventId);
-    queue.discard(eventId);
-
     deletes.schedule(
       eventId,
       async () => {
@@ -223,6 +220,7 @@ const PlotWorkspace: React.FC = () => {
             eventId,
             revision,
           );
+          queue.discard(eventId);
           queryClient.setQueryData<PlotLine[]>(key, (old) =>
             (old ?? []).map((line) =>
               line.id === plotLineId ? { ...line, events } : line,
@@ -241,8 +239,7 @@ const PlotWorkspace: React.FC = () => {
       action: {
         label: "Undo",
         onClick: () => {
-          if (!deletes.undo(eventId)) return;
-          if (unsaved) queue.schedule(plotLineId, unsaved);
+          deletes.undo(eventId);
         },
       },
     });
@@ -367,13 +364,9 @@ const PlotWorkspace: React.FC = () => {
   const confirmPlotLineDelete = async () => {
     const line = plotLineToDelete;
     if (!storyId || !line) return;
-    // The cached line still holds events hidden by a pending delete; cancel
-    // those too, or they'd fire against a plot line that no longer exists.
+    // The cached line still holds events hidden by a pending delete. Keep
+    // their queued edits until the server confirms that the line is gone.
     const cached = rawPlotLines?.find((l) => l.id === line.id) ?? line;
-    for (const event of cached.events) {
-      queue?.discard(event.id);
-      deletes?.undo(event.id);
-    }
     try {
       await deletePlotLineMutation.mutateAsync({
         id: line.id,
@@ -382,6 +375,10 @@ const PlotWorkspace: React.FC = () => {
     } catch {
       toast.error(`Couldn't delete “${line.name}”. Please try again.`);
       return false;
+    }
+    for (const event of cached.events) {
+      queue?.discard(event.id);
+      deletes?.undo(event.id);
     }
     setPlotLineToDelete(null);
   };
