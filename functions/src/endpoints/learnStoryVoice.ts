@@ -39,8 +39,8 @@ export const learnStoryVoice = onRequest(
         chapter_id: chapterId,
         source_revision: sourceRevision,
       };
-      // Preflight checks the switch, revisions, evidence availability and
-      // per-story rate cap before consuming the member's daily AI quota.
+      // Preflight checks the switch, revisions and evidence, then atomically
+      // claims the story's rate slot. Only a claim holder spends daily quota.
       const check = await fetch(`${endpoint}?preflight=true`, {
         method: "POST",
         headers,
@@ -52,8 +52,10 @@ export const learnStoryVoice = onRequest(
           .json({ error: "Voice learning unavailable" });
         return;
       }
-      const eligibility = (await check.json()) as { eligible?: boolean };
-      if (!eligibility.eligible) {
+      const { claim_id: claimId } = (await check.json()) as {
+        claim_id?: string | null;
+      };
+      if (!claimId) {
         response.status(200).json({ status: "skipped" });
         return;
       }
@@ -69,6 +71,7 @@ export const learnStoryVoice = onRequest(
         headers,
         body: JSON.stringify({
           ...base,
+          claim_id: claimId,
           provider_config: access.providerConfig ?? undefined,
         }),
       });

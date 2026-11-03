@@ -31,6 +31,7 @@ import { useAuthContext } from "../../contexts/AuthContext";
 import {
   StoryDataConflictError,
   storyWorkspaceRepo,
+  type StoryVoiceProfile,
 } from "@novelsync/story-data-client";
 import {
   Chapter,
@@ -91,6 +92,11 @@ import { usePlotLines } from "@/components/plot/usePlotLines";
 import { EditorSidePanel } from "@/components/editor/chapterPlan/EditorSidePanel";
 import { eventsInChapter } from "@/components/plot/plotChapters";
 import { chapterDeleteText } from "@/components/plot/plotDeleteCopy";
+import {
+  recordVoiceLearningRequest,
+  recordVoiceLearningResult,
+  shouldRequestVoiceLearning,
+} from "@/components/editor/voiceLearningTrigger";
 import { summarizeChapter } from "@/cloudFunctions/ai";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/queries/queryKeys";
@@ -322,8 +328,21 @@ export function SimpleEditor() {
           actions.updateChapterInList(savedChapter.id, { ...savedChapter });
           cacheChapter(savedChapter);
           bridgeRegistrationRef.current?.revisionChanged();
-          if (content !== base.content && savedChapter.revision) {
-            const savedStoryId = storyBaseRef.current.id;
+          const savedStoryId = storyBaseRef.current.id;
+          const now = Date.now();
+          if (
+            content !== base.content &&
+            savedChapter.revision &&
+            shouldRequestVoiceLearning(
+              savedStoryId,
+              now,
+              queryClient.getQueryData<StoryVoiceProfile>([
+                "story-voice",
+                savedStoryId,
+              ])?.learnFromWriting,
+            )
+          ) {
+            recordVoiceLearningRequest(savedStoryId, now);
             // The save is complete; learning is optional and never delays the
             // editor. The Function supplies the verified writer identity and
             // their BYOK choice, then checks evidence and cost limits.
@@ -334,6 +353,11 @@ export function SimpleEditor() {
                 sourceRevision: savedChapter.revision,
               })
               .then(({ data }) => {
+                recordVoiceLearningResult(
+                  savedStoryId,
+                  Date.now(),
+                  data.status,
+                );
                 if (data.status === "updated") {
                   void queryClient.invalidateQueries({
                     queryKey: ["story-voice", savedStoryId],
