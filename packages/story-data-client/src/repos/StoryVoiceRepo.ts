@@ -1,11 +1,7 @@
 import { request } from "../request.js";
 
 export type StoryPointOfView =
-  | "unspecified"
-  | "first"
-  | "close_third"
-  | "omniscient"
-  | "varies";
+  "unspecified" | "first" | "close_third" | "omniscient" | "varies";
 export type StoryTense = "unspecified" | "past" | "present" | "varies";
 
 export interface StoryVoiceNote {
@@ -67,11 +63,14 @@ export const storyVoiceRepo = {
     });
   },
   history(storyId: string, signal?: AbortSignal) {
-    return request<StoryVoiceChange[]>(`/v1/stories/${storyId}/voice-profile/history`, {
-      auth: "required",
-      label: "Story voice history request",
-      signal,
-    });
+    return request<StoryVoiceChange[]>(
+      `/v1/stories/${storyId}/voice-profile/history`,
+      {
+        auth: "required",
+        label: "Story voice history request",
+        signal,
+      },
+    );
   },
   undo(storyId: string, revision: number, changeId: string) {
     return request<StoryVoiceProfile>(

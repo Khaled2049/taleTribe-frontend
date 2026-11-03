@@ -1,5 +1,12 @@
 import { Outlet, NavLink, Link } from "react-router-dom";
-import { BookOpen, Layers, Users, MapPin, ArrowLeft, AudioLines } from "lucide-react";
+import {
+  BookOpen,
+  Layers,
+  Users,
+  MapPin,
+  ArrowLeft,
+  AudioLines,
+} from "lucide-react";
 import { useParams } from "react-router-dom";
 import { StoryWorkspaceTabs } from "./components/StoryWorkspaceTabs";
 import { useFocusModeStore } from "@/stores/focusModeStore";

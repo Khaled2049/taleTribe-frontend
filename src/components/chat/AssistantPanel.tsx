@@ -1315,9 +1315,18 @@ function AssistantConversation({
         actionLedger,
         editsEnabled: EDITOR_ACTIONS_PRESENTED,
         onVoiceUpdated: (changeId) => {
-          void queryClient.invalidateQueries({ queryKey: ["story-voice", storyId] });
-          void queryClient.invalidateQueries({ queryKey: ["story-voice-history", storyId] });
-          toast("Voice updated", { action: { label: "Review", onClick: () => navigate(`/create/${storyId}/voice#${changeId}`) } });
+          void queryClient.invalidateQueries({
+            queryKey: ["story-voice", storyId],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ["story-voice-history", storyId],
+          });
+          toast("Voice updated", {
+            action: {
+              label: "Review",
+              onClick: () => navigate(`/create/${storyId}/voice#${changeId}`),
+            },
+          });
         },
         transport: {
           endpoint,
@@ -1329,7 +1338,15 @@ function AssistantConversation({
               : (editorBridge?.getSnapshot() ?? null),
         },
       }),
-    [actionLedger, editorBridge, endpoint, navigate, queryClient, storyId, threadSession],
+    [
+      actionLedger,
+      editorBridge,
+      endpoint,
+      navigate,
+      queryClient,
+      storyId,
+      threadSession,
+    ],
   );
   const runtime = useLocalRuntime(adapter, { adapters: { history } });
 

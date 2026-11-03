@@ -327,17 +327,29 @@ export function SimpleEditor() {
             // The save is complete; learning is optional and never delays the
             // editor. The Function supplies the verified writer identity and
             // their BYOK choice, then checks evidence and cost limits.
-            void api.post<{ status: string }>("/learnStoryVoice", {
-              storyId: savedStoryId,
-              chapterId: savedChapter.id,
-              sourceRevision: savedChapter.revision,
-            }).then(({ data }) => {
-              if (data.status === "updated") {
-                void queryClient.invalidateQueries({ queryKey: ["story-voice", savedStoryId] });
-                void queryClient.invalidateQueries({ queryKey: ["story-voice-history", savedStoryId] });
-                toast("Voice updated", { action: { label: "Review", onClick: () => navigate(`/create/${savedStoryId}/voice`) } });
-              }
-            }).catch(() => undefined);
+            void api
+              .post<{ status: string }>("/learnStoryVoice", {
+                storyId: savedStoryId,
+                chapterId: savedChapter.id,
+                sourceRevision: savedChapter.revision,
+              })
+              .then(({ data }) => {
+                if (data.status === "updated") {
+                  void queryClient.invalidateQueries({
+                    queryKey: ["story-voice", savedStoryId],
+                  });
+                  void queryClient.invalidateQueries({
+                    queryKey: ["story-voice-history", savedStoryId],
+                  });
+                  toast("Voice updated", {
+                    action: {
+                      label: "Review",
+                      onClick: () => navigate(`/create/${savedStoryId}/voice`),
+                    },
+                  });
+                }
+              })
+              .catch(() => undefined);
           }
         } catch (error) {
           chapterDirtyRef.current = true;
@@ -1141,12 +1153,22 @@ export function SimpleEditor() {
     </button>
   );
   const chapterReferenceButton = state.currentChapter && storyId && (
-    <button type="button" disabled={!isOnline || saveState.status === "saving"}
+    <button
+      type="button"
+      disabled={!isOnline || saveState.status === "saving"}
       onClick={() => {
-        void flushAndWait().then(() => navigate(`/create/${storyId}/voice?chapterId=${state.currentChapter?.id}`))
-          .catch(() => toast.error("Save this chapter before using it as a reference."));
+        void flushAndWait()
+          .then(() =>
+            navigate(
+              `/create/${storyId}/voice?chapterId=${state.currentChapter?.id}`,
+            ),
+          )
+          .catch(() =>
+            toast.error("Save this chapter before using it as a reference."),
+          );
       }}
-      className="inline-flex items-center rounded-ns border border-ns-border px-3 py-1.5 font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover disabled:opacity-50">
+      className="inline-flex items-center rounded-ns border border-ns-border px-3 py-1.5 font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover disabled:opacity-50"
+    >
       Use chapter as reference
     </button>
   );

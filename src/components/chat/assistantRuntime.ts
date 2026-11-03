@@ -173,9 +173,13 @@ export function createAssistantAdapter({
           { continuation, mode: roomQuestion ? "room" : undefined },
         )) {
           state = applyEvent(state, event);
-          if (event.type === "tool.completed" && event.part.name === "update_story_voice_profile") {
+          if (
+            event.type === "tool.completed" &&
+            event.part.name === "update_story_voice_profile"
+          ) {
             const result = objectValue(event.part.result);
-            if (result?.saved === true && typeof result.changeId === "string") onVoiceUpdated?.(result.changeId);
+            if (result?.saved === true && typeof result.changeId === "string")
+              onVoiceUpdated?.(result.changeId);
           }
           // LocalRuntime already prepends the message's pre-run content to
           // every result it receives, so a resumed run must yield only its own
