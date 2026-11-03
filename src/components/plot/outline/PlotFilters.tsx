@@ -1,4 +1,5 @@
 import React from "react";
+import { ChevronDown } from "lucide-react";
 import type { Character, Place } from "@novelsync/story-data-client";
 import type { PlotEventStatus, PlotLine } from "@/types/IPlot";
 import { STATUS_OPTIONS } from "../plotOptions";
@@ -15,7 +16,19 @@ interface PlotFiltersProps {
 }
 
 const selectClass =
-  "min-w-0 max-w-[11rem] rounded-ns border border-ns-border bg-ns-surface px-2 py-1 font-ui text-xs text-ns-ink focus:outline-none focus:ring-2 focus:ring-ns-accent";
+  "block min-w-0 max-w-[11rem] appearance-none rounded-ns border border-ns-border bg-ns-surface py-1 pl-2 pr-7 font-ui text-xs text-ns-ink focus:outline-none focus:ring-2 focus:ring-ns-accent dark:[color-scheme:dark]";
+
+/** Native select with the arrow drawn inset, since the browser's sits flush right. */
+const FilterSelect: React.FC<React.ComponentProps<"select">> = (props) => (
+  <span className="relative block min-w-0">
+    <select {...props} className={selectClass} />
+    <ChevronDown
+      size={14}
+      aria-hidden="true"
+      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-ns-ink-muted"
+    />
+  </span>
+);
 
 export const PlotFilters: React.FC<PlotFiltersProps> = ({
   filter,
@@ -36,11 +49,10 @@ export const PlotFilters: React.FC<PlotFiltersProps> = ({
         aria-label="Filter events"
         className="flex flex-wrap items-center gap-2"
       >
-        <select
+        <FilterSelect
           aria-label="Plot line"
           value={filter.lineId ?? ""}
           onChange={(e) => set({ lineId: pick(e.target.value) })}
-          className={selectClass}
         >
           <option value="">All plot lines</option>
           {lines.map((line) => (
@@ -48,12 +60,11 @@ export const PlotFilters: React.FC<PlotFiltersProps> = ({
               {line.name || "Untitled plot line"}
             </option>
           ))}
-        </select>
-        <select
+        </FilterSelect>
+        <FilterSelect
           aria-label="Character"
           value={filter.characterId ?? ""}
           onChange={(e) => set({ characterId: pick(e.target.value) })}
-          className={selectClass}
         >
           <option value="">All characters</option>
           {characters.map((c) => (
@@ -61,12 +72,11 @@ export const PlotFilters: React.FC<PlotFiltersProps> = ({
               {c.name}
             </option>
           ))}
-        </select>
-        <select
+        </FilterSelect>
+        <FilterSelect
           aria-label="Location"
           value={filter.locationId ?? ""}
           onChange={(e) => set({ locationId: pick(e.target.value) })}
-          className={selectClass}
         >
           <option value="">All locations</option>
           {places.map((p) => (
@@ -74,14 +84,13 @@ export const PlotFilters: React.FC<PlotFiltersProps> = ({
               {p.name}
             </option>
           ))}
-        </select>
-        <select
+        </FilterSelect>
+        <FilterSelect
           aria-label="Status"
           value={filter.status ?? ""}
           onChange={(e) =>
             set({ status: pick(e.target.value) as PlotEventStatus | undefined })
           }
-          className={selectClass}
         >
           <option value="">Any status</option>
           {STATUS_OPTIONS.map((o) => (
@@ -89,7 +98,7 @@ export const PlotFilters: React.FC<PlotFiltersProps> = ({
               {o.label}
             </option>
           ))}
-        </select>
+        </FilterSelect>
       </div>
       {isFiltering(filter) && (
         <p className="font-ui text-xs text-ns-ink-secondary" aria-live="polite">
