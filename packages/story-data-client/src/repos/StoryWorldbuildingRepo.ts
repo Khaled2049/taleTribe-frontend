@@ -45,21 +45,6 @@ export class StoryWorldbuildingRepo {
     if (x.revision) this.written.set(`${kind}:${x.id}`, x.revision);
     return x;
   }
-  private renumbered(
-    before: { id: string; revision?: number }[] | undefined,
-    after: PlotEvent[],
-  ) {
-    const known = new Map(
-      (before ?? []).map((e) => [
-        e.id,
-        Math.max(e.revision ?? 0, this.written.get(`event:${e.id}`) ?? 0),
-      ]),
-    );
-    for (const e of after) {
-      const k = known.get(e.id);
-      if (k) this.written.set(`event:${e.id}`, k + 1);
-    }
-  }
   private rev(kind: string, id: string, snapshot?: number): number {
     const rev = Math.max(snapshot ?? 0, this.written.get(`${kind}:${id}`) ?? 0);
     if (!rev)
@@ -190,6 +175,20 @@ export class StoryWorldbuildingRepo {
       ),
     );
   }
+  async addPlotWithEvents(
+    storyId: string,
+    line: { name: string; description?: string },
+    events: Omit<PlotEvent, "id" | "revision">[],
+  ) {
+    const created = await this.request<PlotLine>(
+      "POST",
+      `/v1/stories/${storyId}/plots/with-events`,
+      { line, events: events.map((event) => this.eventInput(event)) },
+    );
+    this.wrote("plot", created);
+    created.events.forEach((event) => this.wrote("event", event));
+    return this.line(created);
+  }
   async updatePlotMeta(storyId: string, line: PlotLine) {
     return this.line(
       this.wrote(
@@ -217,7 +216,7 @@ export class StoryWorldbuildingRepo {
       id: _id,
       revision: _revision,
       userId: _userId,
-      dependents: _dependents,
+      chapterPosition: _chapterPosition,
       createdAt: _createdAt,
       updatedAt: _updatedAt,
       ...input
@@ -240,6 +239,19 @@ export class StoryWorldbuildingRepo {
       ),
     );
   }
+  async addEvents(
+    storyId: string,
+    lineId: string,
+    events: Omit<PlotEvent, "id" | "revision">[],
+  ) {
+    const created = await this.request<PlotEvent[]>(
+      "POST",
+      `/v1/stories/${storyId}/plots/${lineId}/events/batch`,
+      { events: events.map((event) => this.eventInput(event)) },
+    );
+    created.forEach((event) => this.wrote("event", event));
+    return created.map((event) => this.event(event));
+  }
   async updateEvent(storyId: string, lineId: string, x: PlotEvent) {
     return this.event(
       this.wrote(
@@ -258,7 +270,6 @@ export class StoryWorldbuildingRepo {
     lineId: string,
     id: string,
     revision?: number,
-    siblings?: { id: string; revision?: number }[],
   ) {
     const events = (
       await this.request<PlotEvent[]>(
@@ -268,10 +279,61 @@ export class StoryWorldbuildingRepo {
         this.rev("event", id, revision),
       )
     ).map((x) => this.event(x));
-    this.renumbered(siblings, events);
     this.written.delete(`event:${id}`);
     return events;
   }
+  /** Counts a write this session caused, without adopting anyone else's. */
+  private bumped(kind: string, id: string, snapshot?: number) {
+    const known = Math.max(
+      snapshot ?? 0,
+      this.written.get(`${kind}:${id}`) ?? 0,
+    );
+    if (known) this.written.set(`${kind}:${id}`, known + 1);
+  }
+
+  /**
+   * Sets a chapter's event order. `orderedIds` must include every event already
+   * in the chapter; `movedIn` are the listed events coming from elsewhere,
+   * whose revisions the server bumps because their chapter changed.
+   */
+  async reorderChapterEvents(
+    storyId: string,
+    chapterId: string,
+    orderedIds: string[],
+    movedIn: { id: string; revision?: number }[] = [],
+  ) {
+    const lines = (
+      (await this.request<PlotLine[]>(
+        "POST",
+        `/v1/stories/${storyId}/plots/chapter-order`,
+        { chapterId, orderedIds },
+      )) ?? []
+    ).map((x) => this.line(x));
+    for (const event of movedIn) this.bumped("event", event.id, event.revision);
+    return lines;
+  }
+
+  /** Moves an event to another plot line at `toIndex`; both lines' revisions move. */
+  async moveEvent(
+    storyId: string,
+    from: PlotLine,
+    event: PlotEvent,
+    to: PlotLine,
+    toIndex: number,
+  ) {
+    const lines = (
+      (await this.request<PlotLine[]>(
+        "POST",
+        `/v1/stories/${storyId}/plots/${from.id}/events/${event.id}/move`,
+        { toPlotLineId: to.id, toIndex },
+        this.rev("event", event.id, event.revision),
+      )) ?? []
+    ).map((x) => this.line(x));
+    this.bumped("plot", from.id, from.revision);
+    if (to.id !== from.id) this.bumped("plot", to.id, to.revision);
+    return lines;
+  }
+
   async reorderEvents(storyId: string, line: PlotLine, orderedIds: string[]) {
     const revision = this.rev("plot", line.id, line.revision);
     const events = (
@@ -282,7 +344,6 @@ export class StoryWorldbuildingRepo {
         revision,
       )
     ).map((x) => this.event(x));
-    this.renumbered(line.events, events);
     this.written.set(`plot:${line.id}`, revision + 1);
     return events;
   }

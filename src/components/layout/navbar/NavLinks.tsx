@@ -1,6 +1,4 @@
 import { Link, useLocation } from "react-router-dom";
-import { Shield } from "lucide-react";
-import { useAuthContext } from "@/contexts/AuthContext";
 import { prefetchStoriesPage } from "@/routes/Story/prefetchStories";
 
 interface NavLinksProps {
@@ -28,7 +26,6 @@ const SECTIONS: readonly {
 
 const NavLinks = ({ className = "", onLinkClick }: NavLinksProps) => {
   const location = useLocation();
-  const { user } = useAuthContext();
 
   const isActive = (to: string) =>
     location.pathname === to ||
@@ -62,24 +59,6 @@ const NavLinks = ({ className = "", onLinkClick }: NavLinksProps) => {
           </Link>
         );
       })}
-      {user?.isAdmin && (
-        <Link
-          to="/admin"
-          onClick={onLinkClick}
-          aria-current={isActive("/admin") ? "page" : undefined}
-          className={`
-            relative inline-flex items-center gap-1.5 font-ui text-sm font-semibold no-underline whitespace-nowrap
-            text-ns-gold transition-colors duration-200 hover:text-ns-gold-bright
-            ${className}
-          `}
-        >
-          <Shield className="h-4 w-4" aria-hidden="true" />
-          Admin
-          {isActive("/admin") && (
-            <span className="absolute -bottom-1.5 inset-x-0 h-0.5 rounded-full bg-ns-gold" />
-          )}
-        </Link>
-      )}
     </>
   );
 };

@@ -29,7 +29,7 @@ export const MultiSelectCharacters: React.FC<MultiSelectCharactersProps> = ({
 
   if (characters.length === 0) {
     return (
-      <div className="text-gray-500 dark:text-gray-400 text-sm p-4 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-center">
+      <div className="font-ui text-ns-ink-muted text-sm p-4 border border-dashed border-ns-border rounded-ns-lg text-center">
         <UserPlus className="w-8 h-8 mx-auto mb-2 opacity-50" />
         <p>No characters available.</p>
         <p className="text-xs mt-1">
@@ -47,13 +47,13 @@ export const MultiSelectCharacters: React.FC<MultiSelectCharactersProps> = ({
           {selectedCharacters.map((character) => (
             <span
               key={character.id}
-              className="inline-flex items-center gap-1 px-3 py-1 bg-dark-green/20 dark:bg-light-green/20 text-dark-green dark:text-light-green rounded-full text-sm"
+              className="inline-flex items-center gap-1 px-3 py-1 bg-ns-accent-subtle text-ns-accent rounded-full font-ui text-sm"
             >
               {character.name}
               <button
                 type="button"
                 onClick={() => removeCharacter(character.id)}
-                className="hover:bg-dark-green/20 dark:hover:bg-light-green/20 rounded-full p-0.5 transition-colors"
+                className="hover:bg-ns-accent/20 rounded-full p-0.5 transition-colors"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -71,7 +71,7 @@ export const MultiSelectCharacters: React.FC<MultiSelectCharactersProps> = ({
               addCharacter(e.target.value);
             }
           }}
-          className="w-full p-2 border border-black/20 dark:border-white/20 rounded bg-neutral-50 dark:bg-gray-800 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-dark-green dark:focus:ring-light-green transition-colors duration-200"
+          className="w-full p-2 rounded-ns border border-ns-border bg-ns-surface font-ui text-sm text-ns-ink focus:outline-none focus:ring-2 focus:ring-ns-accent"
         >
           <option value="">Add a character...</option>
           {availableCharacters.map((character) => (
@@ -83,7 +83,7 @@ export const MultiSelectCharacters: React.FC<MultiSelectCharactersProps> = ({
       )}
 
       {selectedIds.length === 0 && availableCharacters.length > 0 && (
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="font-ui text-xs text-ns-ink-muted">
           Select characters that appear in this scene.
         </p>
       )}

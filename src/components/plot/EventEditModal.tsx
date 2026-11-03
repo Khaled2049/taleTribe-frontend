@@ -1,9 +1,4 @@
-import {
-  PlotEvent,
-  StoryBeatType,
-  PacingType,
-  ensureEventDefaults,
-} from "@/types/IPlot";
+import { PlotEvent, StoryBeatType, PacingType } from "@/types/IPlot";
 import { useEffect, useRef, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Character } from "@novelsync/story-data-client";
@@ -11,6 +6,15 @@ import { Place } from "@novelsync/story-data-client";
 import { MultiSelectCharacters } from "./MultiSelectCharacters";
 import { LocationSelect } from "./LocationSelect";
 import { STORY_BEAT_OPTIONS, PACING_OPTIONS } from "./plotOptions";
+import { ChapterSelect } from "./ChapterSelect";
+import { EventStatusControl } from "./EventStatusControl";
+import type { ChapterOption } from "./plotChapters";
+import { NO_AUTOFILL } from "@/lib/noAutofill";
+
+const labelClass =
+  "block font-ui text-sm font-medium text-ns-ink-secondary mb-2";
+const fieldClass =
+  "w-full p-2 rounded-ns border border-ns-border bg-ns-surface font-ui text-sm text-ns-ink placeholder-ns-ink-muted focus:outline-none focus:ring-2 focus:ring-ns-accent";
 
 interface EventEditModalProps {
   isOpen: boolean;
@@ -22,20 +26,8 @@ interface EventEditModalProps {
   ) => void;
   characters?: Character[];
   places?: Place[];
+  chapters: ChapterOption[];
 }
-
-const TENSION_LABELS: Record<number, string> = {
-  1: "Peaceful",
-  2: "Calm",
-  3: "Low",
-  4: "Mild",
-  5: "Moderate",
-  6: "Rising",
-  7: "High",
-  8: "Intense",
-  9: "Critical",
-  10: "Maximum",
-};
 
 export const EventEditModal: React.FC<EventEditModalProps> = ({
   isOpen,
@@ -45,6 +37,7 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
   setEditingEvent,
   characters = [],
   places = [],
+  chapters,
 }) => {
   const [activeTab, setActiveTab] = useState("basic");
   // Track whether a click started on the backdrop, so dragging/selecting from
@@ -79,11 +72,7 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
 
   if (!isOpen || !editingEvent) return null;
 
-  // Ensure event has all fields with defaults
-  const event = ensureEventDefaults(
-    editingEvent.event,
-    editingEvent.event.orderIndex ?? 0,
-  );
+  const event = editingEvent.event;
 
   const handleOverlayMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     pointerDownOnOverlay.current = e.target === e.currentTarget;
@@ -108,21 +97,22 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
     });
   };
 
-  const getTensionColor = (level: number): string => {
-    if (level <= 3) return "bg-green-500";
-    if (level <= 5) return "bg-yellow-500";
-    if (level <= 7) return "bg-orange-500";
-    return "bg-red-500";
-  };
-
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/50 dark:bg-black/50 flex justify-center items-center p-4"
+      className="fixed inset-0 z-50 bg-black/50 flex justify-center items-center p-4"
       onMouseDown={handleOverlayMouseDown}
       onClick={handleOverlayClick}
     >
-      <div className="bg-neutral-50 dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-2xl transition-colors duration-200 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="event-edit-title"
+        className="bg-ns-elevated border border-ns-border p-6 rounded-ns-lg shadow-ns-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
+        <h2
+          id="event-edit-title"
+          className="font-heading italic text-2xl mb-4 text-ns-ink"
+        >
           Edit Event
         </h2>
 
@@ -132,69 +122,83 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-3 mb-4">
+            <TabsList className="grid w-full mb-4 grid-cols-3">
               <TabsTrigger value="basic">Basic</TabsTrigger>
               <TabsTrigger value="characters">Characters</TabsTrigger>
-              <TabsTrigger value="tension">Tension</TabsTrigger>
+              <TabsTrigger value="pacing">Pacing</TabsTrigger>
             </TabsList>
 
-            {/* Tab 1: Basic Info */}
             <TabsContent value="basic" className="space-y-4">
               <div>
-                <label
-                  htmlFor="event"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
+                <label htmlFor="event" className={labelClass}>
                   Event Name
                 </label>
                 <input
+                  {...NO_AUTOFILL}
                   id="event"
                   type="text"
                   value={event.name}
                   onChange={(e) => updateEvent({ name: e.target.value })}
-                  className="w-full p-2 border border-black/20 dark:border-white/20 rounded bg-neutral-50 dark:bg-gray-800 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-dark-green dark:focus:ring-light-green transition-colors duration-200"
+                  className={fieldClass}
                   required
                 />
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="event-chapter" className={labelClass}>
+                    Chapter
+                  </label>
+                  <ChapterSelect
+                    id="event-chapter"
+                    chapters={chapters}
+                    value={event.chapterId}
+                    onChange={(chapterId) => updateEvent({ chapterId })}
+                    className={`${fieldClass} w-full`}
+                  />
+                </div>
+                <div>
+                  <span className={labelClass} aria-hidden>
+                    Status
+                  </span>
+                  <EventStatusControl
+                    value={event.status}
+                    onChange={(status) => updateEvent({ status })}
+                    label="Status"
+                  />
+                </div>
+              </div>
               <div>
-                <label
-                  htmlFor="content"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  Content
+                <label htmlFor="content" className={labelClass}>
+                  What happens
                 </label>
                 <textarea
+                  {...NO_AUTOFILL}
                   id="content"
                   value={event.content}
                   onChange={(e) => updateEvent({ content: e.target.value })}
                   rows={6}
-                  className="w-full p-2 border border-black/20 dark:border-white/20 rounded bg-neutral-50 dark:bg-gray-800 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-dark-green dark:focus:ring-light-green transition-colors duration-200 resize-y"
+                  className={`${fieldClass} resize-y`}
                 />
               </div>
               <div>
-                <label
-                  htmlFor="notes"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
+                <label htmlFor="notes" className={labelClass}>
                   Author Notes (private)
                 </label>
                 <textarea
+                  {...NO_AUTOFILL}
                   id="notes"
                   value={event.notes || ""}
                   onChange={(e) => updateEvent({ notes: e.target.value })}
                   rows={3}
                   placeholder="Personal notes, reminders, ideas..."
-                  className="w-full p-2 border border-black/20 dark:border-white/20 rounded bg-neutral-50 dark:bg-gray-800 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-dark-green dark:focus:ring-light-green transition-colors duration-200 resize-y"
+                  className={`${fieldClass} resize-y`}
                 />
               </div>
             </TabsContent>
 
-            {/* Tab 2: Characters & Location */}
             <TabsContent value="characters" className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Characters in this scene
-                </label>
+                <span className={labelClass}>Characters in this scene</span>
                 <MultiSelectCharacters
                   characters={characters}
                   selectedIds={event.characterIds}
@@ -202,9 +206,7 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Location
-                </label>
+                <span className={labelClass}>Location</span>
                 <LocationSelect
                   places={places}
                   selectedId={event.locationId}
@@ -213,50 +215,17 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
               </div>
             </TabsContent>
 
-            {/* Tab 3: Tension & Pacing */}
-            <TabsContent value="tension" className="space-y-6">
-              {/* Tension Slider */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Tension Level: {event.tensionLevel} -{" "}
-                  {TENSION_LABELS[event.tensionLevel]}
-                </label>
-                <div className="flex items-center gap-4">
-                  <input
-                    type="range"
-                    min="1"
-                    max="10"
-                    value={event.tensionLevel}
-                    onChange={(e) =>
-                      updateEvent({ tensionLevel: parseInt(e.target.value) })
-                    }
-                    className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <div
-                    className={`w-8 h-8 rounded-full ${getTensionColor(event.tensionLevel)} flex items-center justify-center text-white font-bold text-sm`}
-                  >
-                    {event.tensionLevel}
-                  </div>
-                </div>
-                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  <span>Peaceful</span>
-                  <span>Maximum</span>
-                </div>
-              </div>
-
-              {/* Pacing Radio Buttons */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Pacing
-                </label>
+            <TabsContent value="pacing" className="space-y-6">
+              <fieldset>
+                <legend className={labelClass}>Pacing</legend>
                 <div className="grid grid-cols-3 gap-2">
                   {PACING_OPTIONS.map((option) => (
                     <label
                       key={option.value}
-                      className={`flex flex-col items-center p-3 border rounded-lg cursor-pointer transition-all ${
+                      className={`flex flex-col items-center p-3 border rounded-ns-lg cursor-pointer transition-colors ${
                         event.pacing === option.value
-                          ? "border-dark-green dark:border-light-green bg-dark-green/10 dark:bg-light-green/10"
-                          : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                          ? "border-ns-accent bg-ns-accent-subtle"
+                          : "border-ns-border hover:border-ns-border-strong"
                       }`}
                     >
                       <input
@@ -269,28 +238,28 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
                         }
                         className="sr-only"
                       />
-                      <span className="font-medium text-gray-900 dark:text-white">
+                      <span className="font-ui font-medium text-sm text-ns-ink">
                         {option.label}
                       </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
+                      <span className="font-ui text-xs text-ns-ink-muted text-center mt-1">
                         {option.description}
                       </span>
                     </label>
                   ))}
                 </div>
-              </div>
+              </fieldset>
 
-              {/* Story Beat Dropdown */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label htmlFor="event-beat" className={labelClass}>
                   Story Beat
                 </label>
                 <select
+                  id="event-beat"
                   value={event.storyBeat}
                   onChange={(e) =>
                     updateEvent({ storyBeat: e.target.value as StoryBeatType })
                   }
-                  className="w-full p-2 border border-black/20 dark:border-white/20 rounded bg-neutral-50 dark:bg-gray-800 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-dark-green dark:focus:ring-light-green transition-colors duration-200"
+                  className={fieldClass}
                 >
                   {STORY_BEAT_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -300,35 +269,36 @@ export const EventEditModal: React.FC<EventEditModalProps> = ({
                 </select>
               </div>
 
-              {/* Emotional Tone */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label htmlFor="event-tone" className={labelClass}>
                   Emotional Tone
                 </label>
                 <input
+                  {...NO_AUTOFILL}
+                  id="event-tone"
                   type="text"
                   value={event.emotionalTone || ""}
                   onChange={(e) =>
                     updateEvent({ emotionalTone: e.target.value })
                   }
                   placeholder="e.g., melancholic, hopeful, tense, romantic..."
-                  className="w-full p-2 border border-black/20 dark:border-white/20 rounded bg-neutral-50 dark:bg-gray-800 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-dark-green dark:focus:ring-light-green transition-colors duration-200"
+                  className={fieldClass}
                 />
               </div>
             </TabsContent>
           </Tabs>
 
-          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-6 border-t border-gray-200 dark:border-gray-700 mt-4">
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-6 border-t border-ns-border mt-4">
             <button
               type="button"
               onClick={onClose}
-              className="w-full sm:w-auto bg-black/10 dark:bg-neutral-50/10 text-black dark:text-white px-4 py-2 rounded hover:bg-black/20 dark:hover:bg-neutral-50/20 transition-colors duration-200 font-medium"
+              className="w-full sm:w-auto px-4 py-2 rounded-ns border border-ns-border font-ui text-sm font-medium text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="w-full sm:w-auto bg-dark-green dark:bg-light-green text-white px-4 py-2 rounded hover:bg-light-green dark:hover:bg-dark-green transition-colors duration-200 font-medium"
+              className="w-full sm:w-auto px-4 py-2 rounded-ns bg-ns-accent font-ui text-sm font-medium text-white hover:bg-ns-accent-hover transition-colors"
             >
               Save
             </button>

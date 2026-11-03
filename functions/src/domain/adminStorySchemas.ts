@@ -24,42 +24,25 @@ const keySchema = z
   .trim()
   .min(1)
   .max(64)
-  .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, "must contain only letters, numbers, _ or -");
+  .regex(
+    /^[A-Za-z0-9][A-Za-z0-9_-]*$/,
+    "must contain only letters, numbers, _ or -",
+  );
 const titleSchema = z.string().trim().min(1).max(STORY_LIMITS.titleChars);
-const optionalText = z.string().trim().max(STORY_LIMITS.entityTextChars).optional();
+const optionalText = z
+  .string()
+  .trim()
+  .max(STORY_LIMITS.entityTextChars)
+  .optional();
 const optionalUrl = z
   .string()
   .trim()
   .max(STORY_LIMITS.urlChars)
-  .refine((value) => value === "" || safeHttpsUrl(value), "must be an HTTPS URL")
+  .refine(
+    (value) => value === "" || safeHttpsUrl(value),
+    "must be an HTTPS URL",
+  )
   .optional();
-
-const eventRefSchema = z.strictObject({
-  plotKey: keySchema,
-  eventKey: keySchema,
-});
-
-const dependencySchema = eventRefSchema.extend({
-  relationshipType: z.enum(["causes", "requires", "blocks", "enables", "contradicts"]),
-  description: z.string().trim().max(2_000).optional(),
-});
-
-const timeConstraintSchema = z
-  .strictObject({
-    type: z.enum(["absolute", "relative"]),
-    absoluteDate: z.string().trim().max(40).optional(),
-    relativeTo: eventRefSchema.optional(),
-    relativePosition: z.enum(["before", "after", "same_time"]).optional(),
-    timeGap: z.string().trim().max(200).optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.type === "absolute" && !value.absoluteDate) {
-      ctx.addIssue({ code: "custom", message: "absoluteDate is required for absolute time constraints" });
-    }
-    if (value.type === "relative" && (!value.relativeTo || !value.relativePosition)) {
-      ctx.addIssue({ code: "custom", message: "relativeTo and relativePosition are required for relative constraints" });
-    }
-  });
 
 const eventSchema = z.strictObject({
   key: keySchema,
@@ -67,8 +50,6 @@ const eventSchema = z.strictObject({
   content: z.string().trim().max(STORY_LIMITS.entityTextChars),
   characterKeys: z.array(keySchema).max(STORY_LIMITS.nestedItems).default([]),
   locationKey: keySchema.nullable().default(null),
-  dependencies: z.array(dependencySchema).max(STORY_LIMITS.nestedItems).default([]),
-  tensionLevel: z.number().int().min(1).max(10).default(5),
   pacing: z.enum(["slow", "moderate", "fast"]).default("moderate"),
   storyBeat: z
     .enum([
@@ -82,8 +63,8 @@ const eventSchema = z.strictObject({
     ])
     .default("rising_action"),
   emotionalTone: z.string().trim().max(500).optional(),
-  timeConstraint: timeConstraintSchema.optional(),
-  chapterNumber: z.number().int().min(1).max(STORY_LIMITS.chapters).optional(),
+  chapterKey: keySchema.nullable().default(null),
+  status: z.enum(["planned", "in_progress", "written"]).default("planned"),
   notes: optionalText,
 });
 
@@ -119,7 +100,14 @@ const characterSchema = z.strictObject({
     .array(
       z.strictObject({
         characterKey: keySchema,
-        type: z.enum(["ally", "rival", "mentor", "love interest", "family", "neutral"]),
+        type: z.enum([
+          "ally",
+          "rival",
+          "mentor",
+          "love interest",
+          "family",
+          "neutral",
+        ]),
         description: z.string().trim().max(2_000).optional(),
       }),
     )
@@ -167,7 +155,10 @@ export const createStoryByAdminSchema = z
       thumbnailUrl: optionalUrl.default(""),
     }),
     chapters: z.array(chapterSchema).min(1).max(STORY_LIMITS.chapters),
-    characters: z.array(characterSchema).max(STORY_LIMITS.nestedItems).default([]),
+    characters: z
+      .array(characterSchema)
+      .max(STORY_LIMITS.nestedItems)
+      .default([]),
     places: z.array(placeSchema).max(STORY_LIMITS.nestedItems).default([]),
     plots: z.array(plotSchema).max(STORY_LIMITS.nestedItems).default([]),
   })
@@ -176,11 +167,32 @@ export const createStoryByAdminSchema = z
     checkUniqueKeys(value.characters, ["characters"], ctx);
     checkUniqueKeys(value.places, ["places"], ctx);
     checkUniqueKeys(value.plots, ["plots"], ctx);
-    value.plots.forEach((plot, index) => checkUniqueKeys(plot.events, ["plots", index, "events"], ctx));
+    value.plots.forEach((plot, index) =>
+      checkUniqueKeys(plot.events, ["plots", index, "events"], ctx),
+    );
+    const chapterKeys = new Set(value.chapters.map((chapter) => chapter.key));
+    value.plots.forEach((plot, plotIndex) =>
+      plot.events.forEach((event, eventIndex) => {
+        if (event.chapterKey && !chapterKeys.has(event.chapterKey)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["plots", plotIndex, "events", eventIndex, "chapterKey"],
+            message: `unknown chapter key: ${event.chapterKey}`,
+          });
+        }
+      }),
+    );
 
-    const childDocuments = value.chapters.length + value.characters.length + value.places.length + value.plots.length;
+    const childDocuments =
+      value.chapters.length +
+      value.characters.length +
+      value.places.length +
+      value.plots.length;
     if (childDocuments > STORY_LIMITS.aggregateDocuments) {
-      ctx.addIssue({ code: "custom", message: `aggregate may contain at most ${STORY_LIMITS.aggregateDocuments} child documents` });
+      ctx.addIssue({
+        code: "custom",
+        message: `aggregate may contain at most ${STORY_LIMITS.aggregateDocuments} child documents`,
+      });
     }
   });
 
@@ -194,7 +206,11 @@ function checkUniqueKeys(
   const seen = new Set<string>();
   values.forEach((value, index) => {
     if (seen.has(value.key)) {
-      ctx.addIssue({ code: "custom", path: [...path, index, "key"], message: `duplicate key: ${value.key}` });
+      ctx.addIssue({
+        code: "custom",
+        path: [...path, index, "key"],
+        message: `duplicate key: ${value.key}`,
+      });
     }
     seen.add(value.key);
   });
@@ -226,5 +242,7 @@ function canonicalize(value: unknown): unknown {
 }
 
 export function requestHash(input: CreateStoryByAdminInput): string {
-  return createHash("sha256").update(JSON.stringify(canonicalize(input))).digest("hex");
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalize(input)))
+    .digest("hex");
 }

@@ -37,12 +37,10 @@ const fs = require('fs')
 const path = require('path')
 const admin = require('firebase-admin')
 const { getAuth } = require('firebase-admin/auth')
-const { getFirestore } = require('firebase-admin/firestore')
 
 const DEFAULT_PROJECT = 'story-6f89f'
 const DEFAULT_OWNER_EMAIL = 'seed-owner@taletribe.local'
 const AUTH_EMULATOR_HOST = '127.0.0.1:9099'
-const FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080'
 
 function parseArgs(argv) {
   const args = argv.slice(2)
@@ -128,53 +126,59 @@ function loadSchema() {
   }
 }
 
-/** Build the seeded profile from the same defaults signup and createUserByAdmin use. */
-function loadUserProfileDefaults() {
-  try {
-    return require('../lib/domain/userProfileDefaults').buildUserProfileDefaults
-  } catch {
-    throw new Error('Run `npm run build` first — the seeded owner profile reuses lib/domain/userProfileDefaults.js')
-  }
-}
-
-
 /** Resolve (and in the emulator create) the account stories will be attributed to. */
 async function ensureOwner({ email, prod }) {
-  const db = getFirestore()
-
-  let user
   try {
-    user = await getAuth().getUserByEmail(email)
+    return (await getAuth().getUserByEmail(email)).uid
   } catch (error) {
     if (error.code !== 'auth/user-not-found') throw error
     if (prod) {
       throw new Error(`Owner ${email} does not exist — pass --owner-uid for production`)
     }
-    user = await getAuth().createUser({ email, emailVerified: true, displayName: 'seed-owner' })
+    const user = await getAuth().createUser({ email, emailVerified: true, displayName: 'seed-owner' })
     console.log(`  created owner user ${email} (${user.uid})`)
-  }
-
-  const userRef = db.collection('users').doc(user.uid)
-  const snapshot = await userRef.get()
-  const username = snapshot.data()?.username
-
-  if (typeof username === 'string' && username.trim()) {
     return user.uid
   }
-  if (prod) {
-    throw new Error(`Owner ${email} has no users/${user.uid} profile with a username`)
+}
+
+/**
+ * story-data writes only for an owner with a profile and an accepted writer
+ * agreement. Locally both are created for the seed account; in production the
+ * owner must have done both themselves, since accepting terms is theirs to do.
+ */
+async function ensureOwnerCanWrite({ baseUrl, ctx, prod }) {
+  let hasProfile = true
+  try {
+    await storyData(baseUrl, ctx, 'GET', '/v1/profiles/me')
+  } catch (error) {
+    if (error.status !== 404) throw error
+    hasProfile = false
+  }
+  if (!hasProfile) {
+    if (prod) {
+      throw new Error(`Owner ${ctx.ownerUid} has no story-data profile — sign in once to create it`)
+    }
+    // story-data usernames are 3-20 letters, digits or underscores.
+    const username = `seed_${ctx.ownerUid.slice(0, 8).toLowerCase().replace(/[^a-z0-9_]/g, '_')}`
+    await storyData(baseUrl, ctx, 'PUT', '/v1/profiles/me', { username, guestbookPolicy: 'everyone' })
+    console.log(`  created owner profile ${username}`)
   }
 
-  const generated = `seed_owner_${user.uid.slice(0, 6).toLowerCase()}`
-  const userDoc = loadUserProfileDefaults()({ username: generated, email })
-
-  // Only the user document. story-data owns the public profile (created on the
-  // user's first sign-in) and enforces username uniqueness itself via
-  // public_profiles.username_lower, so the old Firestore `usernames` index is
-  // gone — it had no reader left once createUserByAdmin was removed.
-  await userRef.set(userDoc, { merge: true })
-  console.log(`  seeded owner profile users/${user.uid} (${generated})`)
-  return user.uid
+  const agreement = await storyData(baseUrl, ctx, 'GET', '/v1/me/writer-agreement')
+  if (agreement.accepted) return
+  if (prod) {
+    throw new Error(`Owner ${ctx.ownerUid} has not accepted the writer agreement — they must, in the editor`)
+  }
+  await storyData(baseUrl, ctx, 'POST', '/v1/me/writer-agreement', {
+    termsVersion: agreement.termsVersion,
+    privacyVersion: agreement.privacyVersion,
+    attestationVersion: agreement.attestationVersion,
+    agreeTerms: true,
+    acknowledgePrivacy: true,
+    attestRights: true,
+    adult: true,
+  })
+  console.log('  accepted the writer agreement for the local seed owner')
 }
 
 /** Exchange a custom token for an ID token so the function sees a real bearer token. */
@@ -259,12 +263,10 @@ async function storyData(baseUrl, ctx, method, path, body, revision) {
 /**
  * Walk a validated payload into story-data.
  *
- * The payload addresses everything by key (`characterKeys`, `locationKey`,
- * dependency `plotKey`/`eventKey`) because it was written for a Firestore
- * aggregate that could allocate every id up front. story-data assigns ids on
- * insert instead, so entities are created first and the references patched in
- * a second pass — which is also why events are created before their
- * dependencies are attached.
+ * The payload addresses everything by key (`characterKeys`, `locationKey`)
+ * because it was written for a Firestore aggregate that could allocate every
+ * id up front. story-data assigns ids on insert instead, so entities are
+ * created first and later references use the ids they were given.
  */
 async function importPayload({ baseUrl, ctx, payload }) {
   const call = (method, path, body, revision) => storyData(baseUrl, ctx, method, path, body, revision)
@@ -295,6 +297,7 @@ async function importPayload({ baseUrl, ctx, payload }) {
   // Creating a story opens it with an empty first chapter; fill that one in
   // rather than leaving it stranded ahead of the imported prose.
   const [opening] = await call('GET', `/v1/stories/${storyId}/chapters`)
+  const chapterIds = {}
   for (const [index, chapter] of payload.chapters.entries()) {
     if (index === 0 && opening) {
       await call('PATCH', `/v1/stories/${storyId}/chapters/${opening.id}`, {
@@ -302,12 +305,14 @@ async function importPayload({ baseUrl, ctx, payload }) {
         content: chapter.content,
         position: opening.position,
       }, opening.revision)
+      chapterIds[chapter.key] = opening.id
     } else {
-      await call('POST', `/v1/stories/${storyId}/chapters`, {
+      const created = await call('POST', `/v1/stories/${storyId}/chapters`, {
         title: chapter.title,
         content: chapter.content,
         position: index,
       })
+      chapterIds[chapter.key] = created.id
     }
   }
 
@@ -367,63 +372,25 @@ async function importPayload({ baseUrl, ctx, payload }) {
     placeIds[place.key] = created.id
   }
 
-  const plotIds = {}
-  const eventIds = {}
   for (const plot of payload.plots) {
     const created = await call('POST', `/v1/stories/${storyId}/plots`, {
       name: plot.name,
       description: plot.description,
     })
-    plotIds[plot.key] = created.id
 
     for (const event of plot.events) {
-      const madeEvent = await call('POST', `/v1/stories/${storyId}/plots/${created.id}/events`, {
+      await call('POST', `/v1/stories/${storyId}/plots/${created.id}/events`, {
         name: event.name,
         content: event.content,
         characterIds: (event.characterKeys || []).map((key) => characterIds[key]).filter(Boolean),
         locationId: event.locationKey ? placeIds[event.locationKey] || null : null,
-        tensionLevel: event.tensionLevel,
         pacing: event.pacing,
         storyBeat: event.storyBeat,
         emotionalTone: event.emotionalTone || '',
-        chapterNumber: event.chapterNumber ?? null,
+        chapterId: event.chapterKey ? chapterIds[event.chapterKey] || null : null,
+        status: event.status,
         notes: event.notes || '',
       })
-      eventIds[`${plot.key}::${event.key}`] = madeEvent.id
-    }
-  }
-
-  // Dependencies may point forward to an event in a later plot line, so they
-  // are attached only once every event has an id.
-  for (const plot of payload.plots) {
-    for (const event of plot.events) {
-      const dependencies = (event.dependencies || [])
-        .map((dependency) => ({
-          eventId: eventIds[`${dependency.plotKey}::${dependency.eventKey}`],
-          plotLineId: plotIds[dependency.plotKey],
-          relationshipType: dependency.relationshipType,
-          description: dependency.description || '',
-        }))
-        .filter((dependency) => dependency.eventId && dependency.plotLineId)
-      if (dependencies.length === 0) continue
-
-      const eventId = eventIds[`${plot.key}::${event.key}`]
-      const live = (await call('GET', `/v1/stories/${storyId}/plots`))
-        .find((line) => line.id === plotIds[plot.key])
-        .events.find((entry) => entry.id === eventId)
-      await call('PATCH', `/v1/stories/${storyId}/plots/${plotIds[plot.key]}/events/${eventId}`, {
-        name: event.name,
-        content: event.content,
-        characterIds: (event.characterKeys || []).map((key) => characterIds[key]).filter(Boolean),
-        locationId: event.locationKey ? placeIds[event.locationKey] || null : null,
-        dependencies,
-        tensionLevel: event.tensionLevel,
-        pacing: event.pacing,
-        storyBeat: event.storyBeat,
-        emotionalTone: event.emotionalTone || '',
-        chapterNumber: event.chapterNumber ?? null,
-        notes: event.notes || '',
-      }, live.revision)
     }
   }
 
@@ -467,7 +434,6 @@ async function main() {
 
   if (!options.prod) {
     process.env.FIREBASE_AUTH_EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || AUTH_EMULATOR_HOST
-    process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || FIRESTORE_EMULATOR_HOST
   }
   admin.initializeApp({
     projectId: options.projectId,
@@ -483,6 +449,7 @@ async function main() {
   const idToken = await mintIdToken({ uid: ownerUid, prod: options.prod, projectId: options.projectId })
   const baseUrl = resolveUrl(options)
   const ctx = { idToken, ownerUid }
+  await ensureOwnerCanWrite({ baseUrl, ctx, prod: options.prod })
   console.log(`  owner ${ownerUid}`)
   console.log(`  into  ${baseUrl}\n`)
 

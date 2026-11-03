@@ -27,7 +27,8 @@ import { toast } from "sonner";
 import { storyWorkspaceRepo } from "@novelsync/story-data-client";
 import { storyWorldbuildingRepo } from "@novelsync/story-data-client";
 import { storageService } from "@/services/StorageService";
-import { StoryBeatType, PLOT_TEMPLATES } from "@/types/IPlot";
+import { DEFAULT_PLOT_EVENT_VALUES, StoryBeatType } from "@/types/IPlot";
+import { PLOT_TEMPLATES } from "@/components/plot/plotTemplates";
 import { enhanceWizardInput, WizardEnhanceType } from "@/cloudFunctions/ai";
 import {
   STORY_CATEGORIES as CATEGORIES,
@@ -266,7 +267,7 @@ const CoWriteWizard: React.FC<CoWriteWizardProps> = ({
       template.events.map((e) => ({
         name: e.name,
         content: e.content,
-        storyBeat: "rising_action" as StoryBeatType,
+        storyBeat: e.storyBeat ?? "rising_action",
       })),
     );
   };
@@ -329,32 +330,19 @@ const CoWriteWizard: React.FC<CoWriteWizardProps> = ({
           ),
       );
       if (plotLineName.trim() && (conflict.trim() || events.length > 0)) {
-        const line = await storyWorldbuildingRepo.addPlot(
+        await storyWorldbuildingRepo.addPlotWithEvents(
           storyId,
-          plotLineName.trim(),
+          { name: plotLineName.trim(), description: conflict },
+          events
+            .filter((event) => event.name.trim())
+            .map((event, index) => ({
+              ...DEFAULT_PLOT_EVENT_VALUES,
+              name: event.name.trim(),
+              content: event.content,
+              storyBeat: event.storyBeat,
+              orderIndex: index,
+            })),
         );
-        if (conflict.trim()) {
-          await storyWorldbuildingRepo.updatePlotMeta(storyId, {
-            ...line,
-            description: conflict,
-          });
-        }
-        for (let index = 0; index < events.length; index += 1) {
-          const event = events[index];
-          if (!event.name.trim()) continue;
-          await storyWorldbuildingRepo.addEvent(storyId, line.id, {
-            name: event.name,
-            content: event.content,
-            characterIds: [],
-            locationId: null,
-            dependencies: [],
-            dependents: [],
-            tensionLevel: 5,
-            pacing: "moderate",
-            storyBeat: event.storyBeat,
-            orderIndex: index,
-          });
-        }
       }
 
       toast.success("Your story is ready — time to write!");

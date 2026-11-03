@@ -1,9 +1,9 @@
-import PlotTimeline from "../../components/plot/PlotTimeline";
+import PlotWorkspace from "../../components/plot/PlotWorkspace";
 
 const Plot: React.FC = () => {
   return (
     <div className="h-full">
-      <PlotTimeline />
+      <PlotWorkspace />
     </div>
   );
 };

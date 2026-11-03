@@ -5,6 +5,7 @@ import {
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useAui,
   useAuiState,
   useLocalRuntime,
   type SourceMessagePartProps,
@@ -56,6 +57,11 @@ import {
 import { createAssistantAdapter } from "./assistantRuntime";
 import type { AssistantMessageMetadata } from "./assistantRunModel";
 import { HELP_COMMAND, ROOM_COMMAND } from "./slashCommands";
+import {
+  pendingAssistantPrompt,
+  subscribeAssistantPrompt,
+  takeAssistantPrompt,
+} from "./assistantPrompt";
 import { SpecialistViewCard } from "./SpecialistViewCard";
 import { specialistView } from "./specialistView";
 import { objectValue, proposalArgs } from "./toolParts";
@@ -1108,17 +1114,31 @@ function EmptyAssistant() {
             </ThreadPrimitive.Suggestion>
           ))}
         </div>
-        <p className="mt-6 font-ui text-[10px] leading-4 text-ns-ink-muted">
-          Enter to send · Shift+Enter for a new line · This story only · Every
-          chat is saved
-        </p>
       </div>
     </ThreadPrimitive.Empty>
   );
 }
 
+const usePendingPrompt = () =>
+  useSyncExternalStore(subscribeAssistantPrompt, pendingAssistantPrompt);
+
+/** Fills the composer with a prompt another view prepared, once nothing is running. */
+function usePreparedPrompt(storyId: string | undefined) {
+  const aui = useAui();
+  const pending = usePendingPrompt();
+  const running = useAuiState((state) => state.thread.isRunning);
+  useEffect(() => {
+    if (!storyId || running || pending?.storyId !== storyId) return;
+    const request = takeAssistantPrompt(storyId);
+    if (!request) return;
+    aui.composer().setText(request.prompt);
+    if (request.autoSend) aui.composer().send();
+  }, [aui, pending, running, storyId]);
+}
+
 function Composer() {
   const context = useContext(AssistantPanelContext);
+  usePreparedPrompt(context?.storyId);
   return (
     <>
       <ComposerPrimitive.Root className="rounded-ns-xl border border-ns-border-strong bg-ns-bg p-2 shadow-ns-sm focus-within:border-ns-accent focus-within:ring-2 focus-within:ring-[var(--ns-ring)]">
@@ -1462,6 +1482,11 @@ function AssistantSurface({
   onSelect: (target: ConversationTarget) => void;
 }) {
   const [tab, setTab] = useState<AssistantTab>("chat");
+  const panelStoryId = useContext(AssistantPanelContext)?.storyId;
+  const pendingPrompt = usePendingPrompt();
+  useEffect(() => {
+    if (panelStoryId && pendingPrompt?.storyId === panelStoryId) setTab("chat");
+  }, [panelStoryId, pendingPrompt]);
   const description = EDITOR_ACTIONS_PRESENTED
     ? "Reads with you · previews every change before it reaches the manuscript"
     : "Knows your story · reads along without changing your writing";
