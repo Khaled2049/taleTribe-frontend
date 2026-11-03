@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, Layers, Pencil, Sparkles } from "lucide-react";
+import { ArrowUpRight, Layers, Pencil } from "lucide-react";
 import type { ChapterSummary } from "@novelsync/story-data-client";
 import { useCharacters } from "@/hooks/queries/useCharacterQueries";
 import { usePlaces } from "@/hooks/queries/usePlaceQueries";
@@ -9,10 +9,7 @@ import type { PlotEvent } from "@/types/IPlot";
 import { EventEditModal } from "@/components/plot/EventEditModal";
 import { EventStatusControl } from "@/components/plot/EventStatusControl";
 import { EventSummary } from "@/components/plot/EventSummary";
-import { chapterFor, chapterOptions } from "@/components/plot/plotChapters";
-import { developChapterPrompt } from "@/components/plot/assistantPrompts";
-import { openAssistantWith } from "@/components/chat/assistantPrompt";
-import { ASSISTANT_UI_ENABLED } from "@/config/featureFlags";
+import { chapterOptions } from "@/components/plot/plotChapters";
 import {
   chapterPlan,
   planSummary,
@@ -39,7 +36,6 @@ export const ChapterPlanPanel: React.FC<ChapterPlanPanelProps> = ({
   const { data: characters = [] } = useCharacters(storyId);
   const { data: places = [] } = usePlaces(storyId);
   const options = useMemo(() => chapterOptions(chapters), [chapters]);
-  const chapter = chapterFor(options, chapterId);
   const plan = useMemo(
     () => chapterPlan(plotLines, chapterId),
     [plotLines, chapterId],
@@ -67,21 +63,6 @@ export const ChapterPlanPanel: React.FC<ChapterPlanPanelProps> = ({
         >
           {query.isPending ? "Loading…" : planSummary(plan)}
         </p>
-        {ASSISTANT_UI_ENABLED && chapter && (
-          <button
-            type="button"
-            className={`${actionClass} mt-1.5 -ml-2`}
-            onClick={() =>
-              openAssistantWith({
-                storyId,
-                prompt: developChapterPrompt(chapter),
-              })
-            }
-          >
-            <Sparkles className="w-3 h-3" aria-hidden />
-            Develop this chapter’s plan
-          </button>
-        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">

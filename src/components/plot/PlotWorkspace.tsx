@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Book, PlusCircle, Sparkles } from "lucide-react";
+import { Book, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import { TemplatePreviewDialog } from "./TemplatePreviewDialog";
@@ -40,10 +40,7 @@ import {
   storyWorldbuildingRepo,
 } from "@novelsync/story-data-client";
 import { chapterOptions } from "./plotChapters";
-import {
-  CHECK_OUTLINE_PROMPT,
-  strongerConsequencePrompt,
-} from "./assistantPrompts";
+import { strongerConsequencePrompt } from "./assistantPrompts";
 import { openAssistantWith } from "@/components/chat/assistantPrompt";
 import { ASSISTANT_UI_ENABLED } from "@/config/featureFlags";
 import { useParams, useSearchParams } from "react-router-dom";
@@ -510,18 +507,6 @@ const PlotWorkspace: React.FC = () => {
         >
           <Book className="w-3.5 h-3.5" /> Templates
         </Button>
-
-        {ASSISTANT_UI_ENABLED && storyId && plotLines.length > 0 && (
-          <Button
-            variant="outline"
-            onClick={() =>
-              openAssistantWith({ storyId, prompt: CHECK_OUTLINE_PROMPT })
-            }
-            className="inline-flex items-center gap-1.5 h-auto px-3 py-1.5 bg-transparent border border-ns-border text-ns-ink-secondary font-ui text-xs font-normal rounded-ns hover:bg-ns-surface-hover hover:text-ns-ink transition-all duration-150 shadow-none"
-          >
-            <Sparkles className="w-3.5 h-3.5" /> Check the outline
-          </Button>
-        )}
       </div>
 
       <TemplatePreviewDialog

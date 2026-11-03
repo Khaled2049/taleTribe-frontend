@@ -1114,10 +1114,6 @@ function EmptyAssistant() {
             </ThreadPrimitive.Suggestion>
           ))}
         </div>
-        <p className="mt-6 font-ui text-[10px] leading-4 text-ns-ink-muted">
-          Enter to send · Shift+Enter for a new line · This story only · Every
-          chat is saved
-        </p>
       </div>
     </ThreadPrimitive.Empty>
   );
