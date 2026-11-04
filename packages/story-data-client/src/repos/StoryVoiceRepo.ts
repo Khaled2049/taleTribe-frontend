@@ -24,6 +24,8 @@ export interface StoryVoiceReference {
   sourceRevision: number;
   start: number;
   end: number;
+  /** Plain text copied by story-data when the reference is saved; ignored on input. */
+  text?: string;
 }
 
 export interface StoryVoiceProfile extends StoryVoiceInput {

@@ -526,8 +526,8 @@ export default function StoryVoice() {
                   Reference passages
                 </h2>
                 <p className="text-sm text-ns-ink-secondary">
-                  Choose up to three chapters. The assistant uses a short
-                  passage only while that chapter stays at the saved revision.
+                  Choose up to three chapters. The assistant keeps a copy of
+                  each passage, so later edits to the chapter do not change it.
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
                   <VoiceSelect
@@ -598,14 +598,15 @@ export default function StoryVoice() {
                   return (
                     <div
                       key={ref.chapterId}
-                      className="flex items-center justify-between gap-3 rounded-ns border border-ns-border px-4 py-3 text-sm"
+                      className="flex items-start justify-between gap-3 rounded-ns border border-ns-border px-4 py-3 text-sm"
                     >
-                      <span>
-                        {chapter?.title ?? "Deleted chapter"} · revision{" "}
-                        {ref.sourceRevision}
-                        {chapter && chapter.revision !== ref.sourceRevision
-                          ? " · needs replacement"
-                          : ""}
+                      <span className="min-w-0 space-y-1">
+                        <span className="block">
+                          {chapter?.title ?? "Deleted chapter"}
+                        </span>
+                        <span className="line-clamp-2 block text-xs text-ns-ink-secondary">
+                          {ref.text ?? "Copied when you save."}
+                        </span>
                       </span>
                       <button
                         type="button"
