@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ComponentProps,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { ChevronDown } from "lucide-react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -35,6 +42,23 @@ const empty: StoryVoiceInput = {
 };
 const field =
   "w-full rounded-ns border border-ns-border bg-ns-surface px-3 py-2 font-body text-sm text-ns-ink focus:outline-none focus:border-ns-accent disabled:opacity-60";
+
+// The browser's own arrow sits flush against the right edge, so draw it inset.
+function VoiceSelect({ className = "", ...props }: ComponentProps<"select">) {
+  return (
+    <span className={`relative block ${className}`}>
+      <select
+        {...props}
+        className={`${field} appearance-none pr-9 dark:[color-scheme:dark]`}
+      />
+      <ChevronDown
+        size={16}
+        aria-hidden="true"
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ns-ink-muted"
+      />
+    </span>
+  );
+}
 
 function copyInput(value: StoryVoiceInput): StoryVoiceInput {
   return {
@@ -340,8 +364,7 @@ export default function StoryVoice() {
               <div className="grid gap-6 sm:grid-cols-2">
                 <label className="block space-y-2 font-ui text-sm text-ns-ink">
                   <span>Point of view</span>
-                  <select
-                    className={field}
+                  <VoiceSelect
                     value={draft.pointOfView}
                     onChange={(event) =>
                       setDraft({
@@ -355,12 +378,11 @@ export default function StoryVoice() {
                         {option.label}
                       </option>
                     ))}
-                  </select>
+                  </VoiceSelect>
                 </label>
                 <label className="block space-y-2 font-ui text-sm text-ns-ink">
                   <span>Tense</span>
-                  <select
-                    className={field}
+                  <VoiceSelect
                     value={draft.tense}
                     onChange={(event) =>
                       setDraft({
@@ -374,7 +396,7 @@ export default function StoryVoice() {
                         {option.label}
                       </option>
                     ))}
-                  </select>
+                  </VoiceSelect>
                 </label>
               </div>
 
@@ -508,9 +530,9 @@ export default function StoryVoice() {
                   passage only while that chapter stays at the saved revision.
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
-                  <select
+                  <VoiceSelect
                     aria-label="Chapter for reference"
-                    className={`${field} max-w-sm`}
+                    className="w-full max-w-sm"
                     value={selectedChapter}
                     onChange={(event) => {
                       setSelectedChapter(event.target.value);
@@ -523,7 +545,7 @@ export default function StoryVoice() {
                         {chapter.title}
                       </option>
                     ))}
-                  </select>
+                  </VoiceSelect>
                   <button
                     type="button"
                     disabled={
