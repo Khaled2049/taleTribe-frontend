@@ -39,6 +39,14 @@ export const learnStoryVoice = onRequest(
         chapter_id: chapterId,
         source_revision: sourceRevision,
       };
+      // Denied or unavailable access must not consume the story's rate slot.
+      const access = await checkAiAccess(userId);
+      if (!access.allowed) {
+        response
+          .status(access.suspended ? 403 : 402)
+          .json({ error: access.reason || "AI access unavailable" });
+        return;
+      }
       // Preflight checks the switch, revisions and evidence, then atomically
       // claims the story's rate slot. Only a claim holder spends daily quota.
       const check = await fetch(`${endpoint}?preflight=true`, {
@@ -57,13 +65,6 @@ export const learnStoryVoice = onRequest(
       };
       if (!claimId) {
         response.status(200).json({ status: "skipped" });
-        return;
-      }
-      const access = await checkAiAccess(userId);
-      if (!access.allowed) {
-        response
-          .status(access.suspended ? 403 : 402)
-          .json({ error: access.reason || "AI access unavailable" });
         return;
       }
       const result = await fetch(endpoint, {
