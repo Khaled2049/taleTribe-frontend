@@ -49,6 +49,7 @@ import {
   type ComponentType,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { getFunctionUrl } from "@/cloudFunctions";
 import {
   safeWebReferenceUrl,
@@ -1281,6 +1282,7 @@ function AssistantConversation({
   const editorBridge = useEditorBridge();
   const [actionLedger] = useState(() => new EditorActionLedger());
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { isLgUp } = useBreakpoint();
   const [dockWidth, setDockWidth] = useState(initialDockWidth);
   const [activeTitle, setActiveTitle] = useState<string | null>(null);
@@ -1312,6 +1314,20 @@ function AssistantConversation({
         activeRequest,
         actionLedger,
         editsEnabled: EDITOR_ACTIONS_PRESENTED,
+        onVoiceUpdated: (changeId) => {
+          void queryClient.invalidateQueries({
+            queryKey: ["story-voice", storyId],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ["story-voice-history", storyId],
+          });
+          toast("Voice updated", {
+            action: {
+              label: "Review",
+              onClick: () => navigate(`/create/${storyId}/voice#${changeId}`),
+            },
+          });
+        },
         transport: {
           endpoint,
           getIdToken: async () => auth.currentUser?.getIdToken() ?? null,
@@ -1322,7 +1338,15 @@ function AssistantConversation({
               : (editorBridge?.getSnapshot() ?? null),
         },
       }),
-    [actionLedger, editorBridge, endpoint, storyId, threadSession],
+    [
+      actionLedger,
+      editorBridge,
+      endpoint,
+      navigate,
+      queryClient,
+      storyId,
+      threadSession,
+    ],
   );
   const runtime = useLocalRuntime(adapter, { adapters: { history } });
 

@@ -76,6 +76,15 @@ export {
   type OwnerStoryPage,
 } from "./repos/StoryWorkspaceRepo.js";
 export {
+  storyVoiceRepo,
+  type StoryVoiceInput,
+  type StoryVoiceProfile,
+  type StoryVoiceNote,
+  type StoryVoiceChange,
+  type StoryPointOfView,
+  type StoryTense,
+} from "./repos/StoryVoiceRepo.js";
+export {
   storyWorldbuildingRepo,
   StoryWorldbuildingRepo,
 } from "./repos/StoryWorldbuildingRepo.js";

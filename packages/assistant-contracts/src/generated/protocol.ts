@@ -594,6 +594,17 @@ export const HELP_BOUNDARIES: readonly string[] = [
 ];
 export const CAPABILITIES: readonly Capability[] = [
   {
+    "id": "story_voice",
+    "tools": [
+      "update_story_voice_profile"
+    ],
+    "gate": "always",
+    "title": "Remember this story's prose voice",
+    "summary": "Save a clear story-wide writing preference as a voice note, with history and Undo in Voice.",
+    "example": "For this story, keep the narration restrained.",
+    "limits": "Scene-only directions stay in the scene. You can edit, pin, remove, or undo the note."
+  },
+  {
     "id": "story_overview",
     "tools": [
       "get_story_overview"

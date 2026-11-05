@@ -1,4 +1,4 @@
-import { Layers, MapPin, PenLine, Users } from "lucide-react";
+import { AudioLines, Layers, MapPin, PenLine, Users } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 interface StoryWorkspaceTabsProps {
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { label: "Plot", segment: "plot", icon: Layers, end: false },
   { label: "Characters", segment: "characters", icon: Users, end: false },
   { label: "Places", segment: "places", icon: MapPin, end: false },
+  { label: "Voice", segment: "voice", icon: AudioLines, end: false },
 ] as const;
 
 function buildTo(storyId: string | undefined, segment: string) {

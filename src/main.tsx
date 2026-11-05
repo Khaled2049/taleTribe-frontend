@@ -58,6 +58,7 @@ const BookClubDetails = lazy(() => import("./routes/BookClub/BookClubDetails"));
 const Characters = lazy(() => import("./routes/Story/Characters"));
 const Plot = lazy(() => import("./routes/Story/Plot"));
 const Places = lazy(() => import("./routes/Story/Places"));
+const StoryVoice = lazy(() => import("./routes/Story/StoryVoice"));
 const CreateStory = lazy(() => import("./routes/Story/CreateStory"));
 const PrivateRoute = lazy(() => import("./routes/PrivateRoute"));
 const PrivacyPolicy = lazy(() => import("./routes/Legal/PrivacyPolicy"));
@@ -473,6 +474,14 @@ const router = createBrowserRouter([
             element: (
               <Suspense fallback={<LoadingFallback />}>
                 <Places />
+              </Suspense>
+            ),
+          },
+          {
+            path: "voice",
+            element: (
+              <Suspense fallback={<LoadingFallback />}>
+                <StoryVoice />
               </Suspense>
             ),
           },
