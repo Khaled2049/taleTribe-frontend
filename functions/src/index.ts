@@ -10,14 +10,9 @@ setGlobalOptions({
 admin.initializeApp();
 
 // Export new agent endpoints
-export { summarizeChapter } from "./endpoints/summarizeChapter";
-export { brainstormIdeas } from "./endpoints/brainstormIdeas";
-export { generateNextLines } from "./endpoints/generateNextLines";
-export { generateStoryChoices } from "./endpoints/generateStoryChoices";
 export { searchBooks } from "./endpoints/searchBooks";
 export { generateCoverImage } from "./endpoints/generateCoverImage";
 export { assistantRun } from "./endpoints/assistantRun";
-export { enhanceText } from "./endpoints/enhanceText";
 export { learnStoryVoice } from "./endpoints/learnStoryVoice";
 export { enhanceWizardInput } from "./endpoints/enhanceWizardInput";
 export { onInviteApproved } from "./endpoints/onInviteApproved";

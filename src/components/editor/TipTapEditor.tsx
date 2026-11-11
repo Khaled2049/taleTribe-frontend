@@ -41,7 +41,6 @@ import Suggestion from "@tiptap/suggestion";
 import { slashCommandSuggestion } from "./SlashCommandExtension";
 import { CHAPTER_WORD_LIMIT } from "@/utils/chapterWordLimit";
 import { docWordCount } from "@/components/editor/docWordCount";
-import { SuggestionMenu } from "./SuggestionMenu";
 import { ImageIcon, Loader, Sparkles } from "lucide-react";
 import { EDITOR_PAGE_WIDTH } from "@/components/editor/editorZoom";
 import type { ParagraphStyle } from "@novelsync/story-data-client";
@@ -52,7 +51,6 @@ import {
   ParagraphStyleExtension,
   TextAlignExtension,
 } from "@/components/editor/editorExtensions";
-import { useAiSuggestions } from "@/hooks/useAiSuggestions";
 import { SelectionToolbar } from "./SelectionToolbar";
 import {
   useImageGeneration,
@@ -146,7 +144,6 @@ interface TipTapEditorProps {
   userId?: string;
   onEditorReady?: (editor: Editor | null) => void;
   onTransaction?: (transaction: Transaction) => void;
-  onSummarize: () => Promise<void>;
   onLink: () => void;
   /** Page scale in percent. */
   zoom?: number;
@@ -162,7 +159,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   userId,
   onEditorReady,
   onTransaction,
-  onSummarize,
   onLink,
   zoom = 100,
   paragraphStyle = "spaced",
@@ -176,7 +172,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const onSaveRef = useRef(onSave);
   const onBlurRef = useRef(onBlur);
   const onTransactionRef = useRef(onTransaction);
-  const onSummarizeRef = useRef(onSummarize);
   // Ref so the paste plugin (created once) can surface errors via React state
   const pasteErrorRef = useRef<((msg: string) => void) | null>(null);
 
@@ -184,7 +179,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   onSaveRef.current = onSave;
   onBlurRef.current = onBlur;
   onTransactionRef.current = onTransaction;
-  onSummarizeRef.current = onSummarize;
 
   // Timed error banner shared by all AI features and the paste plugin
   const [editorError, setEditorError] = useState("");
@@ -248,15 +242,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   };
 
   // ── Feature hooks ──────────────────────────────────────────────────────────
-
-  const {
-    suggestions,
-    setSuggestions,
-    showSuggestionMenu,
-    setShowSuggestionMenu,
-    isGenerating,
-    fetchNextLineSuggestions,
-  } = useAiSuggestions({ storyId, chapterId });
 
   const {
     imagePromptOpen,
@@ -330,16 +315,12 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         return [
           Suggestion({
             editor: editorInstance,
-            ...slashCommandSuggestion(
-              async () => fetchNextLineSuggestions(editorInstance),
-              openImagePrompt,
-              () => onSummarizeRef.current(),
-            ),
+            ...slashCommandSuggestion(openImagePrompt),
           }),
         ];
       },
     });
-  }, [fetchNextLineSuggestions, openImagePrompt]);
+  }, [openImagePrompt]);
 
   // ── Editor instance ────────────────────────────────────────────────────────
 
@@ -533,36 +514,6 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           />
         </div>
       </div>
-
-      {/* Loading indicator for next-line suggestions */}
-      {isGenerating && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-ns-elevated border border-ns-border rounded-lg p-6 shadow-xl transition-colors w-72">
-            <div className="flex items-center gap-3">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ns-accent"></div>
-              <span className="text-ns-ink">Generating…</span>
-            </div>
-            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-ns-surface">
-              <div
-                className="h-full rounded-full bg-ns-accent transition-all duration-500 ease-out"
-                style={{ width: "35%" }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Suggestion Menu */}
-      {showSuggestionMenu && suggestions.length > 0 && (
-        <SuggestionMenu
-          suggestions={suggestions}
-          editor={editor}
-          onClose={() => {
-            setShowSuggestionMenu(false);
-            setSuggestions([]);
-          }}
-        />
-      )}
 
       {/* Error Toast */}
       {editorError && (
