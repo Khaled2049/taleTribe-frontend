@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { request } from "@novelsync/story-data-client";
 import { useAuthIdentity } from "@novelsync/platform-auth";
 import { Button } from "@/components/ui/button";
@@ -13,8 +14,11 @@ interface Agreement {
   acceptedAt?: string;
 }
 
+// Uids that accepted this session, so remounting the editor skips the check flash.
+const acceptedUids = new Set<string>();
+
 export function WriterAgreementGate({ children }: { children: ReactNode }) {
-  const { uid } = useAuthIdentity();
+  const { uid, loading: authLoading } = useAuthIdentity();
   const [agreement, setAgreement] = useState<Agreement | null>(null);
   const [terms, setTerms] = useState(false);
   const [rights, setRights] = useState(false);
@@ -35,7 +39,11 @@ export function WriterAgreementGate({ children }: { children: ReactNode }) {
         auth: "required",
         signal: controller.signal,
       })
-        .then(setAgreement)
+        .then((next) => {
+          if (next.accepted) acceptedUids.add(uid);
+          else acceptedUids.delete(uid);
+          setAgreement(next);
+        })
         .catch(() => {
           if (!controller.signal.aborted)
             setError("Could not load your writer agreement. Please retry.");
@@ -62,6 +70,7 @@ export function WriterAgreementGate({ children }: { children: ReactNode }) {
           adult,
         },
       });
+      if (next.accepted && uid) acceptedUids.add(uid);
       setAgreement(next);
     } catch {
       setError(
@@ -73,6 +82,22 @@ export function WriterAgreementGate({ children }: { children: ReactNode }) {
   }
 
   if (agreement?.accepted) return <>{children}</>;
+  // Trust a known acceptance while the background re-check runs.
+  if (uid && !agreement && !error && acceptedUids.has(uid))
+    return <>{children}</>;
+  if (authLoading || (uid && !agreement && !error)) {
+    return (
+      <div
+        className="flex min-h-[50vh] items-center justify-center"
+        role="status"
+      >
+        <Loader2
+          className="h-7 w-7 animate-spin text-ns-accent"
+          aria-label="Loading your writer agreement"
+        />
+      </div>
+    );
+  }
   return (
     <section
       className="max-w-2xl mx-auto p-6 space-y-5 text-ns-ink overflow-y-auto"
@@ -86,11 +111,7 @@ export function WriterAgreementGate({ children }: { children: ReactNode }) {
         edit stories. Your agreement applies to future contributions, including
         cover images and AI-assisted writing.
       </p>
-      {!uid ? (
-        <p>Please sign in to continue.</p>
-      ) : !agreement && !error ? (
-        <p role="status">Loading your agreement…</p>
-      ) : null}
+      {!uid && <p>Please sign in to continue.</p>}
       {agreement && (
         <fieldset disabled={busy} className="space-y-4">
           <div className="flex items-start gap-3">
