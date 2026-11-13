@@ -70,9 +70,7 @@ of what becomes part of their work.
 
 AI-powered tools include:
 
-- Context-aware co-writing and next-line suggestions.
-- Brainstorming for plots, characters, places, and new story directions.
-- Rewriting, expanding, and refining selected prose.
+- A new-story wizard that helps shape a premise, characters and places.
 - Story-aware chat that can reason over the writer's existing material.
 - Chapter, cover, and in-story image generation.
 - Natural-language story discovery and personalized recommendations.

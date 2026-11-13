@@ -2,6 +2,7 @@
 import { getAuth } from "firebase-admin/auth";
 import { Request, Response } from "express";
 import * as logger from "firebase-functions/logger";
+import { isStoryOwner } from "./storyOwnership";
 
 export interface AuthContext {
   userId: string;
@@ -59,9 +60,9 @@ export function requireAdmin(
   };
 }
 
-/** Stories live in story-data, which authorizes them with the caller's original
- * Firebase token. This is the only ownership check — there is no Firestore
- * story document to fall back to. */
+/** Stories live in story-data, which authorizes the read with the caller's
+ * original Firebase token. This is the only ownership check — there is no
+ * Firestore story document to fall back to. */
 async function verifyStoryDataOwnership(storyId: string, userId: string, idToken: string): Promise<boolean> {
   const baseUrl = (process.env.STORY_DATA_URL || "http://localhost:8084").replace(/\/$/, "");
   try {
@@ -70,7 +71,8 @@ async function verifyStoryDataOwnership(storyId: string, userId: string, idToken
       // verifies the Firebase bearer token and ignores it.
       headers: { Authorization: `Bearer ${idToken}`, "X-User-ID": userId },
     });
-    return response.ok;
+    if (!response.ok) return false;
+    return isStoryOwner(await response.json(), userId);
   } catch (error) {
     logger.warn("story-data ownership lookup failed", { storyId, error });
     return false;

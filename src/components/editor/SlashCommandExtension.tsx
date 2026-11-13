@@ -11,14 +11,12 @@ import { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { PluginKey, type EditorState } from "@tiptap/pm/state";
 import {
   type LucideIcon,
-  PenLine,
   Image,
   Heading1,
   Heading2,
   List,
   Code,
   ListChecks,
-  ScrollText,
   SeparatorHorizontal,
 } from "lucide-react";
 import SlashCommandMenu from "./SlashCommandMenu";
@@ -126,33 +124,13 @@ function createSuggestionPopup(content: HTMLElement, contextElement: Element) {
 }
 
 export const slashCommandSuggestion = (
-  onGenerateNextLine: () => Promise<void>,
   onGenerateImage: () => void,
-  onSummarize: () => Promise<void>,
 ): Partial<SuggestionOptions> => ({
   char: "/",
   pluginKey: new PluginKey("slashCommand"),
 
   items: ({ query }: { query: string }): SlashCommand[] => {
     const commands: SlashCommand[] = [
-      {
-        title: "Generate Next Line",
-        description: "AI generates suggestions for the next line",
-        icon: PenLine,
-        command: async ({ editor, range }: CommandContext) => {
-          editor.chain().focus().deleteRange(range).run();
-          await onGenerateNextLine();
-        },
-      },
-      {
-        title: "Summarize",
-        description: "Summarize this chapter",
-        icon: ScrollText,
-        command: async ({ editor, range }: CommandContext) => {
-          editor.chain().focus().deleteRange(range).run();
-          await onSummarize();
-        },
-      },
       {
         title: "Generate Image",
         description: "AI generates an image from your description",

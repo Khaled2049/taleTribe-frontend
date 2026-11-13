@@ -10,13 +10,11 @@ import {
   BookPlus,
   ChevronLeft,
   ChevronRight,
-  Copy,
   Loader,
   Maximize2,
   Minimize2,
   PenLine,
   Save,
-  ScrollText,
   Upload,
   X,
 } from "lucide-react";
@@ -97,7 +95,6 @@ import {
   recordVoiceLearningResult,
   shouldRequestVoiceLearning,
 } from "@/components/editor/voiceLearningTrigger";
-import { summarizeChapter } from "@/cloudFunctions/ai";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/queries/queryKeys";
 import {
@@ -185,8 +182,6 @@ export function SimpleEditor() {
   const [pendingChapter, setPendingChapter] = useState<ChapterSummary | null>(
     null,
   );
-  const [isSummarizing, setIsSummarizing] = useState(false);
-  const [summaryResult, setSummaryResult] = useState<string | null>(null);
   const [splitDialogOpen, setSplitDialogOpen] = useState(false);
   const [releaseRequest, setReleaseRequest] = useState<{
     chapterId: string;
@@ -246,8 +241,7 @@ export function SimpleEditor() {
         deleteDialogOpen ||
         publishDialogOpen ||
         releaseRequest ||
-        unsavedChangesDialogOpen ||
-        summaryResult
+        unsavedChangesDialogOpen
       ) {
         return;
       }
@@ -261,7 +255,6 @@ export function SimpleEditor() {
     publishDialogOpen,
     releaseRequest,
     unsavedChangesDialogOpen,
-    summaryResult,
     exitFocusMode,
   ]);
 
@@ -823,41 +816,6 @@ export function SimpleEditor() {
     setSplitDialogOpen(true);
   };
 
-  // Summarize the current chapter and persist the summary.
-  const handleSummarizeChapter = async () => {
-    if (!state.story || !state.currentChapter || isSummarizing) return;
-
-    setIsSummarizing(true);
-    let loadingToast: string | number | undefined;
-    try {
-      if (!(await saveBeforeContinuing())) return;
-      loadingToast = toast.loading("Summarizing chapter…");
-      const result = await summarizeChapter({
-        storyId: state.story.id,
-        chapterId: state.currentChapter.id,
-      });
-      setSummaryResult(result.summary);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to summarize chapter.",
-      );
-    } finally {
-      if (loadingToast !== undefined) toast.dismiss(loadingToast);
-      setIsSummarizing(false);
-    }
-  };
-
-  // Copy the generated summary to the clipboard.
-  const handleCopySummary = async () => {
-    if (!summaryResult) return;
-    try {
-      await navigator.clipboard.writeText(summaryResult);
-      toast.success("Summary copied to clipboard.");
-    } catch {
-      toast.error("Couldn't copy summary.");
-    }
-  };
-
   // Handle publishing
   const openPublishDialog = () => {
     setPublishCompletionStatus(
@@ -1337,7 +1295,6 @@ export function SimpleEditor() {
                       onTransaction={(transaction) =>
                         bridgeRegistrationRef.current?.transaction(transaction)
                       }
-                      onSummarize={handleSummarizeChapter}
                       onLink={applyLink}
                     />
                   </div>
@@ -1638,70 +1595,6 @@ export function SimpleEditor() {
             onDiscardAndContinue={handleDiscardAndContinue}
             isSaving={saveState.status === "saving"}
           />
-
-          {/* ── Chapter Summary Dialog ── */}
-          {summaryResult !== null && (
-            <div
-              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4 animate-ns-fade-in"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Chapter summary"
-              onClick={() => setSummaryResult(null)}
-            >
-              <div
-                className="w-full max-w-lg rounded-ns-lg border border-ns-border bg-ns-elevated shadow-ns-lg"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="flex items-center justify-between border-b border-ns-border px-5 py-3">
-                  <div className="flex items-center gap-2">
-                    <ScrollText className="w-4 h-4 text-ns-accent" />
-                    <h2 className="font-heading text-lg text-ns-ink">
-                      Chapter Summary
-                    </h2>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSummaryResult(null)}
-                    aria-label="Close"
-                    className="rounded-ns p-1.5 text-ns-ink-muted hover:bg-ns-surface-hover hover:text-ns-ink transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="max-h-[50vh] overflow-y-auto px-5 py-4">
-                  {summaryResult.trim() ? (
-                    <p className="font-body text-sm leading-relaxed text-ns-ink-secondary whitespace-pre-wrap">
-                      {summaryResult}
-                    </p>
-                  ) : (
-                    <p className="font-ui text-sm italic text-ns-ink-muted">
-                      No summary was returned.
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-end gap-2 border-t border-ns-border px-5 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setSummaryResult(null)}
-                    className="inline-flex items-center gap-1.5 rounded-ns border border-ns-border px-3 py-1.5 font-ui text-xs text-ns-ink-secondary hover:bg-ns-surface-hover hover:text-ns-ink hover:border-ns-border-strong active:scale-[0.97] transition-all duration-150"
-                  >
-                    Close
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCopySummary}
-                    disabled={!summaryResult.trim()}
-                    className="inline-flex items-center gap-1.5 rounded-ns bg-ns-accent px-3 py-1.5 font-ui text-xs font-medium text-white hover:bg-ns-accent-hover active:scale-[0.97] transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    Copy
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>
