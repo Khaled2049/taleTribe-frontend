@@ -5,8 +5,8 @@ setGlobalOptions({
   maxInstances: 5,
   memory: "512MiB",
   timeoutSeconds: 540, // Increased for async operations
-  // Created by terraform/iam.tf; agents, recs and creditProxy trust this account.
-  serviceAccount: "novelsync-functions@",
+  // Full address: firebase-tools grants secret access with it unexpanded.
+  serviceAccount: "novelsync-functions@story-6f89f.iam.gserviceaccount.com",
 });
 
 admin.initializeApp();
