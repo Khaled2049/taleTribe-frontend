@@ -1595,7 +1595,6 @@ export function SimpleEditor() {
             onDiscardAndContinue={handleDiscardAndContinue}
             isSaving={saveState.status === "saving"}
           />
-
         </>
       )}
     </div>
