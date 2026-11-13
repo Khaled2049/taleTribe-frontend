@@ -5,6 +5,8 @@ setGlobalOptions({
   maxInstances: 5,
   memory: "512MiB",
   timeoutSeconds: 540, // Increased for async operations
+  // Created by terraform/iam.tf; agents, recs and creditProxy trust this account.
+  serviceAccount: "novelsync-functions@",
 });
 
 admin.initializeApp();

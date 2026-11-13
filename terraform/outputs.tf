@@ -18,9 +18,9 @@ output "firebase_hosting_site" {
   value       = var.firebase_hosting_site_id
 }
 
-output "app_engine_service_account" {
-  description = "Email of the App Engine default service account (Cloud Functions runtime)"
-  value       = local.appengine_service_account
+output "functions_service_account" {
+  description = "Email of the Firebase Functions runtime account"
+  value       = local.functions_service_account
 }
 
 output "github_actions_service_account" {

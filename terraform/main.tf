@@ -39,12 +39,6 @@ resource "google_project_service" "cloudrun" {
   disable_on_destroy = false
 }
 
-# App Engine default service account (computed, used by Cloud Functions)
-# Format: <project-id>@appspot.gserviceaccount.com
-locals {
-  appengine_service_account = "${var.project_id}@appspot.gserviceaccount.com"
-}
-
 # Get the Cloud Run backend service
 data "google_cloud_run_v2_service" "backend" {
   name     = var.backend_service_name
