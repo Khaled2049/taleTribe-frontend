@@ -243,6 +243,14 @@ story-data and the assistant keeps no transcript there either; assistant
 history is durable now, but in story-data's Postgres, not Firestore. The rules
 deny the whole subtree.
 
+Functions run as `novelsync-functions` (`setGlobalOptions` in
+`functions/src/index.ts`), which holds only the roles listed in
+`terraform/iam.tf`: Firestore, Auth admin, logs, the Firestore event trigger
+and the secrets in `secret_names`. A Function that needs another Google API or
+a new secret needs a grant there, or it fails with 403 in production only
+(the emulators don't check IAM). agents, recs and creditProxy trust this
+account by name (`firebase_functions_service_account` in each repo).
+
 ### AI Features
 
 - **Story assistant**: `AssistantPanel` (assistant-ui headless primitives, Inkwell
