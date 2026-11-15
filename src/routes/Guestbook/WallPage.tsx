@@ -1,5 +1,6 @@
 import { useGuestbookMutations } from "@/hooks/queries/useGuestbookMutations";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useInView } from "react-intersection-observer";
 import { Link } from "react-router-dom";
 import { Loader, User } from "lucide-react";
 import { FeedError } from "@/components/guestbook/FeedStatus";
@@ -27,6 +28,20 @@ import { feedView, groupByDay } from "@/lib/guestbookWall";
 import { IGuestbookEntry } from "@novelsync/story-data-client";
 import { rateLimitMessage } from "@/lib/rateLimitError";
 import { useWallFeed, WallFilter } from "@/hooks/queries/useGuestbookQueries";
+import FeedPager from "@/components/guestbook/FeedPager";
+import FeedModeToggle from "@/components/guestbook/FeedModeToggle";
+import { useStoredState } from "@/hooks/useStoredState";
+import { appScrollContainer } from "@/lib/scrollContainer";
+import {
+  doomCheckpoint,
+  FEED_MODE_KEY,
+  knownPageCount,
+  PAGER_HINTS_KEY,
+  parseFeedMode,
+} from "@/lib/feedPaging";
+
+const parseFlag = (raw: string | null) => raw === "1";
+const serializeFlag = (value: boolean) => (value ? "1" : "0");
 
 /**
  * The personal, strictly reverse-chronological combined feed: your own
@@ -45,7 +60,16 @@ const WallPage: React.FC = () => {
   // Both sidebars fetch on mount, so a CSS `hidden` alone would still spend
   // their requests on a phone. Mount only what this breakpoint shows.
   const { isLgUp } = useBreakpoint();
-  const [filter, setFilter] = useState<WallFilter>("all");
+  const [filter, setFilterState] = useState<WallFilter>("all");
+  const [mode, setMode] = useStoredState(FEED_MODE_KEY, parseFeedMode);
+  const [hintsDismissed, setHintsDismissed] = useStoredState(
+    PAGER_HINTS_KEY,
+    parseFlag,
+    serializeFlag,
+  );
+  const [page, setPage] = useState(1);
+  const [loadingPage, setLoadingPage] = useState<number | null>(null);
+  const feedTopRef = useRef<HTMLDivElement>(null);
   const [isPosting, setIsPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
 
@@ -70,13 +94,61 @@ const WallPage: React.FC = () => {
     () => data?.pages.flatMap((p) => p.entries) ?? [],
     [data],
   );
+  const loadedPages = data?.pages.length ?? 0;
+  // A refetch can return fewer pages than were loaded, so clamp rather than trust state.
+  const currentPage = Math.min(page, Math.max(1, loadedPages));
+  const totalPages = knownPageCount(loadedPages, !!hasNextPage);
+  const isLastPage = currentPage >= loadedPages && !hasNextPage;
+  const visibleEntries = useMemo(
+    () =>
+      mode === "pages"
+        ? (data?.pages[currentPage - 1]?.entries ?? [])
+        : entries,
+    [mode, data, currentPage, entries],
+  );
+
   // "Today" and "Yesterday" go stale at midnight, so the day is a dependency.
   const view = feedView({ hasData: !!data, isError, count: entries.length });
   const today = new Date().toDateString();
   const rows = useMemo(
-    () => groupByDay(entries, new Date(today)),
-    [entries, today],
+    () => groupByDay(visibleEntries, new Date(today)),
+    [visibleEntries, today],
   );
+
+  const setFilter = (next: WallFilter) => {
+    setFilterState(next);
+    setPage(1);
+  };
+
+  const goToPage = async (next: number) => {
+    if (next > loadedPages) {
+      setLoadingPage(next);
+      try {
+        const result = await fetchNextPage();
+        if ((result.data?.pages.length ?? 0) < next) return;
+      } finally {
+        setLoadingPage(null);
+      }
+    }
+    setPage(next);
+    feedTopRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
+  // The margin only widens the root's box. Against the viewport it is clipped
+  // by the scrolling <main>, so the next page would not start early.
+  const [scrollRoot, setScrollRoot] = useState<Element | null>(null);
+  useEffect(() => setScrollRoot(appScrollContainer()), []);
+  const { ref: loadMoreRef, inView } = useInView({
+    root: scrollRoot,
+    threshold: 0,
+    rootMargin: "200px",
+    skip: mode !== "scroll",
+  });
+  useEffect(() => {
+    if (mode === "scroll" && inView && hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
+    }
+  }, [mode, inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const handlePost = async (content: string) => {
     if (!user) return;
     setIsPosting(true);
@@ -131,6 +203,8 @@ const WallPage: React.FC = () => {
       </div>
     );
   }
+
+  let postsSeen = 0;
 
   return (
     <div className="min-h-screen bg-ns-bg">
@@ -188,12 +262,14 @@ const WallPage: React.FC = () => {
               </div>
             )}
 
-            <WallFilters
-              filter={filter}
-              onChange={setFilter}
-              onRefresh={() => refetch()}
-              isRefreshing={isRefetching && !isFetchingNextPage}
-            />
+            <div ref={feedTopRef} className="flex flex-col gap-3 scroll-mt-4">
+              <WallFilters
+                filter={filter}
+                onChange={setFilter}
+                onRefresh={() => refetch()}
+                isRefreshing={isRefetching && !isFetchingNextPage}
+              />
+            </div>
 
             {isError && (
               <FeedError
@@ -224,28 +300,46 @@ const WallPage: React.FC = () => {
               </div>
             ) : (
               <div className="flex flex-col gap-3.5">
-                {rows.map((row, i) =>
-                  row.isDivider ? (
-                    <div
-                      key={`divider-${i}`}
-                      className="flex items-center gap-3.5 pt-3.5 pb-1"
-                    >
-                      <span className="font-ui text-[11px] font-bold tracking-[0.14em] uppercase text-ns-ink-muted">
-                        {row.label}
-                      </span>
-                      <span className="flex-1 h-px bg-ns-border" />
-                    </div>
-                  ) : (
-                    <WallPostCard
-                      key={row.entry.id}
-                      entry={row.entry}
-                      currentUser={user}
-                    />
-                  ),
-                )}
+                {rows.map((row, i) => {
+                  if (row.isDivider) {
+                    return (
+                      <div
+                        key={`divider-${i}`}
+                        className="flex items-center gap-3.5 pt-3.5 pb-1"
+                      >
+                        <span className="font-ui text-[11px] font-bold tracking-[0.14em] uppercase text-ns-ink-muted">
+                          {row.label}
+                        </span>
+                        <span className="flex-1 h-px bg-ns-border" />
+                      </div>
+                    );
+                  }
+                  const checkpoint =
+                    mode === "scroll" ? doomCheckpoint(++postsSeen) : null;
+                  return (
+                    <React.Fragment key={row.entry.id}>
+                      <WallPostCard entry={row.entry} currentUser={user} />
+                      {checkpoint && hasNextPage && (
+                        <p className="py-3 text-center font-heading italic text-[15px] text-ns-accent">
+                          {checkpoint}
+                        </p>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
 
-                {hasNextPage && (
-                  <div className="text-center pt-5 pb-1">
+                {mode === "pages" ? (
+                  <FeedPager
+                    page={currentPage}
+                    total={totalPages}
+                    isLastPage={isLastPage}
+                    loadingPage={loadingPage}
+                    showHints={!hintsDismissed}
+                    onDismissHints={() => setHintsDismissed(true)}
+                    onChange={(next) => void goToPage(next)}
+                  />
+                ) : hasNextPage ? (
+                  <div ref={loadMoreRef} className="text-center pt-5 pb-1">
                     <button
                       type="button"
                       onClick={() => fetchNextPage()}
@@ -258,7 +352,18 @@ const WallPage: React.FC = () => {
                       Older posts
                     </button>
                   </div>
+                ) : (
+                  <p className="pt-5 text-center font-ui text-[12.5px] text-ns-ink-muted">
+                    You reached the bottom of an infinite scroll. Impressive.
+                    Now go outside.
+                  </p>
                 )}
+              </div>
+            )}
+
+            {view === "posts" && (
+              <div className="flex justify-center border-t border-ns-border pt-5">
+                <FeedModeToggle mode={mode} onChange={setMode} />
               </div>
             )}
           </div>
