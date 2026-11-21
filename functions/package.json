@@ -15,6 +15,7 @@
         "logs": "firebase functions:log",
         "seed-story": "node scripts/create-story-by-admin.js",
         "seed-competitions": "node scripts/seed-competitions.js",
+        "prod-test-user": "node scripts/create-prod-test-user.js",
         "set-admin": "node scripts/set-admin-claim.js",
         "unset-admin": "node scripts/set-admin-claim.js --revoke",
         "mcp-requests": "node scripts/list-mcp-requests.js",
